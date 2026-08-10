@@ -47,6 +47,9 @@ services:
     image: ${OLLAMA_IMAGE:-ollama/ollama:0.30.8}
     container_name: prn222-ollama
     restart: unless-stopped
+    environment:
+      OLLAMA_CHAT_MODEL: ${OLLAMA_CHAT_MODEL:-qwen3:4b}
+      OLLAMA_EMBEDDING_MODEL: ${OLLAMA_EMBEDDING_MODEL:-qwen3-embedding:0.6b}
     ports:
       - "${OLLAMA_PORT:-11434}:11434"
     volumes:
