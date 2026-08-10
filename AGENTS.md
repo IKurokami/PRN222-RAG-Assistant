@@ -15,6 +15,7 @@ This repository is currently an initialization skeleton for a PRN222 course proj
 - Target framework: `net10.0`
 - Web stack: ASP.NET Core Razor Pages
 - Database runtime: PostgreSQL through Docker Compose
+- Application infrastructure: PostgreSQL registered through `NpgsqlDataSource`
 - Solution: `PRN222-RAG-Assistant.sln`
 
 The baseline does not implement business features. Unless the user explicitly requests a phase change, do not add:
@@ -22,10 +23,10 @@ The baseline does not implement business features. Unless the user explicitly re
 - Document management, uploads, chat, RAG, AI, embeddings, vector search, or statistics
 - Authentication or authorization
 - Domain models, entities, DTOs, view models, services, repositories, controllers, or `DbContext`
-- Migrations, database schema, CRUD scaffolding, or PostgreSQL application connection configuration
+- Migrations, database schema, or CRUD scaffolding
 - New Razor Pages, UI redesigns, frontend frameworks, Ollama, RAGFlow, pgvector, Qdrant, Redis, or other AI infrastructure
 
-Keep the default Razor Pages template and `Program.cs` unchanged unless the requested work genuinely requires a change.
+Keep the default Razor Pages template unchanged unless the requested work genuinely requires a change. Infrastructure registration belongs under `src/PRN222.RagAssistant/Infrastructure` and should remain independent from domain features.
 
 ## Repository layout
 
@@ -41,6 +42,7 @@ Do not create architecture folders such as `Models`, `Services`, `Repositories`,
 
 The main project directly references:
 
+- `Npgsql` `10.0.0`
 - `Npgsql.EntityFrameworkCore.PostgreSQL` `10.0.0`
 - `Microsoft.EntityFrameworkCore.Design` `10.0.0`
 
@@ -55,6 +57,14 @@ Do not edit downloaded files directly under these generated directories:
 
 Update `libman.json` and run LibMan restore when frontend library versions or files need to change. Keep the library license files at the parent directories tracked.
 
+## Infrastructure configuration
+
+- `ConnectionStrings:Postgres` is the application-level PostgreSQL configuration key.
+- Use `ConnectionStrings__Postgres` when overriding it with environment variables.
+- Docker Compose provides the container-to-container connection string and waits for PostgreSQL to become healthy before starting the app.
+- `.env.example` documents Compose-level local defaults. Never commit the real `.env` file.
+- Add future infrastructure dependencies through dedicated configuration and DI registration without introducing business features implicitly.
+
 ## Standard commands
 
 Run from the repository root:
@@ -67,7 +77,7 @@ dotnet build
 dotnet test
 dotnet run --project src/PRN222.RagAssistant
 docker compose config
-docker compose up -d
+docker compose up -d --build
 docker compose ps
 docker compose down
 ```
