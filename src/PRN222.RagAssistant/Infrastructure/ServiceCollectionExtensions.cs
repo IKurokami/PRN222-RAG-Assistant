@@ -16,7 +16,23 @@ public static class ServiceCollectionExtensions
                 "Connection string 'Postgres' is required. Configure ConnectionStrings:Postgres or the ConnectionStrings__Postgres environment variable.");
         }
 
-        services.AddSingleton(_ => NpgsqlDataSource.Create(connectionString));
+        var dataSourceBuilder = new NpgsqlDataSourceBuilder(connectionString);
+        dataSourceBuilder.UseVector();
+        services.AddSingleton(dataSourceBuilder.Build());
+
+        var ollamaBaseUrl = configuration["Rag:Ollama:BaseUrl"];
+
+        if (!Uri.TryCreate(ollamaBaseUrl, UriKind.Absolute, out var ollamaUri))
+        {
+            throw new InvalidOperationException(
+                "Rag:Ollama:BaseUrl must be configured with an absolute URL, for example http://localhost:11434.");
+        }
+
+        services.AddHttpClient("Ollama", client =>
+        {
+            client.BaseAddress = ollamaUri;
+            client.Timeout = TimeSpan.FromMinutes(5);
+        });
 
         return services;
     }
