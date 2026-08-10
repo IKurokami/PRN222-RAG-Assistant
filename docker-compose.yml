@@ -9,14 +9,22 @@ services:
       ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
       ASPNETCORE_URLS: http://+:8080
       ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=${POSTGRES_DB:-prn222_rag};Username=${POSTGRES_USER:-postgres};Password=${POSTGRES_PASSWORD:-postgres}
+      Rag__Ollama__BaseUrl: http://ollama:11434
+      Rag__Ollama__ChatModel: ${OLLAMA_CHAT_MODEL:-qwen3:4b}
+      Rag__Ollama__EmbeddingModel: ${OLLAMA_EMBEDDING_MODEL:-qwen3-embedding:0.6b}
+      Rag__Storage__UploadsPath: /app/storage/uploads
     ports:
       - "${APP_PORT:-8080}:8080"
+    volumes:
+      - ./storage/uploads:/app/storage/uploads
     depends_on:
       postgres:
         condition: service_healthy
+      ollama:
+        condition: service_healthy
 
   postgres:
-    image: postgres:17.5
+    image: ${POSTGRES_IMAGE:-pgvector/pgvector:pg17}
     container_name: prn222-postgres
     restart: unless-stopped
     environment:
@@ -27,6 +35,7 @@ services:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./infrastructure/postgres/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-postgres} -d $${POSTGRES_DB:-prn222_rag}"]
       interval: 10s
@@ -34,5 +43,21 @@ services:
       retries: 5
       start_period: 10s
 
+  ollama:
+    image: ${OLLAMA_IMAGE:-ollama/ollama:0.30.8}
+    container_name: prn222-ollama
+    restart: unless-stopped
+    ports:
+      - "${OLLAMA_PORT:-11434}:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
 volumes:
   postgres_data:
+  ollama_data:
