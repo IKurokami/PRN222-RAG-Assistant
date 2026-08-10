@@ -44,7 +44,7 @@ services:
       start_period: 10s
 
   ollama:
-    image: ${OLLAMA_IMAGE:-ollama/ollama:0.30.8}
+    image: ${OLLAMA_IMAGE:-ollama/ollama:0.32.5}
     container_name: prn222-ollama
     restart: unless-stopped
     environment:
