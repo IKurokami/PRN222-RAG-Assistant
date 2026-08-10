@@ -10,6 +10,13 @@ Restore:
 dotnet restore
 ```
 
+Restore frontend libraries:
+
+```text
+dotnet tool restore
+dotnet libman restore
+```
+
 Build:
 
 ```text

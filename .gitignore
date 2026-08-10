@@ -76,3 +76,9 @@ logs/
 *.p12
 *.key
 *.pem
+
+# Frontend libraries restored by LibMan from libman.json
+src/PRN222.RagAssistant/wwwroot/lib/bootstrap/dist/
+src/PRN222.RagAssistant/wwwroot/lib/jquery/dist/
+src/PRN222.RagAssistant/wwwroot/lib/jquery-validation/dist/
+src/PRN222.RagAssistant/wwwroot/lib/jquery-validation-unobtrusive/dist/
