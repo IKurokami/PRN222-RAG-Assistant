@@ -1,32 +1,30 @@
 # PRN222 RAG Assistant
 
-A PRN222 course project built with ASP.NET Core Razor Pages and PostgreSQL, designed as the foundation for a document-grounded RAG assistant.
+A PRN222 course project built with ASP.NET Core Razor Pages and PostgreSQL/pgvector, designed as the foundation for a document-grounded RAG assistant.
 
-## Development commands
+The demo is scoped to PRN222. Course documents are uploaded by the Subject Leader and used as the chatbot's authoritative knowledge source. See `docs/infrastructure.md` for the infrastructure decisions and intended RAG flow.
 
-Restore:
+## Local setup
+
+Copy the example environment file when you want to override Docker Compose defaults:
 
 ```text
-dotnet restore
+cp .env.example .env
 ```
 
-Restore frontend libraries:
+Restore .NET and frontend dependencies:
 
 ```text
 dotnet tool restore
 dotnet libman restore
+dotnet restore
 ```
 
-Build:
+Build and test:
 
 ```text
 dotnet build
-```
-
-Run application locally:
-
-```text
-dotnet run --project src/PRN222.RagAssistant
+dotnet test
 ```
 
 Start Docker Compose:
@@ -35,11 +33,48 @@ Start Docker Compose:
 docker compose up -d --build
 ```
 
+Compose starts:
+
+- ASP.NET Core application
+- PostgreSQL with pgvector support
+- Ollama local model runtime
+- Persistent PostgreSQL and Ollama volumes
+- Bind-mounted `storage/uploads/` for source documents
+
 Check containers:
 
 ```text
 docker compose ps
 ```
+
+Pull the default local AI models after Ollama is running:
+
+```text
+docker compose exec ollama ollama pull qwen3:4b
+docker compose exec ollama ollama pull qwen3-embedding:0.6b
+```
+
+If you change `OLLAMA_CHAT_MODEL` or `OLLAMA_EMBEDDING_MODEL` in `.env`, pull those model names instead.
+
+List installed Ollama models:
+
+```text
+docker compose exec ollama ollama list
+```
+
+Verify pgvector:
+
+```text
+docker compose exec postgres sh -lc 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT extversion FROM pg_extension WHERE extname = '\''vector'\'';"'
+```
+
+The init script enables pgvector automatically when PostgreSQL creates a new database volume. If you already have a `postgres_data` volume from the earlier PostgreSQL-only setup, enable the extension once with:
+
+```text
+docker compose exec postgres sh -lc 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "CREATE EXTENSION IF NOT EXISTS vector;"'
+```
+
+The application is available at the configured `APP_PORT` (`http://localhost:8080` by default). Ollama is exposed on port `11434` by default for local development and debugging.
 
 Stop Docker Compose:
 
@@ -47,20 +82,40 @@ Stop Docker Compose:
 docker compose down
 ```
 
-Docker Compose starts the application and its infrastructure dependencies. PostgreSQL is available to the application through the internal `postgres` service hostname.
+Do not use `docker compose down -v` unless you intentionally want to delete the PostgreSQL and Ollama data volumes.
+
+## Run the application directly
+
+Start PostgreSQL and Ollama with Compose, then run the web application on the host:
+
+```text
+dotnet run --project src/PRN222.RagAssistant
+```
+
+`appsettings.Development.json` points the host-run application at `localhost:5432` and `localhost:11434`.
 
 ## Environment configuration
 
-Copy `.env.example` to `.env` when you want to override the local Docker Compose defaults:
+`.env.example` documents the local infrastructure defaults:
+
+- `APP_PORT`
+- `POSTGRES_IMAGE`, database credentials, and port
+- `OLLAMA_IMAGE` and port
+- `OLLAMA_CHAT_MODEL`
+- `OLLAMA_EMBEDDING_MODEL`
+
+The `.env` file is intentionally ignored by Git. Keep local credentials and machine-specific values there.
+
+ASP.NET Core settings can also be overridden with standard double-underscore environment-variable keys. Compose currently provides:
 
 ```text
-cp .env.example .env
+ConnectionStrings__Postgres
+Rag__Ollama__BaseUrl
+Rag__Ollama__ChatModel
+Rag__Ollama__EmbeddingModel
+Rag__Storage__UploadsPath
 ```
 
-The `.env` file is intentionally ignored by Git. Keep local credentials and machine-specific values there, and add new infrastructure settings to `.env.example` as dependencies are introduced.
+## Current infrastructure boundary
 
-ASP.NET Core configuration can also be overridden with environment variables. For example, the PostgreSQL connection string uses the standard configuration key:
-
-```text
-ConnectionStrings__Postgres=Host=localhost;Port=5432;Database=prn222_rag;Username=postgres;Password=postgres
-```
+The repository now has the runtime dependencies needed for the RAG implementation, but it intentionally does not yet contain document entities, a `DbContext`, migrations, authentication/Subject Leader roles, upload pages, parsers, chunking logic, embedding jobs, retrieval logic, chat history tables, or citation rendering. Those should be implemented in feature/data-model phases on top of this baseline.
