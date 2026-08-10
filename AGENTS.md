@@ -8,25 +8,26 @@ Follow the user's explicit request when it changes the current project phase. Ot
 
 ## Project baseline
 
-This repository is currently an initialization skeleton for a PRN222 course project:
+This repository is currently an initialization skeleton plus application-infrastructure baseline for a PRN222 course project:
 
 - Main project: `src/PRN222.RagAssistant`
 - Test project: `tests/PRN222.RagAssistant.Tests`
 - Target framework: `net10.0`
 - Web stack: ASP.NET Core Razor Pages
 - Database runtime: PostgreSQL through Docker Compose
+- Application runtime: ASP.NET Core app container plus PostgreSQL container
 - Application infrastructure: PostgreSQL registered through `NpgsqlDataSource`
 - Solution: `PRN222-RAG-Assistant.sln`
 
-The baseline does not implement business features. Unless the user explicitly requests a phase change, do not add:
+The baseline includes infrastructure wiring but does not implement business features. Unless the user explicitly requests a phase change, do not add:
 
 - Document management, uploads, chat, RAG, AI, embeddings, vector search, or statistics
 - Authentication or authorization
-- Domain models, entities, DTOs, view models, services, repositories, controllers, or `DbContext`
+- Domain models, entities, DTOs, view models, business services, repositories, controllers, or `DbContext`
 - Migrations, database schema, or CRUD scaffolding
 - New Razor Pages, UI redesigns, frontend frameworks, Ollama, RAGFlow, pgvector, Qdrant, Redis, or other AI infrastructure
 
-Keep the default Razor Pages template unchanged unless the requested work genuinely requires a change. Infrastructure registration belongs under `src/PRN222.RagAssistant/Infrastructure` and should remain independent from domain features.
+Keep the default Razor Pages template unchanged unless the requested work genuinely requires a change. Infrastructure registration belongs under `src/PRN222.RagAssistant/Infrastructure` and should remain independent from domain features. Preserve the existing infrastructure wiring in `Program.cs` unless the task explicitly changes infrastructure.
 
 ## Repository layout
 
@@ -35,6 +36,9 @@ Keep the default Razor Pages template unchanged unless the requested work genuin
 - `docs/`: project documentation
 - `evaluation/`: version-controlled evaluation sets and ground truth
 - `storage/uploads/`: runtime upload storage; never commit uploaded documents
+- `src/PRN222.RagAssistant/Infrastructure/`: infrastructure-only DI and external-system registration
+- `src/PRN222.RagAssistant/Dockerfile`: production-style application container build
+- `.dockerignore`: Docker build-context exclusions
 
 Do not create architecture folders such as `Models`, `Services`, `Repositories`, or `Data` during initialization without an explicit request.
 
@@ -61,9 +65,20 @@ Update `libman.json` and run LibMan restore when frontend library versions or fi
 
 - `ConnectionStrings:Postgres` is the application-level PostgreSQL configuration key.
 - Use `ConnectionStrings__Postgres` when overriding it with environment variables.
-- Docker Compose provides the container-to-container connection string and waits for PostgreSQL to become healthy before starting the app.
+- Local development uses `appsettings.Development.json`; do not put production credentials there.
+- Docker Compose provides the container-to-container connection string using `Host=postgres` and waits for PostgreSQL to become healthy before starting the app.
+- The host-facing application port is controlled by `APP_PORT` and defaults to `8080`; PostgreSQL uses `POSTGRES_PORT` and defaults to `5432`.
+- `NpgsqlDataSource` registration is infrastructure setup only. Do not add a `DbContext`, entities, migrations, or schema creation as part of this baseline.
 - `.env.example` documents Compose-level local defaults. Never commit the real `.env` file.
 - Add future infrastructure dependencies through dedicated configuration and DI registration without introducing business features implicitly.
+
+## Docker workflow
+
+- Compose currently contains only the `app` and `postgres` services.
+- The app connects to PostgreSQL through the internal service hostname `postgres`; local host tooling uses `localhost`.
+- The app image build restores the local .NET tool manifest and LibMan assets before publishing.
+- Keep the PostgreSQL image version pinned and retain the named `postgres_data` volume.
+- Do not add pgAdmin, Ollama, RAGFlow, Qdrant, Redis, Elasticsearch, or other services without an explicit request.
 
 ## Standard commands
 
@@ -79,17 +94,19 @@ dotnet run --project src/PRN222.RagAssistant
 docker compose config
 docker compose up -d --build
 docker compose ps
+docker compose logs app
 docker compose down
 ```
 
 For ordinary source changes, run the relevant restore command(s), `dotnet build`, and targeted tests. Run `docker compose config` when Compose files change. Do not run `docker compose down -v` or remove the named PostgreSQL volume unless explicitly requested.
 
-Do not run `dotnet ef database update`, create migrations, or create application schema during the initialization phase.
+Do not run `dotnet ef database update`, create migrations, or create application schema in the current baseline.
 
 ## Git and file hygiene
 
 - Use the .NET CLI for scaffolding, solution/project changes, references, and package changes where applicable.
 - Do not create a remote, push, or alter remote configuration unless explicitly requested.
+- The current remote default branch is `origin/master`; `origin/main` does not exist. Use `git pull --ff-only origin master` unless the user explicitly requests a branch change.
 - Never commit `.env`, credentials, private keys, database dumps, logs, uploaded documents, build output, or AI/RAG runtime data.
 - Keep `.env.example`, `docker-compose.yml`, `README.md`, solution files, source, tests, and `evaluation/` version-controlled.
 - `bin/`, `obj/`, and the LibMan-generated `wwwroot/lib/*/dist/` directories are ignored by design.
