@@ -1,0 +1,78 @@
+# .NET build and generated output
+bin/
+obj/
+artifacts/
+TestResults/
+test-results/
+coverage/
+coverage*.json
+coverage*.xml
+*.coverage
+*.coveragexml
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# JetBrains Rider
+.idea/
+*.sln.iml
+
+# VS Code (no shared workspace configuration yet)
+.vscode/
+
+# Operating system files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Environment files and local secrets
+.env
+.env.*
+!.env.example
+**/appsettings.Development.local.json
+**/appsettings.Local.json
+**/secrets.json
+
+# PostgreSQL local data and dumps
+postgres-data/
+pgdata/
+data/postgres/
+*.dump
+*.backup
+
+# Docker local overrides
+docker-compose.override.yml
+compose.override.yml
+
+# Runtime uploaded documents
+storage/uploads/*
+!storage/uploads/.gitkeep
+
+# Temporary document processing
+storage/temp/
+storage/processed/
+storage/chunks/
+
+# Future AI/RAG runtime artifacts
+.ollama/
+models/
+rag-data/
+vector-data/
+
+# Logs
+logs/
+*.log
+
+# NuGet generated packages
+*.nupkg
+*.snupkg
+
+# Certificates and private keys
+*.pfx
+*.p12
+*.key
+*.pem
