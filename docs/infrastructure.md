@@ -6,23 +6,49 @@ The demo targets one subject: PRN222. Course documents are curated and uploaded 
 
 - https://flm.fpt.edu.vn/gui/role/teacher/SyllabusDetails?sylID=13892
 
-Expected source formats are PDF, DOCX, and lecture slides. Upload authorization, parsing, chunking, indexing, retrieval, citation rendering, and chat history are feature work built on top of the infrastructure in this document.
+Expected source formats are PDF, DOCX, and lecture slides. Authentication/authorization, the core data model, migrations, PostgreSQL/pgvector integration, and shared application contracts are already part of the baseline. Upload/parsing/chunking/indexing, retrieval, grounded prompting, citation rendering, and chat UI/history are the workflow implementations built on top of that baseline.
 
 ## Runtime components
 
-### ASP.NET Core Razor Pages app
+### ASP.NET Core application
 
-The web application is the single application process for the course demo. It will host the UI, authentication/authorization, document-management endpoints, chat endpoints, and an in-process background indexing queue.
+The web application is the single application process for the course demo. Both MVC controllers/views and Razor Pages are enabled so the same shared services/data layer can support the course assignment requirements.
 
-For this scale, document indexing can initially use ASP.NET Core `BackgroundService`/hosted services instead of introducing Redis, RabbitMQ, or a separate worker service. A separate worker can be introduced later if indexing becomes too expensive for the web process.
+The application hosts authentication/authorization, document-management endpoints, chat endpoints, and an in-process background indexing queue.
+
+For this scale, document indexing should initially use ASP.NET Core `BackgroundService`/hosted services instead of introducing Redis, RabbitMQ, or a separate worker service. A separate worker can be introduced later only if indexing becomes too expensive for the web process.
+
+### Authentication and authorization
+
+ASP.NET Core Identity is backed by the same PostgreSQL database.
+
+Application roles:
+
+- `SubjectLeader`
+- `Student`
+
+Document-management write operations are protected by the `ManageDocuments` policy, which allows only the `SubjectLeader` role. Public role selection is intentionally not exposed.
 
 ### PostgreSQL + pgvector
 
-PostgreSQL remains the system of record for application data such as document metadata, chapters, users/roles, chat sessions, messages, and indexing state.
+PostgreSQL is the system of record for application data such as document metadata, chapters, users/roles, chat sessions, messages, indexing state, chunks, and citations.
 
-The Compose service uses the pgvector PostgreSQL image so document-chunk embeddings can live beside relational metadata. The database init script enables the `vector` extension for a new database. The .NET application registers `NpgsqlDataSource` with pgvector type support.
+The Compose service uses a pgvector-enabled PostgreSQL image so document-chunk embeddings can live beside relational metadata. The database init script enables the `vector` extension for a new database. The .NET application registers both `NpgsqlDataSource` and EF Core provider support for pgvector.
 
-No application tables, `DbContext`, migrations, vector dimensions, or search indexes are defined during the infrastructure phase. Those belong to the data-model phase after the entities are agreed.
+The EF Core model and committed migration baseline already exist. Application schema changes must continue through EF Core migrations; PostgreSQL init scripts are only for runtime concerns such as enabling extensions.
+
+Current persistence includes:
+
+- `Subject`
+- `Chapter`
+- `Document`
+- `DocumentChunk`
+- `ChatSession`
+- `ChatMessage`
+- `MessageCitation`
+- ASP.NET Core Identity tables
+
+The current model already carries document indexing state/error/timestamps, page/slide metadata, vector embeddings, chat history, and citation links. Do not add duplicate persistence fields unless a concrete workflow requirement cannot be represented by the existing model.
 
 ### Ollama
 
@@ -35,11 +61,35 @@ Default development models:
 
 Model names are configuration, not hard-coded business rules. They can be replaced through `.env` without changing application code.
 
+A named `Ollama` `HttpClient` is already registered from `Rag:Ollama:BaseUrl`.
+
+### Shared application contracts
+
+Cross-workflow contracts live under:
+
+```text
+src/PRN222.RagAssistant/Application/
+```
+
+They intentionally separate presentation and workflow code from concrete infrastructure/provider details.
+
+Current shared contracts:
+
+- `IDocumentIndexingQueue`
+- `IDocumentIndexingService`
+- `ITextEmbeddingService`
+- `IChatCompletionService`
+- `IRagQueryService`
+- `RagAnswer`
+- `RagCitation`
+
+See `src/PRN222.RagAssistant/Application/AGENTS.md` and `docs/team-workflow.md` before implementing later workflows.
+
 ### Document storage
 
 Uploaded source documents are persisted under `storage/uploads/` and mounted into the application container at `/app/storage/uploads`.
 
-The directory is version-controlled only through `.gitkeep`; uploaded course files must never be committed. PostgreSQL stores document metadata and future chunk/index records, while the original binary files remain in storage so citations can point back to the source document.
+The directory is version-controlled only through `.gitkeep`; uploaded course files must never be committed. PostgreSQL stores document metadata and chunk/index records, while the original binary files remain in storage so citations can point back to the source document.
 
 ## Intended RAG flow
 
@@ -48,31 +98,38 @@ Subject Leader
     |
     | uploads PDF / DOCX / slides
     v
-ASP.NET Core app
+Document-management workflow
     |
-    | enqueue indexing work
+    | persist source file + Document
+    v
+IDocumentIndexingQueue
+    |
     v
 BackgroundService
     |
+    | IDocumentIndexingService
     +--> parse document
     +--> split into chunks
-    +--> Ollama embedding model
+    +--> ITextEmbeddingService -> Ollama embedding model
     +--> PostgreSQL + pgvector
 
 Student
     |
     | asks a question
     v
-ASP.NET Core app
+Chat presentation
     |
-    +--> embed question with the same embedding model
-    +--> retrieve relevant chunks from pgvector
-    +--> build grounded prompt with source metadata
-    +--> Ollama chat model
+    | IRagQueryService
     v
-Answer + citations
+RAG backend
     |
-    +--> persist chat session/messages in PostgreSQL
+    +--> ITextEmbeddingService -> question embedding
+    +--> retrieve relevant indexed chunks from pgvector
+    +--> build grounded prompt with source metadata
+    +--> IChatCompletionService -> Ollama chat model
+    +--> persist chat messages + MessageCitation rows
+    v
+RagAnswer + RagCitation[]
 ```
 
 The same embedding model must be used for indexing and querying a given vector collection. Changing the embedding model requires re-indexing affected documents.
@@ -83,8 +140,8 @@ The same embedding model must be used for indexing and querying a given vector c
 - Qdrant or another separate vector database: pgvector avoids running a second database and is enough for the expected PRN222 document set.
 - RAGFlow/LangChain service: the project is a .NET course application, so orchestration should remain explicit in the ASP.NET Core code unless a later requirement justifies another service.
 - Automatic FLM crawling: only Subject Leader uploads are authoritative in this product model.
-- Authentication schema and Subject Leader role: required before document upload is released, but should be introduced together with ASP.NET Core Identity and migrations in the authentication/data phase.
-- Document parsing packages: PDF/DOCX/PPTX extraction libraries should be selected when the ingestion feature is implemented, not during container infrastructure setup.
+- Document parsing packages: PDF/DOCX/PPTX extraction libraries should be selected by the indexing workflow when that feature is implemented.
+- Upload/indexing/RAG/chat business implementations: these belong to Members 2-5 according to `docs/team-workflow.md`.
 
 ## Evaluation deliverable
 
@@ -96,5 +153,7 @@ The repository already reserves `evaluation/` for the required human-authored PR
 - `.env`: developer-specific overrides; never commit it.
 - `appsettings.Development.json`: sensible defaults when running the ASP.NET Core app directly on the host.
 - Docker Compose environment variables: container-specific hostnames and mounted storage paths.
+- `AGENTS.md`: project-wide architecture, schema, authorization, and team ownership rules.
+- `src/PRN222.RagAssistant/Application/AGENTS.md`: shared application-contract rules.
 
 Secrets should never be added to committed configuration files.
