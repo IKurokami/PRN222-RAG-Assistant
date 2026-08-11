@@ -94,9 +94,9 @@ public sealed class CoreDataArchitectureTests
     {
         var entityType = GetEntityType<TEntity>(context);
         var foreignKey = Assert.Single(
-            entityType.GetForeignKeys()
-                .Where(candidate => candidate.Properties.Any(
-                    property => property.Name == foreignKeyPropertyName)));
+            entityType.GetForeignKeys(),
+            candidate => candidate.Properties.Any(
+                property => property.Name == foreignKeyPropertyName));
 
         Assert.Equal(expected, foreignKey.DeleteBehavior);
     }
