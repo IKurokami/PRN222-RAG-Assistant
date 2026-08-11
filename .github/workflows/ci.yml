@@ -7,17 +7,15 @@ on:
   pull_request:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   validate:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout PR branch
+      - name: Checkout
         uses: actions/checkout@v6
-        with:
-          ref: ${{ github.head_ref || github.ref_name }}
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v6
@@ -39,22 +37,11 @@ jobs:
       - name: Test
         run: dotnet test --configuration Release --no-build
 
-      - name: Generate initial EF migration
-        if: ${{ github.event_name == 'pull_request' && github.head_ref == 'agent/setup-auth-db-integration' }}
+      - name: Check EF Core model matches migrations
         run: >-
-          dotnet ef migrations add InitialAuthAndCoreSchema
+          dotnet ef migrations has-pending-model-changes
           --project src/PRN222.RagAssistant
           --startup-project src/PRN222.RagAssistant
-          --output-dir Data/Migrations
-
-      - name: Commit generated EF migration
-        if: ${{ github.event_name == 'pull_request' && github.head_ref == 'agent/setup-auth-db-integration' }}
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/PRN222.RagAssistant/Data/Migrations
-          git commit -m "feat: add initial auth and core schema migration"
-          git push origin HEAD:${{ github.head_ref }}
 
       - name: Validate Docker Compose
         run: docker compose config
