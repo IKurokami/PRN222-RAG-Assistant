@@ -2,7 +2,7 @@
 
 ## Scope
 
-This file applies to the whole repository. If a deeper `AGENTS.md` is added later, its instructions apply to that subtree.
+This file applies to the whole repository. If a deeper `AGENTS.md` exists, its instructions apply to that subtree in addition to this file.
 
 Follow the user's explicit request when it changes the current project phase. Otherwise, preserve the baseline rules below and avoid expanding scope on your own.
 
@@ -23,21 +23,96 @@ This repository is the application/data/infrastructure baseline for a PRN222 cou
 
 The product is scoped to one subject, PRN222. Course documents are selected and uploaded by the Subject Leader. Students consume indexed material through chat. The application must not treat automatic FLM crawling as an authoritative ingestion path.
 
-The current baseline includes authentication, authorization, EF Core domain persistence, and infrastructure wiring. It does not yet implement upload/parsing/chunking/indexing, retrieval, grounded prompting, citations, or chat workflows.
+The current baseline includes authentication, authorization, EF Core domain persistence, infrastructure wiring, and shared application contracts for document indexing and RAG integration. Upload/parsing/chunking/indexing implementations, retrieval, grounded prompting, and chat UI are feature work owned by later workflow members.
+
+## Team ownership and integration boundaries
+
+The team is intentionally split by workflow boundary. Do not reorganize the project into a different architecture or duplicate another member's responsibility without coordinating the change.
+
+### Member 1 - Core/Data Lead
+
+Owns the shared baseline:
+
+- `Domain/Entities/`
+- `Domain/Enums/`
+- `Data/`
+- `Security/`
+- cross-workflow contracts under `Application/`
+- schema/migration conventions and architecture tests
+- shared infrastructure wiring when it affects multiple workflows
+
+Member 1 is the default owner for EF Core schema changes and committed migrations. Other members may propose required persistence changes, but must not casually create competing migrations or redesign existing entities in isolation.
+
+### Member 2 - Document Management
+
+Owns the document-management presentation/application workflow:
+
+- MVC/Razor Pages for document list/upload/details/delete/re-index
+- upload validation and source-file persistence
+- creating/updating `Document` metadata
+- calling `IDocumentIndexingQueue` after a document has been persisted
+
+Member 2 must not parse, chunk, embed, or call Ollama inside upload handlers. Document-management write endpoints must enforce `AppPolicies.ManageDocuments` server-side.
+
+### Member 3 - Document Indexing / Ingestion
+
+Owns indexing implementation:
+
+- document parsers
+- chunking
+- `IDocumentIndexingQueue` implementation and hosted worker
+- `IDocumentIndexingService` implementation
+- `ITextEmbeddingService` implementation for Ollama embeddings
+- replacing/persisting `DocumentChunk` rows
+- document index-state transitions and indexing errors
+
+Member 3 must not place indexing work directly inside MVC/Razor request handlers.
+
+### Member 4 - RAG / Chat Backend
+
+Owns retrieval and grounded answer generation:
+
+- question embedding through `ITextEmbeddingService`
+- pgvector similarity retrieval
+- context construction and out-of-scope handling
+- `IChatCompletionService` implementation for Ollama generation
+- `IRagQueryService` implementation
+- persistence of chat messages and `MessageCitation` records
+
+Member 4 must validate chat-session ownership using the authenticated user ID supplied by the presentation layer. Controllers/PageModels must not execute pgvector/Ollama logic directly.
+
+### Member 5 - Chat UI / History / Evaluation
+
+Owns chat/history presentation and the evaluation deliverable:
+
+- chat UI and chat-session/history UI
+- rendering citations returned by `IRagQueryService`
+- presentation-side session creation/opening/navigation
+- `evaluation/` human-authored 50-question ground-truth set
+- evaluation-facing tests/tools that do not redefine the RAG backend
+
+Member 5 depends on `IRagQueryService`; browser/UI code must not call Ollama or query pgvector directly.
+
+### Shared-contract rule
+
+Cross-member integration points live under `src/PRN222.RagAssistant/Application/`. A deeper `Application/AGENTS.md` documents those contracts. Treat existing public signatures as stable after this baseline lands. Prefer additive changes. If a shared contract must change, update all affected consumers/implementations together and document the change.
+
+See `docs/team-workflow.md` and `docs/member-1-core-data-handoff.md` before starting Member 2-5 work.
 
 ## Repository layout
 
+- `src/PRN222.RagAssistant/Application/`: cross-workflow abstractions and transport/result models
 - `src/PRN222.RagAssistant/Domain/Entities/`: persistence/domain entity classes
 - `src/PRN222.RagAssistant/Domain/Enums/`: domain enums
 - `src/PRN222.RagAssistant/Data/ApplicationDbContext.cs`: EF Core/Identity DbContext
 - `src/PRN222.RagAssistant/Data/Configurations/`: one EF Core configuration class per entity
-- `src/PRN222.RagAssistant/Data/Migrations/`: EF Core migrations and model snapshot
+- `src/PRN222.RagAssistant/Data/Migrations/`: one committed migration chain for the application schema
 - `src/PRN222.RagAssistant/Data/Seed/`: deterministic seed identifiers/data used by EF configuration
 - `src/PRN222.RagAssistant/Security/`: role and authorization-policy constants
 - `src/PRN222.RagAssistant/Infrastructure/`: external systems, DI registration, database startup, Identity seeding
 - `src/PRN222.RagAssistant/Pages/Account/`: minimal authentication UI
 - `tests/PRN222.RagAssistant.Tests/`: unit and architecture/convention tests
-- `docs/`: project documentation
+- `docs/`: architecture, team workflow, and handoff documentation
 - `evaluation/`: version-controlled evaluation sets and human-authored ground truth
 - `infrastructure/postgres/init/`: PostgreSQL runtime initialization such as enabling extensions; application tables must not be created here
 - `storage/uploads/`: runtime upload storage; never commit uploaded documents
@@ -84,6 +159,7 @@ builder.HasOne<Subject>()
    - Do not create application tables in PostgreSQL init scripts.
    - Do not replace migrations with `EnsureCreated`.
    - Do not hand-edit migration/model-snapshot files unless explicitly repairing a known migration issue.
+   - Keep a single migration chain. Before generating a migration, synchronize with the latest integration branch and confirm the model change is genuinely required.
 
 7. **Use explicit, stable persistence conventions.**
    - Application entity primary keys use `Guid` unless a specific requirement says otherwise.
@@ -94,6 +170,7 @@ builder.HasOne<Subject>()
 8. **Convention tests are required to stay green.**
    - `EntityModelConventionsTests` rejects navigation properties in `Domain/Entities`.
    - It also rejects new entities that do not have a dedicated `IEntityTypeConfiguration<TEntity>`.
+   - `CoreDataArchitectureTests` protects important relationship, persistence, and authorization invariants.
    - When adding an entity, add its configuration in the same change.
 
 ## Identity and authorization rules
@@ -120,6 +197,8 @@ The baseline currently contains:
 - `MessageCitation`
 
 Only PRN222 is seeded. Do not invent chapter names/numbers from FLM without verified source data.
+
+The current model already contains the persistence needed for the planned workflows, including document index status/error/timestamps, chunk content/page/slide/embedding, chat timestamps, and message-to-chunk citations. Do not add speculative duplicate fields simply because a later workflow has not yet been implemented.
 
 ## Infrastructure configuration
 
@@ -186,6 +265,7 @@ Do not run `docker compose down -v` or remove named PostgreSQL/Ollama volumes un
 - Use the .NET CLI for scaffolding, solution/project changes, references, package changes, and EF Core migrations where applicable.
 - Do not create a remote, push, or alter remote configuration unless explicitly requested.
 - The remote default branch is `origin/master`; `origin/main` does not exist.
+- Use focused feature branches and pull requests. Do not have multiple members independently modify the same shared contract/schema file without coordination.
 - Never commit `.env`, real credentials, private keys, database dumps, logs, uploaded documents, build output, downloaded Ollama models, or other runtime data.
 - Keep `.env.example`, `docker-compose.yml`, `README.md`, solution files, source, tests, docs, migrations, and `evaluation/` version-controlled.
 - `bin/`, `obj/`, and LibMan-generated `wwwroot/lib/*/dist/` directories are ignored by design.
