@@ -13,7 +13,7 @@ This repository is the application/data/infrastructure baseline for a PRN222 cou
 - Main project: `src/PRN222.RagAssistant`
 - Test project: `tests/PRN222.RagAssistant.Tests`
 - Target framework: `net10.0`
-- Web stack: ASP.NET Core with Razor Pages now and MVC/Razor Pages feature surfaces later
+- Web stack: ASP.NET Core with both MVC controllers/views and Razor Pages enabled in the same application
 - Authentication: ASP.NET Core Identity backed by EF Core/PostgreSQL
 - Roles: `SubjectLeader` and `Student`
 - Relational/vector database: PostgreSQL + pgvector through Docker Compose
@@ -125,7 +125,7 @@ Only PRN222 is seeded. Do not invent chapter names/numbers from FLM without veri
 
 - `ConnectionStrings:Postgres` is the application-level PostgreSQL configuration key; use `ConnectionStrings__Postgres` for environment overrides.
 - `Database:ApplyMigrationsOnStartup` controls startup migration application.
-- `Auth:SeedUsers:Enabled` controls optional local demo users.
+- Identity roles are seeded at startup after the database is available; `Auth:SeedUsers:Enabled` separately controls optional local demo users.
 - The registered `NpgsqlDataSource` and EF Core provider both have pgvector support enabled.
 - `Rag:Ollama:BaseUrl`, `Rag:Ollama:ChatModel`, and `Rag:Ollama:EmbeddingModel` describe the AI runtime.
 - The named `Ollama` `HttpClient` is registered from `Rag:Ollama:BaseUrl`.
@@ -166,6 +166,7 @@ dotnet restore
 dotnet build
 dotnet test
 dotnet ef migrations add <MigrationName> --project src/PRN222.RagAssistant --startup-project src/PRN222.RagAssistant --output-dir Data/Migrations
+dotnet ef migrations has-pending-model-changes --project src/PRN222.RagAssistant --startup-project src/PRN222.RagAssistant
 dotnet ef database update --project src/PRN222.RagAssistant --startup-project src/PRN222.RagAssistant
 dotnet run --project src/PRN222.RagAssistant
 docker compose config
