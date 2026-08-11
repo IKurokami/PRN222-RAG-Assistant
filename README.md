@@ -16,9 +16,36 @@ The repository currently provides:
 - PostgreSQL + pgvector
 - Ollama local model runtime
 - Persistent `storage/uploads/`
+- shared application contracts for upload -> indexing -> RAG -> presentation integration
+- architecture/convention tests protecting core persistence and authorization assumptions
 - GitHub Actions build/test/EF-migration/Compose validation
 
-Business workflows such as upload parsing, chunking/embedding jobs, retrieval, grounded prompting, citations, and chat UI are intentionally implemented in later phases.
+Business implementations for upload parsing, chunking/embedding jobs, retrieval, grounded prompting, citations, and chat UI are intentionally implemented by the later workflow members on top of this baseline.
+
+## Team development boundaries
+
+The project is split by workflow so multiple members can work without duplicating or conflicting with each other:
+
+- **Member 1 - Core/Data Lead:** domain entities/enums, EF Core configurations/migrations, security policies, cross-workflow `Application/` contracts, architecture tests, shared integration rules.
+- **Member 2 - Document Management:** upload/list/details/delete/re-index UI and request workflow. Persists a `Document`, then hands the `Document.Id` to `IDocumentIndexingQueue`.
+- **Member 3 - Document Indexing:** parsers, chunking, indexing queue/worker, embeddings, `DocumentChunk` persistence, document indexing status/error transitions.
+- **Member 4 - RAG Backend:** question embedding, pgvector retrieval, grounded prompts, Ollama chat generation, chat/citation persistence, `IRagQueryService` implementation.
+- **Member 5 - Chat UI / History / Evaluation:** chat/history presentation, citation rendering, and the human-authored 50-question ground-truth evaluation set.
+
+Before implementing a member workflow, read:
+
+```text
+AGENTS.md
+src/PRN222.RagAssistant/Application/AGENTS.md
+docs/team-workflow.md
+docs/member-1-core-data-handoff.md
+```
+
+The cross-member contracts under `src/PRN222.RagAssistant/Application/` are intentional integration boundaries. Do not duplicate those interfaces in feature folders or bypass them by calling Ollama/pgvector directly from MVC controllers or Razor Page models.
+
+### Migration ownership
+
+The repository keeps one EF Core migration chain. Member 1 is the default schema/migration owner. A later member who discovers a genuine persistence requirement should first make the required model/configuration change coherently, synchronize with the latest branch, generate one migration, and run the pending-model check. Do not create speculative fields or parallel competing migrations.
 
 ## Local setup
 
@@ -210,4 +237,4 @@ Rag__Ollama__EmbeddingModel
 Rag__Storage__UploadsPath
 ```
 
-For project-wide coding conventions, especially EF Core entity/configuration rules, see `AGENTS.md`.
+For project-wide coding conventions, especially EF Core entity/configuration rules and team ownership boundaries, see `AGENTS.md`.
