@@ -44,14 +44,12 @@ jobs:
           --startup-project src/PRN222.RagAssistant
           --output-dir Data/Migrations
 
-      - name: Print generated EF migration files
-        run: |
-          for file in src/PRN222.RagAssistant/Data/Migrations/*; do
-            echo "===FILE:${file}==="
-            base64 -w 0 "${file}"
-            echo
-            echo "===END_FILE==="
-          done
+      - name: Upload generated EF migration
+        uses: actions/upload-artifact@v4
+        with:
+          name: ef-migration
+          path: src/PRN222.RagAssistant/Data/Migrations/
+          if-no-files-found: error
 
       - name: Validate Docker Compose
         run: docker compose config
