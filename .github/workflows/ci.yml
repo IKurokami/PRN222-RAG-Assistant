@@ -45,3 +45,34 @@ jobs:
 
       - name: Validate Docker Compose
         run: docker compose config
+
+      - name: Start PostgreSQL validation database
+        run: |
+          docker compose up -d postgres
+          for attempt in {1..30}; do
+            status="$(docker inspect --format='{{.State.Health.Status}}' prn222-postgres 2>/dev/null || true)"
+            if [ "$status" = "healthy" ]; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose logs postgres
+          exit 1
+
+      - name: Apply EF Core migrations to PostgreSQL
+        env:
+          ConnectionStrings__Postgres: Host=localhost;Port=5432;Database=prn222_rag;Username=postgres;Password=postgres
+        run: >-
+          dotnet ef database update
+          --project src/PRN222.RagAssistant
+          --startup-project src/PRN222.RagAssistant
+
+      - name: Verify PostgreSQL schema baseline
+        run: |
+          docker compose exec -T postgres psql -U postgres -d prn222_rag -v ON_ERROR_STOP=1 -c "SELECT extversion FROM pg_extension WHERE extname = 'vector';"
+          docker compose exec -T postgres psql -U postgres -d prn222_rag -v ON_ERROR_STOP=1 -c "SELECT \"Code\", \"Name\" FROM \"Subjects\" WHERE \"Code\" = 'PRN222';"
+          docker compose exec -T postgres psql -U postgres -d prn222_rag -v ON_ERROR_STOP=1 -c "SELECT COUNT(*) FROM \"__EFMigrationsHistory\";"
+
+      - name: Stop PostgreSQL validation database
+        if: always()
+        run: docker compose down -v
