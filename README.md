@@ -8,7 +8,7 @@ The demo is scoped to PRN222. Course documents are managed by the Subject Leader
 
 The repository currently provides:
 
-- ASP.NET Core Razor Pages application
+- ASP.NET Core application with both MVC controllers/views and Razor Pages enabled
 - ASP.NET Core Identity backed by EF Core/PostgreSQL
 - `SubjectLeader` and `Student` roles
 - `ManageDocuments` authorization policy restricted to `SubjectLeader`
@@ -16,9 +16,9 @@ The repository currently provides:
 - PostgreSQL + pgvector
 - Ollama local model runtime
 - Persistent `storage/uploads/`
-- GitHub Actions build/test/Compose validation
+- GitHub Actions build/test/EF-migration/Compose validation
 
-Business workflows such as upload parsing, chunking/embedding jobs, retrieval, grounded prompting, and chat UI are intentionally implemented in later phases.
+Business workflows such as upload parsing, chunking/embedding jobs, retrieval, grounded prompting, citations, and chat UI are intentionally implemented in later phases.
 
 ## Local setup
 
@@ -80,7 +80,7 @@ The app uses ASP.NET Core Identity with two application roles:
 - `SubjectLeader` - the only role allowed by the `ManageDocuments` policy
 - `Student` - normal learner access
 
-Demo-user seeding is disabled by default. To create the local demo users documented in `.env.example`, copy the file to `.env` and set:
+The two roles are ensured at application startup after the database schema is available. Demo-user seeding is disabled by default. To create the local demo users documented in `.env.example`, copy the file to `.env` and set:
 
 ```text
 AUTH_SEED_USERS=true
@@ -99,7 +99,7 @@ Sign in at:
 http://localhost:8080/Account/Login
 ```
 
-Role seeding and optional demo-user seeding run after EF Core migrations are applied. The app does not expose public role selection, so a user cannot self-assign the `SubjectLeader` role.
+The app does not expose public role selection, so a user cannot self-assign the `SubjectLeader` role.
 
 ## EF Core model and migrations
 
@@ -121,6 +121,14 @@ dotnet ef migrations add <MigrationName> \
   --project src/PRN222.RagAssistant \
   --startup-project src/PRN222.RagAssistant \
   --output-dir Data/Migrations
+```
+
+Verify that the model is fully represented by committed migrations:
+
+```text
+dotnet ef migrations has-pending-model-changes \
+  --project src/PRN222.RagAssistant \
+  --startup-project src/PRN222.RagAssistant
 ```
 
 Apply migrations manually when needed:
