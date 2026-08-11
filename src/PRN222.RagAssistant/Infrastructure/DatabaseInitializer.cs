@@ -8,15 +8,14 @@ public static class DatabaseInitializer
 {
     public static async Task InitializeDatabaseAsync(this WebApplication app)
     {
-        if (!app.Configuration.GetValue<bool>("Database:ApplyMigrationsOnStartup"))
+        await using var scope = app.Services.CreateAsyncScope();
+
+        if (app.Configuration.GetValue<bool>("Database:ApplyMigrationsOnStartup"))
         {
-            return;
+            var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            await dbContext.Database.MigrateAsync();
         }
 
-        await using var scope = app.Services.CreateAsyncScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-
-        await dbContext.Database.MigrateAsync();
         await IdentitySeeder.SeedAsync(scope.ServiceProvider, app.Configuration);
     }
 }
