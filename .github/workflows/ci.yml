@@ -37,5 +37,21 @@ jobs:
       - name: Test
         run: dotnet test --configuration Release --no-build
 
+      - name: Generate initial EF migration candidate
+        run: >-
+          dotnet ef migrations add InitialAuthAndCoreSchema
+          --project src/PRN222.RagAssistant
+          --startup-project src/PRN222.RagAssistant
+          --output-dir Data/Migrations
+
+      - name: Print generated EF migration files
+        run: |
+          for file in src/PRN222.RagAssistant/Data/Migrations/*; do
+            echo "===FILE:${file}==="
+            base64 -w 0 "${file}"
+            echo
+            echo "===END_FILE==="
+          done
+
       - name: Validate Docker Compose
         run: docker compose config
