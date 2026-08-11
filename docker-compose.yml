@@ -9,6 +9,14 @@ services:
       ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
       ASPNETCORE_URLS: http://+:8080
       ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=${POSTGRES_DB:-prn222_rag};Username=${POSTGRES_USER:-postgres};Password=${POSTGRES_PASSWORD:-postgres}
+      Database__ApplyMigrationsOnStartup: ${DATABASE_APPLY_MIGRATIONS_ON_STARTUP:-true}
+      Auth__SeedUsers__Enabled: ${AUTH_SEED_USERS:-false}
+      Auth__SeedUsers__SubjectLeader__Email: ${AUTH_SUBJECT_LEADER_EMAIL:-}
+      Auth__SeedUsers__SubjectLeader__Password: ${AUTH_SUBJECT_LEADER_PASSWORD:-}
+      Auth__SeedUsers__SubjectLeader__DisplayName: ${AUTH_SUBJECT_LEADER_DISPLAY_NAME:-Subject Leader}
+      Auth__SeedUsers__Student__Email: ${AUTH_STUDENT_EMAIL:-}
+      Auth__SeedUsers__Student__Password: ${AUTH_STUDENT_PASSWORD:-}
+      Auth__SeedUsers__Student__DisplayName: ${AUTH_STUDENT_DISPLAY_NAME:-Student}
       Rag__Ollama__BaseUrl: http://ollama:11434
       Rag__Ollama__ChatModel: ${OLLAMA_CHAT_MODEL:-qwen3:4b}
       Rag__Ollama__EmbeddingModel: ${OLLAMA_EMBEDDING_MODEL:-qwen3-embedding:0.6b}
