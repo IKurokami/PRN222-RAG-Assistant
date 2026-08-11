@@ -75,4 +75,4 @@ jobs:
 
       - name: Stop PostgreSQL validation database
         if: always()
-        run: docker compose down -v
+        run: docker compose down
