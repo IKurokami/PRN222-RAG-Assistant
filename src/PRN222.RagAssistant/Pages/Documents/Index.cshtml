@@ -1,0 +1,150 @@
+@page
+@using PRN222.RagAssistant.Domain.Enums
+@model PRN222.RagAssistant.Pages.Documents.IndexModel
+@{
+    ViewData["Title"] = "Quản lý tài liệu PRN222";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2 class="mb-1">Danh sách tài liệu PRN222</h2>
+        <p class="text-muted mb-0">Quản lý các tài liệu bài giảng, tài liệu tham khảo môn học đã được index.</p>
+    </div>
+    @if (Model.CanManageDocuments)
+    {
+        <a asp-page="./Upload" class="btn btn-primary">
+            <i class="bi bi-upload"></i> Tải lên tài liệu mới
+        </a>
+    }
+</div>
+
+@if (!string.IsNullOrEmpty(Model.StatusMessage))
+{
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        @Model.StatusMessage
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
+
+<div class="card mb-4 shadow-sm">
+    <div class="card-body">
+        <form method="get" class="row g-3 align-items-center">
+            <div class="col-md-6 col-lg-4">
+                <label asp-for="SelectedChapterId" class="form-label mb-1 fw-bold">Lọc theo Chương môn học:</label>
+                <select asp-for="SelectedChapterId" asp-items="Model.ChapterOptions" class="form-select" onchange="this.form.submit()">
+                    <option value="">-- Tất cả các chương --</option>
+                </select>
+            </div>
+            @if (Model.SelectedChapterId.HasValue)
+            {
+                <div class="col-md-auto align-self-end">
+                    <a asp-page="./Index" class="btn btn-outline-secondary">Xóa bộ lọc</a>
+                </div>
+            }
+        </form>
+    </div>
+</div>
+
+@if (Model.Documents.Count == 0)
+{
+    <div class="text-center py-5 border rounded bg-light">
+        <h5 class="text-muted">Chưa có tài liệu nào được tải lên</h5>
+        <p class="text-muted">Các tài liệu sau khi tải lên sẽ hiển thị tại đây để sinh viên truy vấn RAG.</p>
+        @if (Model.CanManageDocuments)
+        {
+            <a asp-page="./Upload" class="btn btn-primary mt-2">Tải lên tài liệu ngay</a>
+        }
+    </div>
+}
+else
+{
+    <div class="table-responsive shadow-sm rounded">
+        <table class="table table-hover align-middle mb-0 bg-white border">
+            <thead class="table-light">
+                <tr>
+                    <th scope="col">Tên tài liệu</th>
+                    <th scope="col">Chương</th>
+                    <th scope="col">Kích thước</th>
+                    <th scope="col">Trạng thái Index</th>
+                    <th scope="col">Ngày tải lên</th>
+                    <th scope="col" class="text-end">Thao tác</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var doc in Model.Documents)
+                {
+                    <tr>
+                        <td>
+                            <a asp-page="./Details" asp-route-id="@doc.Id" class="fw-bold text-decoration-none text-dark">
+                                @doc.Title
+                            </a>
+                            <div class="small text-muted">@doc.OriginalFileName</div>
+                        </td>
+                        <td>
+                            @if (doc.ChapterNumber.HasValue)
+                            {
+                                <span class="badge bg-info text-dark">Chương @doc.ChapterNumber</span>
+                            }
+                            else
+                            {
+                                <span class="text-muted small">Chung</span>
+                            }
+                        </td>
+                        <td class="small">@doc.FormattedSize</td>
+                        <td>
+                            @switch (doc.IndexStatus)
+                            {
+                                case DocumentIndexStatus.Uploaded:
+                                    <span class="badge bg-secondary">Vừa tải lên</span>
+                                    break;
+                                case DocumentIndexStatus.Processing:
+                                    <span class="badge bg-primary">Đang xử lý...</span>
+                                    break;
+                                case DocumentIndexStatus.Indexed:
+                                    <span class="badge bg-success">Đã Index</span>
+                                    break;
+                                case DocumentIndexStatus.Failed:
+                                    <span class="badge bg-danger" title="@doc.IndexError">Thất bại</span>
+                                    break;
+                            }
+                        </td>
+                        <td class="small text-muted">@doc.UploadedAtUtc.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
+                        <td class="text-end pe-3">
+                            <div class="d-flex gap-2 justify-content-end align-items-center flex-nowrap">
+                                <a asp-page="./Details" asp-route-id="@doc.Id"
+                                   class="btn btn-sm px-3 fw-medium"
+                                   style="background:#e8f4fd;color:#0d6efd;border:none;border-radius:8px;"
+                                   title="Xem chi tiết">
+                                    Chi tiết
+                                </a>
+
+                                @if (Model.CanManageDocuments)
+                                {
+                                    <form method="post" asp-page-handler="Reindex" asp-route-id="@doc.Id" class="m-0"
+                                          onsubmit="return confirm('Yêu cầu index lại tài liệu này?');">
+                                        <button type="submit"
+                                                class="btn btn-sm px-3 fw-medium"
+                                                style="background:#fff8e1;color:#f59e0b;border:none;border-radius:8px;"
+                                                title="Index lại">
+                                            Re-index
+                                        </button>
+                                    </form>
+
+                                    <form method="post" asp-page-handler="Delete" asp-route-id="@doc.Id" class="m-0"
+                                          onsubmit="return confirm('Xóa tài liệu này? Thao tác không thể hoàn tác.');">
+                                        <button type="submit"
+                                                class="btn btn-sm px-3 fw-medium"
+                                                style="background:#fde8e8;color:#dc3545;border:none;border-radius:8px;"
+                                                title="Xóa">
+                                            Xóa
+                                        </button>
+                                    </form>
+                                }
+                            </div>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}

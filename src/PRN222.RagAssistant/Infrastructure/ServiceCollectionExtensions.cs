@@ -66,6 +66,8 @@ public static class ServiceCollectionExtensions
             client.Timeout = TimeSpan.FromMinutes(5);
         });
 
+        services.AddSingleton<PRN222.RagAssistant.Application.Abstractions.IDocumentIndexingQueue, PRN222.RagAssistant.Infrastructure.Services.InMemoryDocumentIndexingQueue>();
+
         return services;
     }
 }
