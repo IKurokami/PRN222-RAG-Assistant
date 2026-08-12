@@ -4,16 +4,28 @@
 
 This file applies to the whole repository. If a deeper `AGENTS.md` exists, its instructions apply to that subtree in addition to this file.
 
-Follow the user's explicit request when it changes the current project phase. Otherwise, preserve the baseline rules below and avoid expanding scope on your own.
+Follow the user's explicit request when it changes the current project phase. Otherwise, preserve the merged architecture and ownership rules below and avoid expanding scope on your own.
 
-## Project baseline
+Before changing workflow code, read:
 
-This repository is the application/data/infrastructure baseline for a PRN222 course RAG assistant:
+```text
+AGENTS.md
+src/PRN222.RagAssistant/Application/AGENTS.md
+docs/project-status.md
+docs/team-workflow.md
+docs/infrastructure.md
+```
+
+For indexing work, also read `docs/member-2-document-management-handoff.md`.
+
+## Current project baseline
+
+This repository is a PRN222 course RAG assistant with:
 
 - Main project: `src/PRN222.RagAssistant`
 - Test project: `tests/PRN222.RagAssistant.Tests`
 - Target framework: `net10.0`
-- Web stack: ASP.NET Core with both MVC controllers/views and Razor Pages enabled in the same application
+- Web stack: ASP.NET Core with MVC and Razor Pages enabled
 - Authentication: ASP.NET Core Identity backed by EF Core/PostgreSQL
 - Roles: `SubjectLeader` and `Student`
 - Relational/vector database: PostgreSQL + pgvector through Docker Compose
@@ -21,15 +33,29 @@ This repository is the application/data/infrastructure baseline for a PRN222 cou
 - Source-document storage: `storage/uploads/`
 - Solution: `PRN222-RAG-Assistant.sln`
 
-The product is scoped to one subject, PRN222. Course documents are selected and uploaded by the Subject Leader. Subject Leaders may organize PRN222 documents into user-managed chapters; chapter records must not be treated as fixed seed-only data. Students consume indexed material through chat. The application must not treat automatic FLM crawling as an authoritative ingestion path.
+The product is scoped to one subject, PRN222. Course documents are selected and uploaded by the Subject Leader. Chapters are runtime-managed organizational data and must not be treated as a fixed seed-only list. Students consume indexed material through chat. Automatic FLM crawling is not an authoritative ingestion path.
 
-The current baseline includes authentication, authorization, EF Core domain persistence, infrastructure wiring, and shared application contracts for document indexing and RAG integration. Upload/parsing/chunking/indexing implementations, retrieval, grounded prompting, and chat UI are feature work owned by later workflow members.
+### Current merged milestone
+
+The source baseline reviewed after PR #5 is:
+
+- Member 1 Core/Data baseline: **merged/complete**
+- Member 2 Document Management + Chapter Management: **merged/complete request side**
+- Member 3 Document Indexing/Ingestion: **pending**
+- Member 4 RAG/Chat backend: **pending**
+- Member 5 Chat UI/History/Evaluation: **pending**
+
+Member 2's merged work includes runtime Chapter CRUD and Document list/upload/details/edit/removal/re-index request flows.
+
+The current `InMemoryDocumentIndexingQueue` is a **temporary integration stub**. It exists so Member 2 can enqueue a persisted `Document.Id` through `IDocumentIndexingQueue`; it is not a completed indexing worker. Member 3 owns the real background worker, indexing service, parsing, chunking and embedding pipeline.
+
+When status is unclear, treat the latest merged code on `master` as the source of truth and consult `docs/project-status.md`.
 
 ## Team ownership and integration boundaries
 
-The team is intentionally split by workflow boundary. Do not reorganize the project into a different architecture or duplicate another member's responsibility without coordinating the change.
+The team is split by workflow boundary. Do not reorganize the project into a different architecture or duplicate another member's responsibility without coordinating the change.
 
-### Member 1 - Core/Data Lead
+### Member 1 - Core/Data Lead - COMPLETE BASELINE
 
 Owns the shared baseline:
 
@@ -41,41 +67,78 @@ Owns the shared baseline:
 - schema/migration conventions and architecture tests
 - shared infrastructure wiring when it affects multiple workflows
 
-Member 1 is the default owner for EF Core schema changes and committed migrations. Other members may propose required persistence changes, but must not casually create competing migrations or redesign existing entities in isolation.
+Member 1 is the default owner/coordinator for genuine EF Core schema changes and committed migrations. Other members may propose required persistence changes, but must not casually create competing migrations or redesign existing entities in isolation.
 
-### Member 2 - Document Management
+Do not move later workflow business logic into Member 1 simply because the baseline contracts live under `Application/`.
 
-Owns the document-management presentation/application workflow:
+### Member 2 - Document Management - MERGED
 
-- MVC/Razor Pages for document list/upload/details/delete/re-index
-- MVC/Razor Pages for chapter list/create/edit/delete
-- upload validation and source-file persistence
+Owns the request/presentation side of Flow 1.
+
+Already merged:
+
+- Razor Pages for document list/upload/details/edit/removal/re-index request
+- Razor Pages for chapter list/create/edit/removal
+- PDF/DOCX/PPTX upload validation
+- 50 MB upload size limit
+- configured source-file persistence
 - creating/updating `Document` metadata
-- creating/updating/deleting PRN222 `Chapter` records through the existing model
+- creating/updating/removing PRN222 `Chapter` records through the existing model
 - validating server-side that any selected `ChapterId` belongs to PRN222
-- calling `IDocumentIndexingQueue` after a document has been persisted
+- calling `IDocumentIndexingQueue` after a document is persisted
+- server-side `AppPolicies.ManageDocuments` enforcement on write operations
+- cleanup of a newly written upload if database persistence fails
 
-Chapter management is part of the document-management workflow, not a seed-data-only concern. Subject Leaders must be able to create chapters without requiring a code, seed, or migration change when the course outline changes.
+Chapter Management is part of the merged document-management workflow. Subject Leaders must be able to create chapters without a code, seed, or migration change when the course outline changes.
 
-Deleting a chapter must not delete documents. Keep the existing `Document -> Chapter` relationship protected by `DeleteBehavior.Restrict`; when a Subject Leader explicitly deletes a chapter that is referenced by documents, the application layer must first set those documents' nullable `ChapterId` values to `null` and then delete the chapter in one coherent transaction. Do not silently change the FK to cascading delete or rely on database-side implicit unlinking.
+Removing a chapter must preserve documents. Keep the existing restrictive `Document -> Chapter` relationship; when a referenced chapter is removed, the application layer must unassign affected documents (`ChapterId = null`) before removing the chapter. Never use cascade delete to make this flow easier.
 
-Member 2 must not parse, chunk, embed, or call Ollama inside upload handlers. Document-management and chapter-management write endpoints must enforce `AppPolicies.ManageDocuments` server-side.
+Member 2 request handlers must not parse, chunk, embed, query pgvector, or call Ollama.
 
-### Member 3 - Document Indexing / Ingestion
+Do not create a second upload/chapter-management implementation in later member branches unless the team explicitly decides to replace the merged flow.
 
-Owns indexing implementation:
+### Member 3 - Document Indexing / Ingestion - NEXT / PENDING
+
+Owns the background side of Flow 1:
 
 - document parsers
 - chunking
-- `IDocumentIndexingQueue` implementation and hosted worker
+- final `IDocumentIndexingQueue` integration
+- hosted/background indexing worker
 - `IDocumentIndexingService` implementation
 - `ITextEmbeddingService` implementation for Ollama embeddings
 - replacing/persisting `DocumentChunk` rows
 - document index-state transitions and indexing errors
 
-Member 3 must not place indexing work directly inside MVC/Razor request handlers.
+Expected state flow:
 
-### Member 4 - RAG / Chat Backend
+```text
+Uploaded -> Processing -> Indexed
+                     \-> Failed
+```
+
+Re-indexing must replace stale chunks coherently rather than append duplicate chunks.
+
+Member 3 must integrate with the existing Member 2 handoff:
+
+```text
+Persisted Document
+      |
+      v
+IDocumentIndexingQueue.EnqueueAsync(documentId)
+      |
+      v
+Background worker
+      |
+      v
+IDocumentIndexingService.IndexAsync(documentId)
+```
+
+Member 3 may replace `InMemoryDocumentIndexingQueue` and its DI registration with the real integration, but should preserve `IDocumentIndexingQueue` unless all affected consumers are updated together.
+
+Do not place parsing/chunking/embedding work directly inside MVC/Razor request handlers.
+
+### Member 4 - RAG / Chat Backend - PENDING
 
 Owns retrieval and grounded answer generation:
 
@@ -88,7 +151,9 @@ Owns retrieval and grounded answer generation:
 
 Member 4 must validate chat-session ownership using the authenticated user ID supplied by the presentation layer. Controllers/PageModels must not execute pgvector/Ollama logic directly.
 
-### Member 5 - Chat UI / History / Evaluation
+Retrieval should use successfully indexed PRN222 chunks as evidence.
+
+### Member 5 - Chat UI / History / Evaluation - PENDING
 
 Owns chat/history presentation and the evaluation deliverable:
 
@@ -102,50 +167,48 @@ Member 5 depends on `IRagQueryService`; browser/UI code must not call Ollama or 
 
 ### Shared-contract rule
 
-Cross-member integration points live under `src/PRN222.RagAssistant/Application/`. A deeper `Application/AGENTS.md` documents those contracts. Treat existing public signatures as stable after this baseline lands. Prefer additive changes. If a shared contract must change, update all affected consumers/implementations together and document the change.
+Cross-member integration points live under `src/PRN222.RagAssistant/Application/`. The deeper `Application/AGENTS.md` documents those contracts.
 
-See `docs/team-workflow.md` and `docs/member-1-core-data-handoff.md` before starting Member 2-5 work.
+Treat existing public signatures as stable. Prefer additive changes. If a shared contract must change, update all affected consumers/implementations together and update the coordination docs.
 
 ## Repository layout
 
 - `src/PRN222.RagAssistant/Application/`: cross-workflow abstractions and transport/result models
 - `src/PRN222.RagAssistant/Domain/Entities/`: persistence/domain entity classes
 - `src/PRN222.RagAssistant/Domain/Enums/`: domain enums
-- `src/PRN222.RagAssistant/Data/ApplicationDbContext.cs`: EF Core/Identity DbContext
-- `src/PRN222.RagAssistant/Data/Configurations/`: one EF Core configuration class per entity
-- `src/PRN222.RagAssistant/Data/Migrations/`: one committed migration chain for the application schema
-- `src/PRN222.RagAssistant/Data/Seed/`: deterministic seed identifiers/data used by EF configuration
+- `src/PRN222.RagAssistant/Data/`: EF Core/Identity DbContext, configurations, migrations, seed identifiers
 - `src/PRN222.RagAssistant/Security/`: role and authorization-policy constants
 - `src/PRN222.RagAssistant/Infrastructure/`: external systems, DI registration, database startup, Identity seeding
+- `src/PRN222.RagAssistant/Infrastructure/Services/InMemoryDocumentIndexingQueue.cs`: temporary Member 2 queue stub awaiting Member 3 integration
 - `src/PRN222.RagAssistant/Pages/Account/`: minimal authentication UI
+- `src/PRN222.RagAssistant/Pages/Chapters/`: merged PRN222 Chapter Management UI
+- `src/PRN222.RagAssistant/Pages/Documents/`: merged Document Management UI
 - `tests/PRN222.RagAssistant.Tests/`: unit and architecture/convention tests
-- `docs/`: architecture, team workflow, and handoff documentation
+- `docs/`: architecture, project status, team workflow, and member handoff documentation
 - `evaluation/`: version-controlled evaluation sets and human-authored ground truth
 - `infrastructure/postgres/init/`: PostgreSQL runtime initialization such as enabling extensions; application tables must not be created here
 - `storage/uploads/`: runtime upload storage; never commit uploaded documents
 
 ## Mandatory EF Core entity rules
 
-These rules are project-wide defaults for every current and future entity unless the user explicitly changes them.
+These rules are project-wide defaults unless the user explicitly changes them.
 
 1. **Do not use navigation properties in entity classes.**
-   - No reference navigation such as `public Subject Subject { get; set; }`.
-   - No collection navigation such as `public ICollection<Document> Documents { get; set; }`.
-   - Store explicit scalar foreign keys instead, for example `SubjectId`, `DocumentId`, or nullable `ChapterId`.
+   - No reference navigation properties.
+   - No collection navigation properties.
+   - Store explicit scalar foreign keys instead.
 
 2. **Do not put EF Core mapping inside entity classes.**
-   - Do not use EF mapping data annotations such as `[Table]`, `[Column]`, `[ForeignKey]`, `[Index]`, or relationship annotations on entities.
-   - Keep entity classes focused on state only.
-   - Validation annotations belong on request/input models when UI validation is needed, not on persistence entities as a substitute for EF configuration.
+   - No EF mapping annotations such as `[Table]`, `[Column]`, `[ForeignKey]`, `[Index]`, or relationship annotations.
+   - Validation annotations belong on request/input models when UI validation is needed.
 
 3. **Every entity must have a dedicated configuration class.**
    - Implement `IEntityTypeConfiguration<TEntity>`.
    - Place it under `Data/Configurations/`.
    - Name it `<EntityName>Configuration`.
-   - Configure table names, keys, property lengths/types, required/optional fields, enum conversions, indexes, unique constraints, relationships, delete behavior, and EF seed data there.
+   - Configure tables, keys, lengths/types, required/optional fields, enum conversions, indexes, unique constraints, relationships, delete behavior, and EF seed data there.
 
 4. **Configure relationships without navigation properties.**
-   - Use patterns such as:
 
 ```csharp
 builder.HasOne<Subject>()
@@ -156,43 +219,42 @@ builder.HasOne<Subject>()
 
 5. **Keep `ApplicationDbContext` thin.**
    - It may expose `DbSet<TEntity>` properties.
-   - `OnModelCreating` must call `base.OnModelCreating(builder)` because Identity depends on it.
-   - Then load entity configurations with `ApplyConfigurationsFromAssembly(...)`.
-   - Do not add entity-specific Fluent API mappings directly to `ApplicationDbContext`.
+   - `OnModelCreating` must call `base.OnModelCreating(builder)`.
+   - Load mappings with `ApplyConfigurationsFromAssembly(...)`.
+   - Do not add entity-specific Fluent API mapping directly to the DbContext.
 
 6. **Use EF Core migrations for application schema.**
-   - Generate migrations with the repository-local `dotnet-ef` tool.
+   - Use the repository-local `dotnet-ef` tool.
    - Keep migrations under `Data/Migrations/`.
    - Do not create application tables in PostgreSQL init scripts.
    - Do not replace migrations with `EnsureCreated`.
-   - Do not hand-edit migration/model-snapshot files unless explicitly repairing a known migration issue.
-   - Keep a single migration chain. Before generating a migration, synchronize with the latest integration branch and confirm the model change is genuinely required.
+   - Do not hand-edit migration/model-snapshot files unless repairing a known migration issue.
+   - Keep one migration chain and synchronize with latest `master` before adding a migration.
 
-7. **Use explicit, stable persistence conventions.**
-   - Application entity primary keys use `Guid` unless a specific requirement says otherwise.
-   - Persist timestamps as UTC and name them with the `Utc` suffix.
-   - Persist domain enums as strings unless a specific storage/performance requirement justifies otherwise.
-   - Configure delete behavior explicitly for relationships rather than relying on accidental conventions.
+7. **Use stable persistence conventions.**
+   - Application entity primary keys use `Guid` unless a requirement says otherwise.
+   - Persist timestamps as UTC and use the `Utc` suffix.
+   - Persist domain enums as strings unless a concrete requirement justifies otherwise.
+   - Configure relationship delete behavior explicitly.
 
-8. **Convention tests are required to stay green.**
-   - `EntityModelConventionsTests` rejects navigation properties in `Domain/Entities`.
-   - It also rejects new entities that do not have a dedicated `IEntityTypeConfiguration<TEntity>`.
+8. **Convention tests must stay green.**
+   - `EntityModelConventionsTests` rejects navigation properties and missing dedicated entity configurations.
    - `CoreDataArchitectureTests` protects important relationship, persistence, and authorization invariants.
-   - When adding an entity, add its configuration in the same change.
+   - Member 2 tests additionally protect Chapter/Document request-side behavior and authorization.
 
 ## Identity and authorization rules
 
 - `ApplicationUser` extends `IdentityUser<Guid>` and must not add navigation properties.
-- Application role names live in `Security/AppRoles.cs`; do not scatter role-name string literals through controllers/pages/services.
+- Application role names live in `Security/AppRoles.cs`; do not scatter role-name string literals.
 - Authorization policy names live in `Security/AppPolicies.cs`.
-- Document-management write operations, including chapter create/edit/delete operations, must require `AppPolicies.ManageDocuments`, which is restricted to `AppRoles.SubjectLeader`.
-- Hiding an Upload/Delete/Re-index/Create Chapter/Edit Chapter/Delete Chapter button is not authorization. Enforce authorization server-side on MVC actions/Razor Pages/handlers.
-- Do not add public role selection during registration. A user must never be able to self-select `SubjectLeader`.
+- Document-management and chapter-management writes require `AppPolicies.ManageDocuments`, restricted to `AppRoles.SubjectLeader`.
+- Hiding a management button is not authorization. Enforce authorization server-side.
+- Do not add public role selection during registration. Users must never self-select `SubjectLeader`.
 - Local demo-user seeding is configuration-driven and disabled by default. Never commit real credentials.
 
 ## Current domain model
 
-The baseline currently contains:
+The current model contains:
 
 - `ApplicationUser`
 - `Subject`
@@ -203,15 +265,15 @@ The baseline currently contains:
 - `ChatMessage`
 - `MessageCitation`
 
-Only PRN222 is seeded. The seeded subject establishes the current course scope, but chapters are runtime-managed data and must not be limited to seed data. Do not invent chapter names/numbers from FLM without verified source data.
+Only PRN222 is seeded. The seeded subject establishes current course scope, but chapters are runtime-managed data. Do not invent chapter names/numbers from FLM without verified source data.
 
-The current model already contains the persistence needed for the planned workflows, including document index status/error/timestamps, chunk content/page/slide/embedding, chat timestamps, and message-to-chunk citations. Do not add speculative duplicate fields simply because a later workflow has not yet been implemented.
+The model already contains the planned persistence for document index status/error/timestamps, chunk content/page/slide/embedding, chat timestamps, and message-to-chunk citations. Do not add speculative duplicate fields simply because later workflows are still pending.
 
 ## Infrastructure configuration
 
-- `ConnectionStrings:Postgres` is the application-level PostgreSQL configuration key; use `ConnectionStrings__Postgres` for environment overrides.
+- `ConnectionStrings:Postgres` is the PostgreSQL configuration key; use `ConnectionStrings__Postgres` for environment overrides.
 - `Database:ApplyMigrationsOnStartup` controls startup migration application.
-- Identity roles are seeded at startup after the database is available; `Auth:SeedUsers:Enabled` separately controls optional local demo users.
+- Identity roles are seeded after the database is available; `Auth:SeedUsers:Enabled` separately controls optional local demo users.
 - The registered `NpgsqlDataSource` and EF Core provider both have pgvector support enabled.
 - `Rag:Ollama:BaseUrl`, `Rag:Ollama:ChatModel`, and `Rag:Ollama:EmbeddingModel` describe the AI runtime.
 - The named `Ollama` `HttpClient` is registered from `Rag:Ollama:BaseUrl`.
@@ -225,21 +287,14 @@ Default local models are `qwen3:4b` for chat and `qwen3-embedding:0.6b` for embe
 - Compose contains `app`, `postgres`, and `ollama` services.
 - The app connects internally to PostgreSQL through `postgres` and to Ollama through `ollama`; host-run development uses `localhost`.
 - Source documents are bind-mounted from `storage/uploads/` into the app container.
-- Keep named PostgreSQL and Ollama data volumes persistent unless the user explicitly requests a reset.
+- Keep named PostgreSQL and Ollama volumes persistent unless the user explicitly requests a reset.
 - Do not add pgAdmin, Qdrant, Redis, RabbitMQ, Elasticsearch, RAGFlow, or other services without an explicit requirement.
 
 ## Dependencies and frontend assets
 
 Frontend libraries are restored by LibMan. The source of truth is `libman.json`, and repository-local .NET CLI tools are declared in `dotnet-tools.json`.
 
-Do not edit downloaded files directly under these generated directories:
-
-- `src/PRN222.RagAssistant/wwwroot/lib/bootstrap/dist/`
-- `src/PRN222.RagAssistant/wwwroot/lib/jquery/dist/`
-- `src/PRN222.RagAssistant/wwwroot/lib/jquery-validation/dist/`
-- `src/PRN222.RagAssistant/wwwroot/lib/jquery-validation-unobtrusive/dist/`
-
-Update `libman.json` and run LibMan restore when frontend library versions or files need to change.
+Do not edit generated/downloaded frontend library files directly. Update `libman.json` and restore when versions/files change.
 
 ## Standard commands
 
@@ -263,19 +318,19 @@ docker compose exec ollama ollama list
 docker compose down
 ```
 
-For ordinary source changes, run the relevant restore command(s), `dotnet build`, and targeted tests. When the EF model changes, add a migration in the same change and validate that the model has no pending changes. Run `docker compose config` when Compose files change.
+For ordinary source changes, run the relevant restore command(s), `dotnet build`, and targeted tests. When the EF model changes, add a migration in the same change and validate no pending model changes remain. Run `docker compose config` when Compose files change.
 
 Do not run `docker compose down -v` or remove named PostgreSQL/Ollama volumes unless explicitly requested.
 
 ## Git and file hygiene
 
-- Use the .NET CLI for scaffolding, solution/project changes, references, package changes, and EF Core migrations where applicable.
-- Do not create a remote, push, or alter remote configuration unless explicitly requested.
+- Use the .NET CLI for scaffolding, solution/project changes, package changes, and EF Core migrations where applicable.
 - The remote default branch is `origin/master`; `origin/main` does not exist.
-- Use focused feature branches and pull requests. Do not have multiple members independently modify the same shared contract/schema file without coordination.
-- Never commit `.env`, real credentials, private keys, database dumps, logs, uploaded documents, build output, downloaded Ollama models, or other runtime data.
+- Use focused feature branches and pull requests.
+- Do not have multiple members independently modify the same shared contract/schema file without coordination.
+- Never commit `.env`, real credentials, private keys, database dumps, logs, uploaded documents, build output, downloaded Ollama models, or runtime data.
 - Keep `.env.example`, `docker-compose.yml`, `README.md`, solution files, source, tests, docs, migrations, and `evaluation/` version-controlled.
-- `bin/`, `obj/`, and LibMan-generated `wwwroot/lib/*/dist/` directories are ignored by design.
+- `storage/uploads/` is runtime data except for `.gitkeep`; processing/temp/chunk storage paths are also ignored.
 - Preserve unrelated user changes.
 
-Before handing off a change, report validation results and any remaining warnings or errors. Do not silently broaden the task beyond the user's request.
+Before handing off a change, report validation results and any remaining warnings or errors. After a major member workflow is merged, update `docs/project-status.md`, `docs/team-workflow.md`, relevant handoff docs, and these agent instructions if ownership/integration status changed.

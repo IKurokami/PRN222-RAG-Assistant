@@ -1,14 +1,22 @@
 # Member 1 - Core/Data handoff
 
-## Scope completed
+## Current status
+
+Member 1's shared baseline is complete and already consumed by the merged Member 2 Document Management work.
+
+Since this handoff was originally written, PR #5 has merged Member 2's runtime Chapter Management and Document Management request/presentation flow into `master`. Therefore, the old "Handoff to Member 2" section below is now historical/validated rather than future work.
+
+For the latest project milestone, read `docs/project-status.md`. For the next implementation handoff, read `docs/member-2-document-management-handoff.md`.
+
+## Scope completed by Member 1
 
 Member 1 owns the shared application/data baseline that the remaining workflows build on.
 
-The repository already had the required persistent entities, EF Core configurations, migration baseline, PostgreSQL/pgvector integration, Identity roles, and the `ManageDocuments` policy. This handoff intentionally does **not** add speculative schema fields or an unnecessary migration.
+The repository already had the required persistent entities, EF Core configurations, migration baseline, PostgreSQL/pgvector integration, Identity roles, and the `ManageDocuments` policy. This handoff intentionally did **not** add speculative schema fields or an unnecessary migration.
 
 Validated existing persistence covers:
 
-- PRN222 subject and chapters
+- PRN222 subject and runtime-manageable chapters
 - document metadata, source storage path, upload owner, indexing status/error/timestamps
 - document chunks with page/slide metadata and pgvector embeddings
 - chat sessions and messages
@@ -16,9 +24,11 @@ Validated existing persistence covers:
 - `SubjectLeader` and `Student` Identity roles
 - document-management authorization restricted to `SubjectLeader`
 
-`Chapter` persistence is intentionally reusable at runtime. The existing model already supports Subject Leader-managed Chapter CRUD without a schema change: `Chapter` has `Id`, `SubjectId`, `Number`, and `Title`; `(SubjectId, Number)` is unique; and `Document.ChapterId` is nullable.
+`Chapter` persistence is intentionally reusable at runtime. The existing model supports Subject Leader-managed Chapter CRUD without a schema change: `Chapter` has `Id`, `SubjectId`, `Number`, and `Title`; `(SubjectId, Number)` is unique; and `Document.ChapterId` is nullable.
 
-## Shared contracts added
+Member 2 now uses this model directly in the merged Chapter Management flow.
+
+## Shared contracts established
 
 ### Upload -> indexing
 
@@ -26,9 +36,11 @@ Validated existing persistence covers:
 
 The document-management workflow persists the source file and `Document` record first, then enqueues only the persisted `Document.Id`.
 
+This handoff is now active in merged Member 2 code. The current `InMemoryDocumentIndexingQueue` is only a temporary integration stub until Member 3 supplies the real background integration.
+
 `IDocumentIndexingService`
 
-The background worker invokes this service for each dequeued document. The implementation owns parsing, chunk replacement, embedding, and index-state transitions.
+The Member 3 background worker should invoke this service for each dequeued document. The implementation owns parsing, chunk replacement, embedding, and index-state transitions.
 
 ### Indexing/retrieval -> AI provider
 
@@ -55,20 +67,22 @@ These models keep the chat UI independent from database entities and provider-sp
 
 ## Core invariants protected by tests
 
-`CoreDataArchitectureTests` adds regression protection for:
+`CoreDataArchitectureTests` provides regression protection for:
 
 - explicit delete behavior on core relationships
 - presence/nullability of RAG persistence fields
 - the `ManageDocuments` policy allowing only `SubjectLeader`
 
-The existing `EntityModelConventionsTests` continues to enforce:
+`EntityModelConventionsTests` enforces:
 
 - no navigation properties in domain entities
 - one dedicated `IEntityTypeConfiguration<TEntity>` per entity
 
-## Why there is no new migration
+Member 2 has since added request-side tests for Chapter and Document Management. Those later tests do not replace the core architecture tests; both sets of invariants should stay green.
 
-No persistence gap was found that requires a schema change before Member 2-4 start.
+## Why Member 1 added no new migration
+
+No persistence gap was found that required a schema change before later members started.
 
 The existing model already has:
 
@@ -114,52 +128,28 @@ MessageCitation
 - Rank
 ```
 
-Adding fields without a concrete workflow requirement would create migration churn and increase merge conflicts. Later schema changes must follow the coordination rules in `AGENTS.md` and `docs/team-workflow.md`.
+Member 2's merged Chapter and Document Management features confirmed this decision: runtime Chapter CRUD and document metadata/upload flows were implemented without a new schema migration.
 
-## Handoff to Member 2
+Later schema changes must follow the coordination rules in `AGENTS.md` and `docs/team-workflow.md`.
 
-Member 2 should implement document and chapter management against the existing model.
+## Member 2 handoff - NOW MERGED
 
-Chapter Management belongs to the Flow 1 request/presentation side. Subject Leaders should be able to create, edit, list, and delete PRN222 chapters at runtime instead of depending on fixed seed data.
+The original Member 1 -> Member 2 expectations have been implemented.
 
-Expected Chapter flow:
+Merged Chapter Management behavior includes:
 
-```text
-Authorize SubjectLeader
-        |
-Create/Edit Chapter
-        |
-Validate SubjectId = PRN222
-        |
-Validate unique chapter Number within PRN222
-        |
-Persist Chapter
-```
+- Subject Leader authorization
+- runtime PRN222 Chapter list/create/edit/removal
+- chapter number/title validation
+- unique number validation within PRN222
+- preserving documents when a chapter is removed by clearing referenced nullable `ChapterId` values before removing the chapter
 
-For Chapter deletion, keep the existing restrictive relationship behavior. Do not cascade-delete documents and do not change the FK merely to make deletion easier.
-
-Expected delete sequence when documents reference a Chapter:
+Merged document flow includes:
 
 ```text
 Authorize SubjectLeader
         |
-Confirm destructive organization change
-        |
-BEGIN TRANSACTION
-        |
-Set matching Document.ChapterId = null
-        |
-Delete Chapter
-        |
-COMMIT
-```
-
-Expected document upload sequence:
-
-```text
-Authorize SubjectLeader
-        |
-Validate PDF/DOCX/PPTX
+Validate PDF/DOCX/PPTX and size
         |
 Validate optional ChapterId belongs to PRN222
         |
@@ -172,13 +162,15 @@ SaveChanges
 IDocumentIndexingQueue.EnqueueAsync(document.Id)
 ```
 
-Do not parse or embed the file in the upload request.
+Member 2 correctly leaves parsing/chunking/embedding outside the request handler.
 
-## Handoff to Member 3
+See `docs/member-2-document-management-handoff.md` for the current downstream integration contract.
+
+## Handoff to Member 3 - CURRENT NEXT STEP
 
 Member 3 should implement:
 
-- `IDocumentIndexingQueue`
+- final/integrated `IDocumentIndexingQueue` behavior
 - hosted/background worker
 - `IDocumentIndexingService`
 - parsers/chunking
@@ -195,6 +187,8 @@ On success, clear `IndexError` and set `IndexedAtUtc`.
 On failure, persist a useful bounded `IndexError` and set status to `Failed`.
 Re-indexing should replace stale chunks rather than append duplicates.
 
+Member 3 should preserve the merged Member 2 request-side handoff. The temporary `InMemoryDocumentIndexingQueue` and its DI registration may be replaced as part of the real worker integration.
+
 ## Handoff to Member 4
 
 Member 4 should implement:
@@ -208,9 +202,9 @@ Member 4 should implement:
 
 1. validate that `chatSessionId` belongs to `userId`;
 2. persist the user message;
-3. retrieve only indexed PRN222 document chunks;
-4. generate an answer using document context only;
-5. provide an explicit no-evidence/out-of-scope answer when retrieval is insufficient;
+3. retrieve only successfully indexed PRN222 document chunks;
+4. generate an answer using grounded document context;
+5. provide explicit no-evidence/out-of-scope behavior when retrieval is insufficient;
 6. persist the assistant message and source `MessageCitation` rows;
 7. return `RagAnswer` with ordered `RagCitation` values.
 
@@ -218,15 +212,19 @@ Member 4 should implement:
 
 Member 5 should treat `IRagQueryService` as the chat backend boundary and render `RagAnswer`/`RagCitation` results. UI code should not depend on Ollama payloads or raw pgvector queries.
 
+Member 5 also owns the `evaluation/` human-authored evaluation deliverable.
+
 ## Files to read before continuing
 
 ```text
 AGENTS.md
 src/PRN222.RagAssistant/Application/AGENTS.md
+docs/project-status.md
 docs/team-workflow.md
 docs/infrastructure.md
+docs/member-2-document-management-handoff.md
 ```
 
-## Validation status
+## Validation note
 
-This work was authored through the connected GitHub repository environment. The Chapter Management clarification does not change the EF model, so no new migration is expected. The existing restrictive `Document -> Chapter` relationship remains intentional; runtime unlinking before Chapter deletion belongs to the application workflow.
+Member 1's no-new-migration decision remains valid after Member 2's merge. The restrictive `Document -> Chapter` relationship also remains intentional; runtime document unassignment is handled in the application workflow rather than by changing the schema to cascade.
