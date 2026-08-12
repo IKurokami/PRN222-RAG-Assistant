@@ -21,7 +21,7 @@ This repository is the application/data/infrastructure baseline for a PRN222 cou
 - Source-document storage: `storage/uploads/`
 - Solution: `PRN222-RAG-Assistant.sln`
 
-The product is scoped to one subject, PRN222. Course documents are selected and uploaded by the Subject Leader. Students consume indexed material through chat. The application must not treat automatic FLM crawling as an authoritative ingestion path.
+The product is scoped to one subject, PRN222. Course documents are selected and uploaded by the Subject Leader. Subject Leaders may organize PRN222 documents into user-managed chapters; chapter records must not be treated as fixed seed-only data. Students consume indexed material through chat. The application must not treat automatic FLM crawling as an authoritative ingestion path.
 
 The current baseline includes authentication, authorization, EF Core domain persistence, infrastructure wiring, and shared application contracts for document indexing and RAG integration. Upload/parsing/chunking/indexing implementations, retrieval, grounded prompting, and chat UI are feature work owned by later workflow members.
 
@@ -48,11 +48,18 @@ Member 1 is the default owner for EF Core schema changes and committed migration
 Owns the document-management presentation/application workflow:
 
 - MVC/Razor Pages for document list/upload/details/delete/re-index
+- MVC/Razor Pages for chapter list/create/edit/delete
 - upload validation and source-file persistence
 - creating/updating `Document` metadata
+- creating/updating/deleting PRN222 `Chapter` records through the existing model
+- validating server-side that any selected `ChapterId` belongs to PRN222
 - calling `IDocumentIndexingQueue` after a document has been persisted
 
-Member 2 must not parse, chunk, embed, or call Ollama inside upload handlers. Document-management write endpoints must enforce `AppPolicies.ManageDocuments` server-side.
+Chapter management is part of the document-management workflow, not a seed-data-only concern. Subject Leaders must be able to create chapters without requiring a code, seed, or migration change when the course outline changes.
+
+Deleting a chapter must not delete documents. Keep the existing `Document -> Chapter` relationship protected by `DeleteBehavior.Restrict`; when a Subject Leader explicitly deletes a chapter that is referenced by documents, the application layer must first set those documents' nullable `ChapterId` values to `null` and then delete the chapter in one coherent transaction. Do not silently change the FK to cascading delete or rely on database-side implicit unlinking.
+
+Member 2 must not parse, chunk, embed, or call Ollama inside upload handlers. Document-management and chapter-management write endpoints must enforce `AppPolicies.ManageDocuments` server-side.
 
 ### Member 3 - Document Indexing / Ingestion
 
@@ -178,8 +185,8 @@ builder.HasOne<Subject>()
 - `ApplicationUser` extends `IdentityUser<Guid>` and must not add navigation properties.
 - Application role names live in `Security/AppRoles.cs`; do not scatter role-name string literals through controllers/pages/services.
 - Authorization policy names live in `Security/AppPolicies.cs`.
-- Document-management write operations must require `AppPolicies.ManageDocuments`, which is restricted to `AppRoles.SubjectLeader`.
-- Hiding an Upload/Delete/Re-index button is not authorization. Enforce authorization server-side on MVC actions/Razor Pages/handlers.
+- Document-management write operations, including chapter create/edit/delete operations, must require `AppPolicies.ManageDocuments`, which is restricted to `AppRoles.SubjectLeader`.
+- Hiding an Upload/Delete/Re-index/Create Chapter/Edit Chapter/Delete Chapter button is not authorization. Enforce authorization server-side on MVC actions/Razor Pages/handlers.
 - Do not add public role selection during registration. A user must never be able to self-select `SubjectLeader`.
 - Local demo-user seeding is configuration-driven and disabled by default. Never commit real credentials.
 
@@ -196,7 +203,7 @@ The baseline currently contains:
 - `ChatMessage`
 - `MessageCitation`
 
-Only PRN222 is seeded. Do not invent chapter names/numbers from FLM without verified source data.
+Only PRN222 is seeded. The seeded subject establishes the current course scope, but chapters are runtime-managed data and must not be limited to seed data. Do not invent chapter names/numbers from FLM without verified source data.
 
 The current model already contains the persistence needed for the planned workflows, including document index status/error/timestamps, chunk content/page/slide/embedding, chat timestamps, and message-to-chunk citations. Do not add speculative duplicate fields simply because a later workflow has not yet been implemented.
 
