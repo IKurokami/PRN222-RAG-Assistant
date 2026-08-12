@@ -1,0 +1,57 @@
+@page
+@model PRN222.RagAssistant.Pages.Documents.UploadModel
+@{
+    ViewData["Title"] = "Tải lên tài liệu môn PRN222";
+}
+
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2>Tải lên tài liệu môn PRN222</h2>
+            <a asp-page="./Index" class="btn btn-outline-secondary">Quay lại danh sách</a>
+        </div>
+
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <form method="post" enctype="multipart/form-data">
+                    <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+
+                    <div class="mb-3">
+                        <label asp-for="Input.Title" class="form-label fw-bold"></label>
+                        <input asp-for="Input.Title" class="form-control" placeholder="Nhập tiêu đề mô tả cho tài liệu..." />
+                        <span asp-validation-for="Input.Title" class="text-danger"></span>
+                    </div>
+
+                    <div class="mb-3">
+                        <label asp-for="Input.ChapterId" class="form-label fw-bold"></label>
+                        <div class="input-group">
+                            <select asp-for="Input.ChapterId" asp-items="Model.ChapterOptions" class="form-select">
+                                <option value="">-- Chọn chương môn học (Không bắt buộc) --</option>
+                            </select>
+                            <a asp-page="/Chapters/Create" class="btn btn-outline-secondary" title="Tạo chương mới">
+                                + Tạo chương mới
+                            </a>
+                        </div>
+                        <span asp-validation-for="Input.ChapterId" class="text-danger"></span>
+                    </div>
+
+                    <div class="mb-4">
+                        <label asp-for="Input.File" class="form-label fw-bold"></label>
+                        <input asp-for="Input.File" type="file" class="form-control" accept=".pdf,.docx,.pptx" />
+                        <div class="form-text">Định dạng chấp nhận: PDF, DOCX, PPTX (Dung lượng tối đa: 50MB).</div>
+                        <span asp-validation-for="Input.File" class="text-danger"></span>
+                    </div>
+
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <a asp-page="./Index" class="btn btn-light me-md-2">Hủy bỏ</a>
+                        <button type="submit" class="btn btn-primary px-4">Tải lên & Tự động Index</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

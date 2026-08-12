@@ -1,0 +1,50 @@
+@page "{id:guid}"
+@model PRN222.RagAssistant.Pages.Documents.EditModel
+@{
+    ViewData["Title"] = $"Chỉnh sửa - {Model.DocumentTitle}";
+}
+
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h2 class="mb-1">Chỉnh sửa tài liệu</h2>
+                <p class="text-muted mb-0">Cập nhật tiêu đề hoặc chương của tài liệu.</p>
+            </div>
+            <a asp-page="./Details" asp-route-id="@RouteData.Values["id"]" class="btn btn-outline-secondary">
+                Quay lại chi tiết
+            </a>
+        </div>
+
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <form method="post" asp-route-id="@RouteData.Values["id"]">
+                    <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+
+                    <div class="mb-3">
+                        <label asp-for="Input.Title" class="form-label fw-bold"></label>
+                        <input asp-for="Input.Title" class="form-control" placeholder="Nhập tiêu đề mô tả cho tài liệu..." />
+                        <span asp-validation-for="Input.Title" class="text-danger"></span>
+                    </div>
+
+                    <div class="mb-4">
+                        <label asp-for="Input.ChapterId" class="form-label fw-bold"></label>
+                        <select asp-for="Input.ChapterId" asp-items="Model.ChapterOptions" class="form-select">
+                            <option value="">-- Không gán chương cụ thể --</option>
+                        </select>
+                        <span asp-validation-for="Input.ChapterId" class="text-danger"></span>
+                    </div>
+
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <a asp-page="./Details" asp-route-id="@RouteData.Values["id"]" class="btn btn-light me-md-2">Hủy bỏ</a>
+                        <button type="submit" class="btn btn-primary px-4">Lưu thay đổi</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}
