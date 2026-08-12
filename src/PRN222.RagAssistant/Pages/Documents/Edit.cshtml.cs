@@ -25,12 +25,12 @@ public sealed class EditModel : PageModel
 
     public sealed class InputModel
     {
-        [Required(ErrorMessage = "Ti\u00eau \u0111\u1ec1 t\u00e0i li\u1ec7u l\u00e0 b\u1eaft bu\u1ed9c.")]
-        [StringLength(200, ErrorMessage = "Ti\u00eau \u0111\u1ec1 kh\u00f4ng \u0111\u01b0\u1ee3c v\u01b0\u1ee3t qu\u00e1 200 k\u00fd t\u1ef1.")]
-        [Display(Name = "Ti\u00eau \u0111\u1ec1 t\u00e0i li\u1ec7u")]
+        [Required(ErrorMessage = "Tiêu đề tài liệu là bắt buộc.")]
+        [StringLength(200, ErrorMessage = "Tiêu đề không được vượt quá 200 ký tự.")]
+        [Display(Name = "Tiêu đề tài liệu")]
         public string Title { get; set; } = string.Empty;
 
-        [Display(Name = "Ch\u01b0\u01a1ng (kh\u00f4ng b\u1eaft bu\u1ed9c)")]
+        [Display(Name = "Chương (không bắt buộc)")]
         public Guid? ChapterId { get; set; }
     }
 
@@ -59,6 +59,20 @@ public sealed class EditModel : PageModel
         {
             await LoadChapterOptionsAsync(cancellationToken);
             return Page();
+        }
+
+        // Blocker 3: Server-side validate ChapterId thuộc PRN222
+        if (Input.ChapterId.HasValue)
+        {
+            var chapterValid = await _dbContext.Chapters
+                .AnyAsync(c => c.Id == Input.ChapterId.Value && c.SubjectId == SeedData.Prn222SubjectId, cancellationToken);
+
+            if (!chapterValid)
+            {
+                ModelState.AddModelError("Input.ChapterId", "Chương được chọn không hợp lệ hoặc không thuộc môn PRN222.");
+                await LoadChapterOptionsAsync(cancellationToken);
+                return Page();
+            }
         }
 
         var document = await _dbContext.Documents.FirstOrDefaultAsync(d => d.Id == id, cancellationToken);

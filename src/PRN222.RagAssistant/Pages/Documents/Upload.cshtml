@@ -24,9 +24,14 @@
 
                     <div class="mb-3">
                         <label asp-for="Input.ChapterId" class="form-label fw-bold"></label>
-                        <select asp-for="Input.ChapterId" asp-items="Model.ChapterOptions" class="form-select">
-                            <option value="">-- Chọn chương môn học (Không bắt buộc) --</option>
-                        </select>
+                        <div class="input-group">
+                            <select asp-for="Input.ChapterId" asp-items="Model.ChapterOptions" class="form-select">
+                                <option value="">-- Chọn chương môn học (Không bắt buộc) --</option>
+                            </select>
+                            <a asp-page="/Chapters/Create" class="btn btn-outline-secondary" title="Tạo chương mới">
+                                + Tạo chương mới
+                            </a>
+                        </div>
                         <span asp-validation-for="Input.ChapterId" class="text-danger"></span>
                     </div>
 

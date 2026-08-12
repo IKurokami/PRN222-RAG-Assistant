@@ -1,0 +1,58 @@
+@page "{id:guid}"
+@model PRN222.RagAssistant.Pages.Chapters.DeleteModel
+@{
+    ViewData["Title"] = $"Xóa Chương {Model.ChapterNumber} - PRN222";
+}
+
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2 class="mb-0">Xác nhận xóa chương</h2>
+            <a asp-page="./Index" class="btn btn-outline-secondary">Quay lại</a>
+        </div>
+
+        <div class="card shadow-sm border-danger">
+            <div class="card-header bg-danger text-white fw-bold">
+                Thông tin chương sẽ bị xóa
+            </div>
+            <div class="card-body">
+                <dl class="row mb-0">
+                    <dt class="col-sm-4">Số thứ tự</dt>
+                    <dd class="col-sm-8">@Model.ChapterNumber</dd>
+
+                    <dt class="col-sm-4">Tên chương</dt>
+                    <dd class="col-sm-8">@Model.ChapterTitle</dd>
+                </dl>
+            </div>
+        </div>
+
+        @if (Model.AffectedDocumentCount > 0)
+        {
+            <div class="alert alert-warning mt-3" role="alert">
+                <h6 class="alert-heading fw-bold">
+                    ⚠️ Cảnh báo: Chương này đang có @Model.AffectedDocumentCount tài liệu liên kết
+                </h6>
+                <p class="mb-0">
+                    Khi xóa chương, <strong>@Model.AffectedDocumentCount tài liệu</strong> sẽ bị bỏ gán chương
+                    (ChapterId → null) nhưng <strong>các tài liệu vẫn còn trong hệ thống</strong> và không bị xóa.
+                    Bạn có thể vào trang tài liệu để gán lại chương sau.
+                </p>
+            </div>
+        }
+        else
+        {
+            <div class="alert alert-info mt-3" role="alert">
+                Chương này hiện không có tài liệu nào liên kết. Có thể xóa an toàn.
+            </div>
+        }
+
+        <div class="d-flex gap-2 mt-3">
+            <form method="post" asp-route-id="@RouteData.Values["id"]" class="flex-fill">
+                <button type="submit" class="btn btn-danger w-100">
+                    Xác nhận xóa chương
+                </button>
+            </form>
+            <a asp-page="./Index" class="btn btn-outline-secondary flex-fill">Hủy bỏ</a>
+        </div>
+    </div>
+</div>

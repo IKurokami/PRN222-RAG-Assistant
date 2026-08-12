@@ -21,17 +21,20 @@ public sealed class UploadModel : PageModel
     private readonly IDocumentIndexingQueue _indexingQueue;
     private readonly IConfiguration _configuration;
     private readonly UserManager<ApplicationUser> _userManager;
+    private readonly ILogger<UploadModel> _logger;
 
     public UploadModel(
         ApplicationDbContext dbContext,
         IDocumentIndexingQueue indexingQueue,
         IConfiguration configuration,
-        UserManager<ApplicationUser> userManager)
+        UserManager<ApplicationUser> userManager,
+        ILogger<UploadModel> logger)
     {
         _dbContext = dbContext;
         _indexingQueue = indexingQueue;
         _configuration = configuration;
         _userManager = userManager;
+        _logger = logger;
     }
 
     [BindProperty]
@@ -42,16 +45,16 @@ public sealed class UploadModel : PageModel
         private static readonly string[] AllowedExtensions = [".pdf", ".docx", ".pptx"];
         public const long MaxFileSizeBytes = 50 * 1024 * 1024; // 50 MB
 
-        [Required(ErrorMessage = "Ti\u00eau \u0111\u1ec1 t\u00e0i li\u1ec7u l\u00e0 b\u1eaft bu\u1ed9c.")]
-        [StringLength(200, ErrorMessage = "Ti\u00eau \u0111\u1ec1 kh\u00f4ng \u0111\u01b0\u1ee3c v\u01b0\u1ee3t qu\u00e1 200 k\u00fd t\u1ef1.")]
-        [Display(Name = "Ti\u00eau \u0111\u1ec1 t\u00e0i li\u1ec7u")]
+        [Required(ErrorMessage = "Tiêu đề tài liệu là bắt buộc.")]
+        [StringLength(200, ErrorMessage = "Tiêu đề không được vượt quá 200 ký tự.")]
+        [Display(Name = "Tiêu đề tài liệu")]
         public string Title { get; set; } = string.Empty;
 
-        [Display(Name = "Ch\u01b0\u01a1ng (kh\u00f4ng b\u1eaft bu\u1ed9c)")]
+        [Display(Name = "Chương (không bắt buộc)")]
         public Guid? ChapterId { get; set; }
 
-        [Required(ErrorMessage = "Vui l\u00f2ng ch\u1ecdn file c\u1ea7n t\u1ea3i l\u00ean.")]
-        [Display(Name = "File t\u00e0i li\u1ec7u (.pdf, .docx, .pptx)")]
+        [Required(ErrorMessage = "Vui lòng chọn file cần tải lên.")]
+        [Display(Name = "File tài liệu (.pdf, .docx, .pptx)")]
         public IFormFile? File { get; set; }
 
         public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
@@ -59,7 +62,7 @@ public sealed class UploadModel : PageModel
             if (File is null || File.Length == 0)
             {
                 yield return new ValidationResult(
-                    "File \u0111\u01b0\u1ee3c t\u1ea3i l\u00ean kh\u00f4ng h\u1ee3p l\u1ec7 ho\u1eb7c tr\u1ed1ng.",
+                    "File được tải lên không hợp lệ hoặc trống.",
                     [nameof(File)]);
                 yield break;
             }
@@ -67,7 +70,7 @@ public sealed class UploadModel : PageModel
             if (File.Length > MaxFileSizeBytes)
             {
                 yield return new ValidationResult(
-                    $"K\u00edch th\u01b0\u1edbc file v\u01b0\u1ee3t qu\u00e1 gi\u1edbi h\u1ea1n t\u1ed1i \u0111a (50 MB).",
+                    $"Kích thước file vượt quá giới hạn tối đa (50 MB).",
                     [nameof(File)]);
             }
 
@@ -75,7 +78,7 @@ public sealed class UploadModel : PageModel
             if (string.IsNullOrEmpty(extension) || !AllowedExtensions.Contains(extension))
             {
                 yield return new ValidationResult(
-                    $"\u0110\u1ecbnh d\u1ea1ng file '{extension}' kh\u00f4ng \u0111\u01b0\u1ee3c h\u1ed7 tr\u1ee3. C\u00e1c \u0111\u1ecbnh d\u1ea1ng \u0111\u01b0\u1ee3c ph\u00e9p: {string.Join(", ", AllowedExtensions)}",
+                    $"Định dạng file '{extension}' không được hỗ trợ. Các định dạng được phép: {string.Join(", ", AllowedExtensions)}",
                     [nameof(File)]);
             }
         }
@@ -95,6 +98,20 @@ public sealed class UploadModel : PageModel
         {
             await LoadChapterOptionsAsync(cancellationToken);
             return Page();
+        }
+
+        // Blocker 3: Server-side validate ChapterId thuộc PRN222
+        if (Input.ChapterId.HasValue)
+        {
+            var chapterValid = await _dbContext.Chapters
+                .AnyAsync(c => c.Id == Input.ChapterId.Value && c.SubjectId == SeedData.Prn222SubjectId, cancellationToken);
+
+            if (!chapterValid)
+            {
+                ModelState.AddModelError("Input.ChapterId", "Chương được chọn không hợp lệ hoặc không thuộc môn PRN222.");
+                await LoadChapterOptionsAsync(cancellationToken);
+                return Page();
+            }
         }
 
         var user = await _userManager.GetUserAsync(User);
@@ -121,6 +138,7 @@ public sealed class UploadModel : PageModel
         var extension = Path.GetExtension(Input.File.FileName).ToLowerInvariant();
         var storagePath = Path.Combine(uploadsFolder, $"{documentId}{extension}").Replace('\\', '/');
 
+        // Blocker 4: Ghi file trước, cleanup nếu DB fail
         await using (var stream = new FileStream(storagePath, FileMode.Create))
         {
             await Input.File.CopyToAsync(stream, cancellationToken);
@@ -142,8 +160,32 @@ public sealed class UploadModel : PageModel
             UploadedAtUtc = DateTime.UtcNow
         };
 
-        _dbContext.Documents.Add(document);
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        try
+        {
+            _dbContext.Documents.Add(document);
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            // DB failed — cleanup orphan file
+            _logger.LogError(ex, "Failed to persist document record for {DocumentId}. Cleaning up uploaded file at {StoragePath}.", documentId, storagePath);
+
+            try
+            {
+                if (System.IO.File.Exists(storagePath))
+                {
+                    System.IO.File.Delete(storagePath);
+                }
+            }
+            catch (Exception cleanupEx)
+            {
+                _logger.LogWarning(cleanupEx, "Failed to clean up orphan file at {StoragePath}.", storagePath);
+            }
+
+            ModelState.AddModelError(string.Empty, "Lưu thông tin tài liệu thất bại. Vui lòng thử lại.");
+            await LoadChapterOptionsAsync(cancellationToken);
+            return Page();
+        }
 
         await _indexingQueue.EnqueueAsync(document.Id, cancellationToken);
 

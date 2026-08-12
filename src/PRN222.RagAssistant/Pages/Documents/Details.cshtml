@@ -54,7 +54,7 @@
                     <dd class="col-sm-8">@Model.Document.UploadedByEmail</dd>
 
                     <dt class="col-sm-4">Thời gian tải lên</dt>
-                    <dd class="col-sm-8">@Model.Document.UploadedAtUtc.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss") (UTC)</dd>
+                    <dd class="col-sm-8">@Model.Document.UploadedAtUtc.ToString("dd/MM/yyyy HH:mm:ss") (UTC)</dd>
                 </dl>
             </div>
         </div>
@@ -97,7 +97,7 @@
                     <div>
                         @if (Model.Document.IndexedAtUtc.HasValue)
                         {
-                            <span>@Model.Document.IndexedAtUtc.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss")</span>
+                            <span>@Model.Document.IndexedAtUtc.Value.ToString("dd/MM/yyyy HH:mm:ss") (UTC)</span>
                         }
                         else
                         {

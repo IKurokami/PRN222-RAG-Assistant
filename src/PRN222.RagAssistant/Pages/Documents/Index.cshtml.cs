@@ -18,15 +18,18 @@ public sealed class IndexModel : PageModel
     private readonly ApplicationDbContext _dbContext;
     private readonly IDocumentIndexingQueue _indexingQueue;
     private readonly IAuthorizationService _authorizationService;
+    private readonly ILogger<IndexModel> _logger;
 
     public IndexModel(
         ApplicationDbContext dbContext,
         IDocumentIndexingQueue indexingQueue,
-        IAuthorizationService authorizationService)
+        IAuthorizationService authorizationService,
+        ILogger<IndexModel> logger)
     {
         _dbContext = dbContext;
         _indexingQueue = indexingQueue;
         _authorizationService = authorizationService;
+        _logger = logger;
     }
 
     public List<DocumentItemViewModel> Documents { get; set; } = [];
@@ -108,21 +111,26 @@ public sealed class IndexModel : PageModel
             return NotFound();
         }
 
-        if (System.IO.File.Exists(document.StoragePath))
+        var storagePathToDelete = document.StoragePath;
+
+        // Blocker 4: Commit DB trước để bảo toàn consistency.
+        // Nếu DB commit thành công mà file cleanup thất bại thì chỉ log warning,
+        // không để lại record trong DB trỏ đến file đã mất.
+        _dbContext.Documents.Remove(document);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        // Cleanup physical file sau khi DB commit thành công
+        if (System.IO.File.Exists(storagePathToDelete))
         {
             try
             {
-                System.IO.File.Delete(document.StoragePath);
+                System.IO.File.Delete(storagePathToDelete);
             }
             catch (Exception ex)
             {
-                // File deletion failure logged if needed, proceed with DB cleanup
-                _ = ex;
+                _logger.LogWarning(ex, "Document record {DocumentId} deleted from DB but failed to remove physical file at {StoragePath}.", id, storagePathToDelete);
             }
         }
-
-        _dbContext.Documents.Remove(document);
-        await _dbContext.SaveChangesAsync(cancellationToken);
 
         StatusMessage = $"Đã xóa tài liệu '{document.Title}' thành công.";
         return RedirectToPage(new { SelectedChapterId });
