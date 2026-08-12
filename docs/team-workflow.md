@@ -6,7 +6,7 @@ This document is the coordination contract for the five-member PRN222 RAG Assist
 
 The project uses three functional workflows:
 
-1. **Document Management & Indexing** - Subject Leader uploads PRN222 course material, the system stores it, indexes it, and exposes indexing state.
+1. **Document Management & Indexing** - Subject Leader manages PRN222 chapters, uploads course material, the system stores it, indexes it, and exposes indexing state.
 2. **RAG Question & Answer** - Student asks a question, the system retrieves relevant indexed chunks, generates a grounded answer, and returns citations.
 3. **Conversation History** - Student creates/reopens chat sessions and reviews persisted messages and citations.
 
@@ -35,11 +35,24 @@ Primary responsibility: Flow 1 request/presentation side.
 Owns:
 
 - document list/upload/details/delete/re-index UI
+- chapter list/create/edit/delete UI for PRN222
 - PDF/DOCX/PPTX upload validation
 - source-file persistence under configured upload storage
 - creation/update of `Document` metadata
+- creation/update/deletion of PRN222 `Chapter` records through the existing domain model
+- server-side validation that any selected `ChapterId` belongs to PRN222
 - server-side enforcement of `AppPolicies.ManageDocuments`
 - enqueueing persisted document IDs through `IDocumentIndexingQueue`
+
+Chapter Management is part of Flow 1. The Subject Leader must be able to create or reorganize chapters at runtime without editing seed data or requiring a migration when the course outline changes.
+
+When deleting a Chapter:
+
+1. Keep the existing `Document -> Chapter` relationship protected by `DeleteBehavior.Restrict`.
+2. If no documents reference the Chapter, delete it normally.
+3. If documents reference the Chapter, require an explicit user confirmation.
+4. In one coherent application transaction, set those documents' nullable `ChapterId` values to `null`, then delete the Chapter.
+5. Never cascade-delete documents as a side effect of deleting a Chapter.
 
 Must not:
 
@@ -122,11 +135,22 @@ Current contracts:
 - `RagAnswer`
 - `RagCitation`
 
-### Flow 1 handoff
+### Flow 1 request-side organization
 
 ```text
 Member 2
+Manage Chapters
+    |
+    +--> Create/Edit PRN222 Chapter
+    |
+    +--> Delete Chapter
+            |
+            +--> if referenced: Document.ChapterId = null
+            +--> delete Chapter
+
 Upload/validate/save source
+        |
+        +--> optional validated ChapterId
         |
         v
 Persist Document
@@ -163,7 +187,9 @@ RagAnswer + RagCitation[]
 
 ## Database coordination
 
-The baseline already includes persistence for the planned workflows. Do not add duplicate fields just because the business implementation has not been written yet.
+The baseline already includes persistence for the planned workflows. `Chapter` already contains `Id`, `SubjectId`, `Number`, and `Title`; `Document.ChapterId` is nullable; and `(SubjectId, Number)` is already unique. Runtime Chapter CRUD therefore does not require a schema change by itself.
+
+Do not change delete behavior merely to implement Chapter Management. The current restrictive FK is intentional; explicit unlinking of documents belongs in the Member 2 application workflow.
 
 If a later workflow genuinely requires a schema change:
 
@@ -186,6 +212,8 @@ feature/document-indexing
 feature/rag-chat
 feature/chat-ui-history
 ```
+
+Chapter Management belongs in the document-management workflow/branch unless the team intentionally splits it into a dedicated follow-up PR owned by Member 2.
 
 Each workflow should be merged through a pull request. Keep PRs scoped to the member's responsibility and avoid unrelated refactors.
 
