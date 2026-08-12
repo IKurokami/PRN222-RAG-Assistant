@@ -49,13 +49,13 @@ docker-compose.override.yml
 compose.override.yml
 
 # Runtime uploaded documents
-storage/uploads/*
-!storage/uploads/.gitkeep
+**/storage/uploads/*
+!**/storage/uploads/.gitkeep
 
 # Temporary document processing
-storage/temp/
-storage/processed/
-storage/chunks/
+**/storage/temp/
+**/storage/processed/
+**/storage/chunks/
 
 # Future AI/RAG runtime artifacts
 .ollama/
