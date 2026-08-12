@@ -16,6 +16,8 @@ Validated existing persistence covers:
 - `SubjectLeader` and `Student` Identity roles
 - document-management authorization restricted to `SubjectLeader`
 
+`Chapter` persistence is intentionally reusable at runtime. The existing model already supports Subject Leader-managed Chapter CRUD without a schema change: `Chapter` has `Id`, `SubjectId`, `Number`, and `Title`; `(SubjectId, Number)` is unique; and `Document.ChapterId` is nullable.
+
 ## Shared contracts added
 
 ### Upload -> indexing
@@ -71,9 +73,14 @@ No persistence gap was found that requires a schema change before Member 2-4 sta
 The existing model already has:
 
 ```text
+Chapter
+- SubjectId
+- Number
+- Title
+
 Document
 - SubjectId
-- ChapterId
+- ChapterId (nullable)
 - UploadedByUserId
 - title/file metadata/storage path
 - IndexStatus
@@ -111,14 +118,50 @@ Adding fields without a concrete workflow requirement would create migration chu
 
 ## Handoff to Member 2
 
-Member 2 should implement document management against the existing `Document` model.
+Member 2 should implement document and chapter management against the existing model.
 
-Expected request-side sequence:
+Chapter Management belongs to the Flow 1 request/presentation side. Subject Leaders should be able to create, edit, list, and delete PRN222 chapters at runtime instead of depending on fixed seed data.
+
+Expected Chapter flow:
+
+```text
+Authorize SubjectLeader
+        |
+Create/Edit Chapter
+        |
+Validate SubjectId = PRN222
+        |
+Validate unique chapter Number within PRN222
+        |
+Persist Chapter
+```
+
+For Chapter deletion, keep the existing restrictive relationship behavior. Do not cascade-delete documents and do not change the FK merely to make deletion easier.
+
+Expected delete sequence when documents reference a Chapter:
+
+```text
+Authorize SubjectLeader
+        |
+Confirm destructive organization change
+        |
+BEGIN TRANSACTION
+        |
+Set matching Document.ChapterId = null
+        |
+Delete Chapter
+        |
+COMMIT
+```
+
+Expected document upload sequence:
 
 ```text
 Authorize SubjectLeader
         |
 Validate PDF/DOCX/PPTX
+        |
+Validate optional ChapterId belongs to PRN222
         |
 Persist source file
         |
@@ -186,4 +229,4 @@ docs/infrastructure.md
 
 ## Validation status
 
-This work was authored through the connected GitHub repository environment. The local execution environment available during this change could not resolve GitHub for a local clone and did not have GitHub CLI available, so final compile/test validation is delegated to the repository CI after the branch is published as a pull request. No EF model change was made, therefore no new migration is expected.
+This work was authored through the connected GitHub repository environment. The Chapter Management clarification does not change the EF model, so no new migration is expected. The existing restrictive `Document -> Chapter` relationship remains intentional; runtime unlinking before Chapter deletion belongs to the application workflow.
