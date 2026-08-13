@@ -4,17 +4,18 @@ using PRN222.RagAssistant.Application.Abstractions;
 namespace PRN222.RagAssistant.Infrastructure.Services;
 
 /// <summary>
-/// TEMPORARY INTEGRATION STUB — Member 2 only.
+/// Process-local implementation of <see cref="IDocumentIndexingQueue"/> used by the merged
+/// document indexing pipeline.
 ///
-/// This in-memory implementation of <see cref="IDocumentIndexingQueue"/> exists solely
-/// so that the document-management upload flow can be developed and tested independently
-/// before Member 3's real queue implementation and background worker are merged.
+/// Document upload/re-index actions enqueue persisted document IDs here and
+/// <see cref="DocumentIndexingWorker"/> consumes them in the background.
 ///
-/// Ownership: <see cref="IDocumentIndexingQueue"/> implementation and the hosted background
-/// worker belong to Member 3. When Member 3's implementation is merged, this stub must be
-/// removed and the DI registration in <c>ServiceCollectionExtensions</c> replaced.
+/// This queue is intentionally in-memory rather than a durable external broker. Recovery is
+/// based on persisted document state: the worker re-enqueues documents still marked Uploaded
+/// or Processing when the application starts.
 ///
-/// Do NOT add indexing, parsing, chunking, or Ollama calls here.
+/// Keep parsing, chunking, embedding, and index-state business logic in
+/// <see cref="IDocumentIndexingService"/> rather than in this transport class.
 /// </summary>
 public sealed class InMemoryDocumentIndexingQueue : IDocumentIndexingQueue
 {

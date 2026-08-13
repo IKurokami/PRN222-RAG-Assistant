@@ -1,22 +1,20 @@
 # Application-layer instructions
 
-This subtree contains stable contracts shared by the document-management, indexing, RAG, and chat presentation workflows.
+This subtree contains stable contracts shared by document management, indexing, RAG, and presentation workflows.
 
-The project currently defines three product workflows:
+The project defines:
 
-1. **Flow 1 - Document Management & Indexing**
-2. **Flow 2 - RAG Question & Answer & Conversation Management**
-3. **Flow 3 - Report & Statistics**
+1. **Flow 1 - Document Management & Indexing** - complete
+2. **Flow 2 - RAG Question & Answer & Conversation Management** - pending
+3. **Flow 3 - Report & Statistics** - pending
 
-Conversation History is part of Flow 2. Flow 3 is a separate read-only reporting workflow and must not be implemented by reshaping the shared contracts unnecessarily.
+Conversation History belongs to Flow 2. Flow 3 is a separate read-only reporting workflow and should not reshape shared contracts unnecessarily.
 
 ## Current integration status
 
-Member 1 established these shared contracts. Member 2 is merged and actively consumes `IDocumentIndexingQueue` from the document upload/re-index flow.
+Member 1 established the shared contracts. Member 2 consumes `IDocumentIndexingQueue` from the merged document upload/re-index flow. Member 3 has now completed and merged the indexing implementation through PR #9.
 
-The repository currently contains `Infrastructure/Services/InMemoryDocumentIndexingQueue.cs` as a **temporary Member 2 integration stub**. It is not the final indexing subsystem. Member 3 owns the hosted worker, real indexing implementation, parser/chunker/embedding pipeline, and any replacement/integration of that temporary queue implementation.
-
-Do not redesign the Member 2 upload flow simply because indexing is still pending. The intended handoff is already established:
+The active Flow 1 handoff is:
 
 ```text
 Persist Document
@@ -25,92 +23,138 @@ Persist Document
 IDocumentIndexingQueue.EnqueueAsync(documentId)
     |
     v
-Member 3 background worker
+InMemoryDocumentIndexingQueue
+    |
+    v
+DocumentIndexingWorker
     |
     v
 IDocumentIndexingService.IndexAsync(documentId)
 ```
 
-Member 2 additionally owns Flow 3 in a separate focused reporting branch. The initial reporting implementation should aggregate existing persisted data and should not require a new `Application/` interface merely to count rows.
+`InMemoryDocumentIndexingQueue` is an in-process transport consumed by the worker. It is not a durable broker. The worker recovers persisted `Uploaded`/`Processing` documents at startup by re-enqueueing them.
 
-See `docs/project-status.md`, `docs/team-workflow.md`, `docs/member-2-document-management-handoff.md`, and `docs/flow-3-report-statistics-handoff.md` for the current project boundaries.
+Member 4 is now the next main consumer of the completed indexing boundary. Member 2 may implement Flow 3 in parallel using read-only aggregate queries.
+
+See:
+
+- `docs/project-status.md`
+- `docs/team-workflow.md`
+- `docs/member-3-document-indexing-handoff.md`
+- `docs/flow-3-report-statistics-handoff.md`
 
 ## Dependency boundaries
 
-- Presentation code (MVC/Razor Pages) may depend on `Application/Abstractions` and `Application/Models`.
+- Presentation code may depend on `Application/Abstractions` and `Application/Models`.
 - Application abstractions must not depend on Razor Pages, MVC controllers, `HttpContext`, Ollama-specific DTOs, or PostgreSQL-specific query types.
 - Infrastructure implementations may depend on these abstractions.
 - Do not duplicate a shared contract inside a feature folder when an abstraction already exists here.
-- Do not move parser, chunker, pgvector, or Ollama implementation logic into Member 2 request handlers.
-- Flow 3 reporting code must not call Ollama or pgvector similarity retrieval.
-- Flow 3 must not change a shared contract solely to make a dashboard/query page easier to implement.
+- Member 2 request handlers must not parse/chunk/embed documents.
+- Member 4 must not parse raw uploaded files or duplicate the indexing pipeline.
+- Member 5 presentation must not call Ollama or query pgvector directly.
+- Flow 3 must not call Ollama, run similarity retrieval, mutate indexing state, or change a shared contract solely for dashboard convenience.
 
 ## Current shared contracts
 
-- `IDocumentIndexingQueue`: handoff from the merged document upload/re-index actions to the Member 3 background indexing worker.
-- `IDocumentIndexingService`: one-document indexing pipeline executed by the worker.
-- `ITextEmbeddingService`: provider-neutral text embedding boundary shared by indexing and retrieval. It supports both single-text embedding for retrieval and ordered batch embedding for indexing.
-- `IChatCompletionService`: provider-neutral chat-generation boundary used by the RAG workflow.
-- `IRagQueryService`: presentation-facing boundary for asking a grounded question in an existing chat session.
-- `RagAnswer` / `RagCitation`: presentation-safe RAG result models used by the chat UI.
+### `IDocumentIndexingQueue`
 
-There is intentionally **no reporting-specific shared contract yet**. Initial Flow 3 aggregates can be implemented with focused read-only EF Core queries over the existing model. Introduce a reporting abstraction only if a concrete reuse/testability requirement justifies it.
+Handoff from document upload/re-index actions to the merged background indexing worker.
+
+### `IDocumentIndexingService`
+
+One-document indexing pipeline executed by `DocumentIndexingWorker`. Member 3 provides the merged implementation.
+
+### `ITextEmbeddingService`
+
+Provider-neutral text embedding boundary shared by indexing and retrieval.
+
+It supports:
+
+- single-text embedding for Member 4 question retrieval
+- ordered batch embedding for Member 3 document indexing
+
+The same configured embedding model must be used for indexing and retrieval.
+
+### `IChatCompletionService`
+
+Provider-neutral chat-generation boundary for Member 4's RAG implementation.
+
+### `IRagQueryService`
+
+Presentation-facing boundary for asking a grounded question in an existing chat session. Member 4 owns the implementation; Member 5 owns the presentation consumer.
+
+### `RagAnswer` / `RagCitation`
+
+Presentation-safe result models for Flow 2.
+
+There is intentionally no reporting-specific shared contract yet. Initial Flow 3 aggregates should use focused read-only EF Core queries unless a concrete reusable application-layer need justifies an abstraction.
 
 ## Ownership expectations
 
-### Flow 1 request/presentation - Member 2 - MERGED
+### Flow 1 request/presentation - Member 2 - COMPLETE
 
-The merged flow persists the source file and `Document` record first, validates an optional PRN222 chapter assignment, then enqueues only the persisted `Document.Id` through `IDocumentIndexingQueue`.
+Member 2:
 
-Document/Chapter Management is now an existing consumer of this application layer. Later members should preserve that handoff rather than creating a second upload/indexing entry point.
+- validates/stores uploads
+- persists `Document`
+- manages Chapters
+- enqueues persisted document IDs
 
-Member 2 request handlers must not parse or embed documents.
+Do not move background indexing into request handlers.
 
-### Flow 1 indexing - Member 3 - PENDING
+### Flow 1 indexing - Member 3 - COMPLETE
 
-Implement the background side behind the existing contracts:
+Merged PR #9 provides:
 
-- queue/worker integration
-- `IDocumentIndexingService`
-- parsing
-- chunk replacement
-- embeddings through `ITextEmbeddingService`
-- index-state transitions (`Uploaded` -> `Processing` -> `Indexed`/`Failed`)
-- `IndexedAtUtc` and `IndexError` updates
+- parser factory and PDF/DOCX/PPTX parsers
+- chunking
+- embedding batching
+- `OllamaTextEmbeddingService`
+- `DocumentIndexingService`
+- `DocumentIndexingWorker`
+- chunk replacement/persistence
+- index-state transitions
+- startup rehydration
 
-Member 3 may replace the temporary `InMemoryDocumentIndexingQueue` and its DI registration, but should keep `IDocumentIndexingQueue` stable unless all consumers are changed together.
+Member 3's output for downstream consumers is persisted successfully indexed `DocumentChunk` rows plus document index state.
 
 ### Flow 2 RAG backend - Member 4 - PENDING
 
-Use `ITextEmbeddingService` for question embedding and `IChatCompletionService` for generation.
+Member 4 should use the existing boundaries to:
 
-Implement `IRagQueryService` so it:
+- embed questions with `ITextEmbeddingService.EmbedAsync`
+- retrieve successfully indexed PRN222 chunks through pgvector
+- build grounded context
+- implement `IChatCompletionService`
+- implement `IRagQueryService`
+- validate chat-session ownership
+- persist messages/citations
+- provide explicit no-evidence/out-of-scope behavior
 
-- validates that the session belongs to the supplied authenticated user
-- persists user/assistant messages
-- retrieves successfully indexed PRN222 evidence
-- persists source citations
-- returns `RagAnswer`
-- provides explicit no-evidence/out-of-scope behavior when grounding is insufficient
+Do not parse raw source files or create a second embedding/indexing path.
 
-### Flow 2 presentation/conversation management - Member 5 - PENDING
+### Flow 2 presentation - Member 5 - PENDING
 
-Depend on `IRagQueryService`; do not call Ollama or pgvector directly from controllers, Razor Page models, or browser JavaScript.
+Member 5 depends on `IRagQueryService` and owns:
 
-Use `RagAnswer` and `RagCitation` rather than leaking persistence entities/provider DTOs into the UI.
+- chat/session UI
+- Conversation History
+- citation rendering
+- evaluation-facing presentation/tooling
 
-Member 5 owns chat-session creation/opening/navigation and **Conversation History as part of Flow 2**, plus citation rendering and the evaluation deliverable.
+Do not expose provider or pgvector details directly to browser/UI code.
 
-### Flow 3 Report & Statistics - Member 2 - NEW / PENDING
+### Flow 3 Report & Statistics - Member 2 - PENDING
 
-The initial reporting workflow should be read-only and derive aggregate information from existing persisted data, including where useful:
+The initial reporting workflow is read-only and may aggregate:
 
 - chapters
-- documents and indexing status
+- documents/indexing status
 - document/chapter grouping
-- chat sessions
-- chat messages
-- message citations
+- chunks where useful
+- chat sessions/messages/citations
+
+Because Member 3 is complete, document/indexing aggregates can use real merged data immediately.
 
 Flow 3 must not:
 
@@ -120,10 +164,8 @@ Flow 3 must not:
 - call Ollama
 - mutate chat/session/message/citation data
 - duplicate Member 5 conversation pages
-- create speculative analytics entities or migrations
-- force changes to the existing shared contracts
-
-If reporting later exposes a genuine reusable application-layer need, coordinate it additively and preserve existing Flow 1/Flow 2 consumers.
+- create speculative analytics schema
+- force shared-contract changes
 
 ## Contract changes
 
@@ -131,9 +173,9 @@ These interfaces are cross-member integration points. Prefer additive changes.
 
 If a signature must change:
 
-1. explain why the existing contract cannot represent the requirement;
-2. coordinate with the current producer/consumer owners;
-3. update all affected consumers and implementations together;
-4. update `docs/project-status.md`, `docs/team-workflow.md`, and the relevant handoff document when the change affects member boundaries.
+1. explain why the current contract cannot represent the requirement;
+2. coordinate with current producers/consumers;
+3. update all affected implementations/consumers together;
+4. update `docs/project-status.md`, `docs/team-workflow.md`, and relevant handoff docs.
 
-Do not change a shared contract merely to make one implementation more convenient, especially for the initial Flow 3 reporting dashboard.
+Do not change a shared contract merely to make one implementation more convenient.
