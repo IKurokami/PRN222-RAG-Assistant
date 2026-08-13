@@ -24,6 +24,8 @@ This assignment is intentionally chosen to avoid disrupting the currently active
 - Member 5 continues Flow 2 chat/history presentation and the evaluation deliverable.
 - Member 2 can start Flow 3 from the merged `master` baseline in a separate focused branch.
 
+The assignment changes ownership documentation only. It does not reopen Member 2's already merged Flow 1 implementation.
+
 ## Flow definition
 
 Primary actor: **Subject Leader**.
@@ -98,6 +100,7 @@ Member 2 must not implement Flow 3 by:
 - creating speculative analytics entities or migrations
 - changing existing Flow 1 behavior while adding reporting
 - using report pages to mutate documents, chapters, chats, messages, citations, or indexing state
+- changing existing `Application/` contracts solely to make reporting code more convenient
 
 Prefer aggregate, no-tracking EF Core queries against the existing model. If a genuine persistence gap is discovered, document the requirement first and coordinate the schema change through Member 1 instead of creating an isolated competing migration.
 
@@ -121,6 +124,22 @@ feature/report-statistics
 
 Keep the PR limited to Flow 3. Do not mix Flow 1 fixes, indexing changes, RAG changes, or chat UI refactors into the same PR.
 
+## Documentation synchronization
+
+The three-flow model must remain consistent across the repository. When Flow 3 is implemented or ownership/status changes, review and synchronize all relevant coordination documents:
+
+- `AGENTS.md`
+- `src/PRN222.RagAssistant/Application/AGENTS.md`
+- `README.md`
+- `docs/team-workflow.md`
+- `docs/project-status.md`
+- `docs/infrastructure.md`
+- `docs/member-1-core-data-handoff.md`
+- `docs/member-2-document-management-handoff.md`
+- this handoff document
+
+Do not update a coordination file blindly when another active PR is already modifying it. Resolve the active integration first and then synchronize the status snapshot against the latest `master`.
+
 ## Acceptance criteria
 
 Flow 3 is considered implemented when:
@@ -132,4 +151,4 @@ Flow 3 is considered implemented when:
 5. The workflow is read-only and does not mutate source workflow records.
 6. No speculative schema/migration is introduced solely for reporting.
 7. Relevant tests cover the aggregate/query behavior and access restriction.
-8. `docs/project-status.md`, `docs/team-workflow.md`, `README.md`, and `AGENTS.md` are synchronized when the implementation is merged.
+8. The documentation listed above is synchronized against the actual merged implementation state.
