@@ -136,12 +136,19 @@ public sealed class DocumentIndexingService : IDocumentIndexingService
         {
             _logger.LogError(ex, "Failed to index document {DocumentId}", documentId);
 
-            document.IndexStatus = DocumentIndexStatus.Failed;
-            document.IndexError = ex.Message.Length > 2000
-                ? ex.Message[..2000]
-                : ex.Message;
+            _dbContext.ChangeTracker.Clear();
 
-            await _dbContext.SaveChangesAsync(CancellationToken.None);
+            var failDoc = await _dbContext.Documents.FirstOrDefaultAsync(d => d.Id == documentId, CancellationToken.None);
+
+            if (failDoc is not null)
+            {
+                failDoc.IndexStatus = DocumentIndexStatus.Failed;
+                failDoc.IndexError = ex.Message.Length > 2000
+                    ? ex.Message[..2000]
+                    : ex.Message;
+
+                await _dbContext.SaveChangesAsync(CancellationToken.None);
+            }
         }
     }
 }

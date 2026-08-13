@@ -39,8 +39,10 @@ public sealed class TextChunker
                 var length = Math.Min(_maxChunkSize, remaining);
                 var segment = text.Substring(position, length);
 
+                var isEnd = position + length >= text.Length;
+
                 // Try to break at a sentence boundary if we're not at the end
-                if (position + length < text.Length)
+                if (!isEnd)
                 {
                     var lastSentenceEnd = FindLastSentenceEnd(segment);
 
@@ -51,7 +53,15 @@ public sealed class TextChunker
                     }
                 }
 
-                chunks.Add(new ChunkedText(chunkIndex++, segment.Trim(), page.PageNumber, page.SlideNumber));
+                if (!string.IsNullOrWhiteSpace(segment))
+                {
+                    chunks.Add(new ChunkedText(chunkIndex++, segment.Trim(), page.PageNumber, page.SlideNumber));
+                }
+
+                if (isEnd)
+                {
+                    break;
+                }
 
                 // Move forward, applying overlap
                 var advance = Math.Max(length - _overlapSize, 1);

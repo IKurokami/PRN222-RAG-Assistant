@@ -45,28 +45,18 @@ public sealed class PptxDocumentParser : IDocumentParser
     {
         var sb = new System.Text.StringBuilder();
 
-        if (slidePart.Slide?.CommonSlideData?.ShapeTree is null)
+        if (slidePart.Slide is null)
         {
             return string.Empty;
         }
 
-        foreach (var shape in slidePart.Slide.CommonSlideData.ShapeTree.Elements<Shape>())
+        foreach (var paragraph in slidePart.Slide.Descendants<DocumentFormat.OpenXml.Drawing.Paragraph>())
         {
-            var textBody = shape.TextBody;
+            var text = paragraph.InnerText?.Trim();
 
-            if (textBody is null)
+            if (!string.IsNullOrWhiteSpace(text))
             {
-                continue;
-            }
-
-            foreach (var paragraph in textBody.Elements<DocumentFormat.OpenXml.Drawing.Paragraph>())
-            {
-                var text = paragraph.InnerText?.Trim();
-
-                if (!string.IsNullOrWhiteSpace(text))
-                {
-                    sb.AppendLine(text);
-                }
+                sb.AppendLine(text);
             }
         }
 

@@ -17,7 +17,7 @@ public sealed class DocxDocumentParser : IDocumentParser
             return pages;
         }
 
-        var paragraphs = body.Elements<Paragraph>().ToList();
+        var paragraphs = body.Descendants<Paragraph>().ToList();
         var currentBlock = new System.Text.StringBuilder();
         var blockIndex = 1;
 

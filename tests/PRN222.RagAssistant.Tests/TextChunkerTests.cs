@@ -56,4 +56,21 @@ public sealed class TextChunkerTests
         Assert.Null(chunks[0].PageNumber);
         Assert.Equal(3, chunks[0].SlideNumber);
     }
+
+    [Fact]
+    public void Chunk_600Chars_ProducesExactlyTwoChunks()
+    {
+        var chunker = new TextChunker(maxChunkSize: 500, overlapSize: 100);
+        var text600 = new string('A', 600);
+        var pages = new[]
+        {
+            new ParsedPage(text600, PageNumber: 1, SlideNumber: null)
+        };
+
+        var chunks = chunker.Chunk(pages);
+
+        Assert.Equal(2, chunks.Count);
+        Assert.Equal(500, chunks[0].Content.Length);
+        Assert.Equal(200, chunks[1].Content.Length);
+    }
 }
