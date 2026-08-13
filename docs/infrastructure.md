@@ -135,7 +135,7 @@ Current contracts:
 
 - `IDocumentIndexingQueue`
 - `IDocumentIndexingService`
-- `ITextEmbeddingService`
+- `ITextEmbeddingService` (single-text and ordered batch embedding)
 - `IChatCompletionService`
 - `IRagQueryService`
 - `RagAnswer`

@@ -18,8 +18,8 @@ This file is the quickest place for team members and coding agents to understand
 | Core domain/data/security | Member 1 | Complete baseline | Entities, EF Core configurations, migration baseline, Identity roles/policy, pgvector wiring, shared application contracts and architecture tests are in place. |
 | Chapter Management | Member 2 | Merged | Runtime list/create/edit/delete for PRN222 chapters is implemented. Chapters are not seed-only data. |
 | Document Management | Member 2 | Merged | Upload, list, details, edit, delete and re-index request flows are implemented with server-side authorization and validation. |
-| Upload-to-index queue handoff | Member 2 -> Member 3 | Integrated with temporary stub | Document actions enqueue `Document.Id` through `IDocumentIndexingQueue`. `InMemoryDocumentIndexingQueue` is intentionally temporary and must be replaced/integrated by Member 3. |
-| Document parsing/chunking/indexing | Member 3 | Pending | No real parser, chunker, hosted indexing worker, indexing service or Ollama embedding implementation is merged yet. |
+| Upload-to-index queue handoff | Member 2 -> Member 3 | Complete | Document actions enqueue `Document.Id` through `IDocumentIndexingQueue`, consumed by `DocumentIndexingWorker`. |
+| Document parsing/chunking/indexing | Member 3 | Complete | Parsers for PDF (PdfPig), DOCX (OpenXml), PPTX (OpenXml), fixed-size TextChunker, OllamaTextEmbeddingService (`/api/embed`), DocumentIndexingService, and DocumentIndexingWorker are implemented and registered. |
 | Retrieval / grounded RAG backend | Member 4 | Pending | pgvector retrieval, grounded prompting, chat generation and `IRagQueryService` implementation remain. |
 | Chat UI / history / citations | Member 5 | Pending | Presentation for chat/history and citation rendering remains. |
 | Evaluation set | Member 5 | Pending | `evaluation/` is reserved for the required human-authored evaluation dataset. |
