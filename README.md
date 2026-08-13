@@ -4,7 +4,17 @@ A PRN222 course project built with ASP.NET Core, EF Core, PostgreSQL/pgvector, a
 
 The demo is scoped to PRN222. Course documents are curated and uploaded by the Subject Leader and become the chatbot's authoritative knowledge source after indexing. Chapter organization is managed at runtime by the Subject Leader instead of being fixed in seed data.
 
-See `docs/project-status.md` for the current whole-project milestone, `docs/team-workflow.md` for member ownership, and `docs/infrastructure.md` for infrastructure decisions and the intended RAG flow.
+See `docs/project-status.md` for the current whole-project milestone, `docs/team-workflow.md` for member ownership, `docs/flow-3-report-statistics-handoff.md` for the third workflow, and `docs/infrastructure.md` for infrastructure decisions and the intended RAG flow.
+
+## Product workflows
+
+The project defines three independent workflows:
+
+1. **Flow 1 - Document Management & Indexing** - Subject Leader manages chapters/documents and the system indexes uploaded course material.
+2. **Flow 2 - RAG Question & Answer & Conversation Management** - Student asks grounded questions, receives citations, and can reopen persisted conversation history.
+3. **Flow 3 - Report & Statistics** - Subject Leader reviews read-only aggregate document/indexing and chat-usage statistics.
+
+Conversation history is part of Flow 2 rather than being counted as the independent third workflow.
 
 ## Current project status
 
@@ -13,10 +23,10 @@ Current integration baseline after Member 2's Document Management work was merge
 | Member | Scope | Status |
 | --- | --- | --- |
 | Member 1 | Core/Data, Identity, authorization, EF Core model/migrations, shared contracts | Complete |
-| Member 2 | Document Management + runtime Chapter Management | Complete and merged |
-| Member 3 | Document parsing, chunking, embeddings, indexing queue/worker | Next / pending |
-| Member 4 | pgvector retrieval, grounded RAG backend, chat/citation persistence | Pending |
-| Member 5 | Chat UI, conversation history, citation rendering, evaluation set | Pending |
+| Member 2 | Flow 1 Document/Chapter Management + Flow 3 Report & Statistics | Flow 1 request side complete and merged; Flow 3 pending |
+| Member 3 | Flow 1 document parsing, chunking, embeddings, indexing queue/worker | Next / pending |
+| Member 4 | Flow 2 pgvector retrieval, grounded RAG backend, chat/citation persistence | Pending |
+| Member 5 | Flow 2 chat UI/conversation history/citation rendering + evaluation set | Pending |
 
 The repository currently provides:
 
@@ -92,15 +102,28 @@ Uploaded -> Processing -> Indexed
 
 When Member 3 lands the real indexing implementation, replace the temporary queue stub/DI registration rather than creating a second competing queue contract or moving indexing work into Razor Page handlers.
 
+### Flow 3 ownership
+
+Member 2 owns the new **Report & Statistics** workflow in a separate focused branch after synchronizing with the latest `master`.
+
+The first reporting version is intentionally read-only and should aggregate existing persisted data such as:
+
+- chapter/document totals
+- document counts by indexing state
+- document counts by chapter
+- chat-session/message/citation totals when Flow 2 data becomes available
+
+Flow 3 must not change Member 3 indexing behavior, Member 4 RAG behavior, or Member 5 chat/history UI. It should not introduce speculative analytics entities or migrations simply to count existing records. See `docs/flow-3-report-statistics-handoff.md` for the exact boundary.
+
 ## Team development boundaries
 
 The project is split by workflow so multiple members can work without duplicating or conflicting with each other:
 
 - **Member 1 - Core/Data Lead:** completed domain entities/enums, EF Core configurations/migrations, security policies, cross-workflow `Application/` contracts, architecture tests, and shared integration rules.
-- **Member 2 - Document Management:** completed document upload/list/details/edit/delete/re-index plus PRN222 Chapter list/create/edit/delete. Persists a `Document`, then hands the persisted `Document.Id` to `IDocumentIndexingQueue`.
+- **Member 2 - Document Management + Report & Statistics:** completed Flow 1 document/chapter request-side work and owns the separate read-only Flow 3 reporting workflow.
 - **Member 3 - Document Indexing:** owns parsers, chunking, the real indexing queue/worker, embeddings, `DocumentChunk` persistence, and document indexing status/error transitions.
 - **Member 4 - RAG Backend:** owns question embedding, pgvector retrieval, grounded prompts, Ollama chat generation, chat/citation persistence, and `IRagQueryService` implementation.
-- **Member 5 - Chat UI / History / Evaluation:** owns chat/history presentation, citation rendering, and the human-authored 50-question ground-truth evaluation set.
+- **Member 5 - Chat UI / Conversation Management / Evaluation:** owns Flow 2 chat/history presentation, citation rendering, and the human-authored 50-question ground-truth evaluation set.
 
 Before implementing the next member workflow, read:
 
@@ -112,6 +135,7 @@ docs/team-workflow.md
 docs/infrastructure.md
 docs/member-1-core-data-handoff.md
 docs/member-2-document-management-handoff.md
+docs/flow-3-report-statistics-handoff.md
 ```
 
 The cross-member contracts under `src/PRN222.RagAssistant/Application/` are intentional integration boundaries. Do not duplicate those interfaces in feature folders or bypass them by calling Ollama/pgvector directly from MVC controllers or Razor Page models.
@@ -121,6 +145,8 @@ The cross-member contracts under `src/PRN222.RagAssistant/Application/` are inte
 The repository keeps one EF Core migration chain. Member 1 is the default schema/migration coordinator. A later member who discovers a genuine persistence requirement should first explain the persistence gap, update the model/configuration coherently, synchronize with the latest integration branch, generate one migration, and run the pending-model check. Do not create speculative fields or parallel competing migrations.
 
 Runtime Chapter CRUD does not require a migration because the existing model already supports it through `Chapter` and nullable `Document.ChapterId`.
+
+The initial Flow 3 reporting scope should also use the existing persistence rather than introducing an analytics schema.
 
 ## Local setup
 
