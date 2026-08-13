@@ -2,130 +2,169 @@
 
 A PRN222 course project built with ASP.NET Core, EF Core, PostgreSQL/pgvector, and Ollama for a document-grounded RAG assistant.
 
-The demo is scoped to PRN222. Course documents are curated and uploaded by the Subject Leader and become the chatbot's authoritative knowledge source after indexing. Chapter organization is managed at runtime by the Subject Leader instead of being fixed in seed data.
+The demo is scoped to PRN222. Course documents are curated and uploaded by the Subject Leader and become the chatbot's authoritative knowledge source after indexing. Chapter organization is managed at runtime rather than fixed in seed data.
 
-See `docs/project-status.md` for the current whole-project milestone, `docs/team-workflow.md` for member ownership, `docs/flow-3-report-statistics-handoff.md` for the third workflow, and `docs/infrastructure.md` for infrastructure decisions and the intended RAG flow.
+See:
+
+- `docs/project-status.md` - latest merged project state
+- `docs/team-workflow.md` - canonical member/workflow ownership
+- `docs/infrastructure.md` - runtime/RAG architecture
+- `docs/member-3-document-indexing-handoff.md` - completed indexing handoff to RAG
+- `docs/flow-3-report-statistics-handoff.md` - Flow 3 reporting scope
 
 ## Product workflows
 
 The project defines three independent workflows:
 
-1. **Flow 1 - Document Management & Indexing** - Subject Leader manages chapters/documents and the system indexes uploaded course material.
-2. **Flow 2 - RAG Question & Answer & Conversation Management** - Student asks grounded questions, receives citations, and can reopen persisted conversation history.
-3. **Flow 3 - Report & Statistics** - Subject Leader reviews read-only aggregate document/indexing and chat-usage statistics.
+1. **Flow 1 - Document Management & Indexing** - Subject Leader manages chapters/documents; uploaded material is parsed, chunked, embedded, and indexed.
+2. **Flow 2 - RAG Question & Answer & Conversation Management** - Student asks grounded questions, receives citations, and can reopen Conversation History.
+3. **Flow 3 - Report & Statistics** - Subject Leader reviews read-only document/indexing/chat-usage statistics.
 
-Conversation history is part of Flow 2 rather than being counted as the independent third workflow.
+Conversation History belongs to Flow 2 rather than being counted as Flow 3.
 
 ## Current project status
 
-Current integration baseline after Member 2's Document Management work was merged into `master`:
+Latest baseline after PR #10 and PR #9:
 
 | Member | Scope | Status |
 | --- | --- | --- |
 | Member 1 | Core/Data, Identity, authorization, EF Core model/migrations, shared contracts | Complete |
-| Member 2 | Flow 1 Document/Chapter Management + Flow 3 Report & Statistics | Flow 1 request side complete and merged; Flow 3 pending |
-| Member 3 | Flow 1 document parsing, chunking, embeddings, indexing queue/worker | Next / pending |
+| Member 2 | Flow 1 Document/Chapter Management | Complete / merged |
+| Member 3 | Flow 1 parsing, chunking, embeddings, indexing worker/service | Complete / merged through PR #9 |
 | Member 4 | Flow 2 pgvector retrieval, grounded RAG backend, chat/citation persistence | Pending |
-| Member 5 | Flow 2 chat UI/conversation history/citation rendering + evaluation set | Pending |
+| Member 5 | Flow 2 chat UI, Conversation History, citation rendering, evaluation | Pending |
+| Member 2 | Flow 3 Report & Statistics | Defined / pending implementation |
 
-The repository currently provides:
+PR #9 head CI run #43 completed successfully before merge.
 
-- ASP.NET Core application with both MVC controllers/views and Razor Pages enabled
-- ASP.NET Core Identity backed by EF Core/PostgreSQL
-- `SubjectLeader` and `Student` roles
-- `ManageDocuments` authorization policy restricted to `SubjectLeader`
-- EF Core domain model for PRN222 subjects/chapters/documents/chunks and chat sessions/messages/citations
-- PostgreSQL + pgvector
-- Ollama local model runtime
-- persistent source-document storage under `storage/uploads/`
-- shared application contracts for document management -> indexing -> RAG -> presentation integration
-- runtime PRN222 Chapter list/create/edit/delete for Subject Leaders
-- document upload/list/details/edit/delete/re-index request workflow
-- PDF/DOCX/PPTX upload validation with a 50 MB limit
-- server-side validation that selected chapters belong to PRN222
-- architecture, authorization, Chapter Management, and Document Management tests
-- GitHub Actions build/test/EF-migration/Compose validation
+## Implemented Flow 1
 
-### Implemented Document Management flow
-
-Member 2's merged request-side Flow 1 now follows this boundary:
+Flow 1 is now end-to-end implemented.
 
 ```text
 Subject Leader
     |
-    +--> Manage PRN222 Chapters at runtime
-    |       +--> list
-    |       +--> create
-    |       +--> edit
-    |       \--> delete
-    |              \--> linked Document.ChapterId values are set to null first
+    +--> Manage PRN222 Chapters
     |
-    \--> Upload / manage documents
+    \--> Upload / manage / re-index documents
+            |
+            v
+Member 2 request side
             |
             +--> validate PDF / DOCX / PPTX and size
-            +--> validate optional ChapterId belongs to PRN222
-            +--> persist source file under storage/uploads/
-            +--> persist Document with IndexStatus = Uploaded
-            \--> IDocumentIndexingQueue.EnqueueAsync(document.Id)
-```
-
-Document and Chapter management request handlers must not parse, chunk, embed, or call Ollama directly.
-
-### Current Member 3 handoff
-
-`InMemoryDocumentIndexingQueue` is currently registered only as a **temporary integration stub** so the merged Member 2 upload/re-index workflow has a working `IDocumentIndexingQueue` implementation.
-
-Member 3 owns the next integration step:
-
-```text
+            +--> validate optional ChapterId
+            +--> persist source file
+            +--> persist Document with Uploaded status
+            |
+            v
 IDocumentIndexingQueue
-        |
-        v
-Hosted/background worker
-        |
-        v
-IDocumentIndexingService.IndexAsync(documentId)
-        |
-        +--> parse PDF / DOCX / PPTX
-        +--> chunk extracted text
-        +--> ITextEmbeddingService -> Ollama
-        +--> replace/persist DocumentChunk rows
-        \--> update Document indexing state
+            |
+            v
+InMemoryDocumentIndexingQueue
+            |
+            v
+DocumentIndexingWorker
+            |
+            v
+Member 3 indexing pipeline
+            |
+            +--> parse
+            +--> chunk
+            +--> batch embed through Ollama
+            +--> replace/persist DocumentChunk rows
+            \--> Indexed / Failed
 ```
 
-Expected state transitions:
+### Document/Chapter Management
+
+Member 2's merged request-side behavior includes:
+
+- runtime Chapter list/create/edit/delete
+- Document list/filter/upload/details/edit/delete/re-index request
+- PDF/DOCX/PPTX upload validation
+- 50 MB limit
+- Subject Leader authorization on writes
+- configured source-file storage
+- safe chapter deletion that preserves documents
+- queue handoff after `Document` persistence
+
+### Document Indexing
+
+Member 3's merged PR #9 includes:
+
+- PDF parser via PdfPig
+- DOCX/PPTX parsers via OpenXml
+- `DocumentParserFactory`
+- `TextChunker`
+- `TextEmbeddingBatcher`
+- `OllamaTextEmbeddingService`
+- `DocumentIndexingService`
+- `DocumentIndexingWorker`
+- coherent re-index chunk replacement
+- `Uploaded -> Processing -> Indexed/Failed` transitions
+- startup rehydration of persisted `Uploaded`/`Processing` documents
+
+`InMemoryDocumentIndexingQueue` is the active process-local queue consumed by the worker. It is not a durable external broker; startup recovery is based on persisted document indexing state.
+
+## Pending Flow 2
+
+Member 4 owns the RAG backend and can now rely on successfully indexed `DocumentChunk` rows.
+
+Expected backend path:
 
 ```text
-Uploaded -> Processing -> Indexed
-                     \-> Failed
+Question
+   |
+   v
+ITextEmbeddingService.EmbedAsync
+   |
+   v
+pgvector retrieval over Indexed PRN222 chunks
+   |
+   v
+Grounded context
+   |
+   v
+IChatCompletionService -> Ollama
+   |
+   +--> persist ChatMessage
+   \--> persist MessageCitation
+   |
+   v
+RagAnswer + RagCitation[]
 ```
 
-When Member 3 lands the real indexing implementation, replace the temporary queue stub/DI registration rather than creating a second competing queue contract or moving indexing work into Razor Page handlers.
+Member 5 owns presentation, session navigation, Conversation History, citation rendering, and the evaluation deliverable.
 
-### Flow 3 ownership
+## Pending Flow 3
 
-Member 2 owns the new **Report & Statistics** workflow in a separate focused branch after synchronizing with the latest `master`.
+Member 2 owns **Report & Statistics** in a separate focused branch such as:
 
-The first reporting version is intentionally read-only and should aggregate existing persisted data such as:
+```text
+feature/report-statistics
+```
 
-- chapter/document totals
-- document counts by indexing state
-- document counts by chapter
-- chat-session/message/citation totals when Flow 2 data becomes available
+Initial read-only metrics:
 
-Flow 3 must not change Member 3 indexing behavior, Member 4 RAG behavior, or Member 5 chat/history UI. It should not introduce speculative analytics entities or migrations simply to count existing records. See `docs/flow-3-report-statistics-handoff.md` for the exact boundary.
+- total chapters/documents
+- documents by indexing state
+- documents by chapter/unassigned
+- total chat sessions/messages/citations
+- optional chunk totals/recent indexing failures using existing persisted data
+
+Document/indexing statistics are already meaningful now that Member 3 is merged. Chat usage metrics should render zero/empty states until Flow 2 persists chat data.
+
+Flow 3 must not add speculative analytics tables, call Ollama, run pgvector similarity retrieval, mutate indexing/chat data, or duplicate Member 5 pages.
 
 ## Team development boundaries
 
-The project is split by workflow so multiple members can work without duplicating or conflicting with each other:
+- **Member 1 - Core/Data Lead:** schema/migration coordination, domain/data/security/shared contracts.
+- **Member 2 - Document Management + Reporting:** completed Flow 1 request side; pending read-only Flow 3.
+- **Member 3 - Document Indexing:** completed parser/chunker/embedding/worker/index-state pipeline.
+- **Member 4 - RAG Backend:** pending question embedding/retrieval/grounding/generation/chat persistence.
+- **Member 5 - Chat UI / Conversation Management / Evaluation:** pending Flow 2 presentation/evaluation.
 
-- **Member 1 - Core/Data Lead:** completed domain entities/enums, EF Core configurations/migrations, security policies, cross-workflow `Application/` contracts, architecture tests, and shared integration rules.
-- **Member 2 - Document Management + Report & Statistics:** completed Flow 1 document/chapter request-side work and owns the separate read-only Flow 3 reporting workflow.
-- **Member 3 - Document Indexing:** owns parsers, chunking, the real indexing queue/worker, embeddings, `DocumentChunk` persistence, and document indexing status/error transitions.
-- **Member 4 - RAG Backend:** owns question embedding, pgvector retrieval, grounded prompts, Ollama chat generation, chat/citation persistence, and `IRagQueryService` implementation.
-- **Member 5 - Chat UI / Conversation Management / Evaluation:** owns Flow 2 chat/history presentation, citation rendering, and the human-authored 50-question ground-truth evaluation set.
-
-Before implementing the next member workflow, read:
+Before implementing new workflow work, read:
 
 ```text
 AGENTS.md
@@ -135,34 +174,27 @@ docs/team-workflow.md
 docs/infrastructure.md
 docs/member-1-core-data-handoff.md
 docs/member-2-document-management-handoff.md
+docs/member-3-document-indexing-handoff.md
 docs/flow-3-report-statistics-handoff.md
 ```
 
-The cross-member contracts under `src/PRN222.RagAssistant/Application/` are intentional integration boundaries. Do not duplicate those interfaces in feature folders or bypass them by calling Ollama/pgvector directly from MVC controllers or Razor Page models.
-
-### Migration ownership
-
-The repository keeps one EF Core migration chain. Member 1 is the default schema/migration coordinator. A later member who discovers a genuine persistence requirement should first explain the persistence gap, update the model/configuration coherently, synchronize with the latest integration branch, generate one migration, and run the pending-model check. Do not create speculative fields or parallel competing migrations.
-
-Runtime Chapter CRUD does not require a migration because the existing model already supports it through `Chapter` and nullable `Document.ChapterId`.
-
-The initial Flow 3 reporting scope should also use the existing persistence rather than introducing an analytics schema.
+Do not duplicate cross-member contracts under `Application/` or bypass them by putting Ollama/pgvector logic directly in Razor Page models/controllers.
 
 ## Local setup
 
-Copy the example environment file when you want to override Docker Compose defaults:
+Copy the example environment file when overriding Docker Compose defaults:
 
 ```text
 cp .env.example .env
 ```
 
-On Windows Command Prompt you can use:
+Windows Command Prompt:
 
 ```text
 copy .env.example .env
 ```
 
-Restore .NET and frontend dependencies:
+Restore dependencies:
 
 ```text
 dotnet tool restore
@@ -186,12 +218,10 @@ docker compose up -d --build
 Compose starts:
 
 - ASP.NET Core application
-- PostgreSQL with pgvector support
-- Ollama local model runtime
-- persistent PostgreSQL and Ollama volumes
-- bind-mounted `storage/uploads/` for source documents
-
-The application applies committed EF Core migrations on startup when `DATABASE_APPLY_MIGRATIONS_ON_STARTUP=true`.
+- PostgreSQL + pgvector
+- Ollama
+- persistent PostgreSQL/Ollama volumes
+- bind-mounted `storage/uploads/`
 
 Check containers:
 
@@ -199,28 +229,32 @@ Check containers:
 docker compose ps
 ```
 
-Stop Docker Compose:
+Stop:
 
 ```text
 docker compose down
 ```
 
-Do not use `docker compose down -v` unless you intentionally want to delete the PostgreSQL and Ollama data volumes.
+Do not use `docker compose down -v` unless intentionally deleting local PostgreSQL/Ollama data.
 
 ## Authentication and demo accounts
 
-The app uses ASP.NET Core Identity with two application roles:
+Roles:
 
-- `SubjectLeader` - the only role allowed by the `ManageDocuments` policy
-- `Student` - normal learner access
+- `SubjectLeader`
+- `Student`
 
-The two roles are ensured at application startup after the database schema is available. Demo-user seeding is disabled by default. To create the local demo users documented in `.env.example`, copy the file to `.env` and set:
+`ManageDocuments` is restricted to `SubjectLeader`.
+
+Demo-user seeding is disabled by default. To enable the local example users, copy `.env.example` to `.env` and set:
 
 ```text
 AUTH_SEED_USERS=true
 ```
 
-Change the example passwords before using the accounts. The default example identities are:
+Change example passwords before use.
+
+Default example identities:
 
 ```text
 leader@prn222.local
@@ -233,36 +267,29 @@ Sign in at:
 http://localhost:8080/Account/Login
 ```
 
-The app does not expose public role selection, so a user cannot self-assign the `SubjectLeader` role.
+Users cannot self-select the `SubjectLeader` role.
 
-## Document and Chapter Management
+## Document storage
 
-Subject Leaders can manage the current Flow 1 request-side functionality through Razor Pages under:
+Uploaded documents use configured `Rag:Storage:UploadsPath`, defaulting to `storage/uploads/` locally.
 
-```text
-Pages/Chapters/
-Pages/Documents/
-```
+Runtime uploads are ignored by Git; only `.gitkeep` is version-controlled.
 
-Chapter records are **runtime-managed application data**. They are not restricted to fixed seed values. A Subject Leader can add a new PRN222 chapter when the course outline changes without modifying source code or creating a migration.
-
-When deleting a Chapter that is referenced by documents, the application keeps the restrictive database relationship and explicitly unlinks affected documents by setting `Document.ChapterId` to `null` before deleting the Chapter. Documents are never cascade-deleted as a side effect of Chapter deletion.
-
-Uploaded documents are persisted under the configured `Rag:Storage:UploadsPath`, which defaults to `storage/uploads/` for local development. Runtime uploaded files are intentionally ignored by Git; only `storage/uploads/.gitkeep` is version-controlled.
+PostgreSQL remains the source of truth for document metadata/indexing state/chunks.
 
 ## EF Core model and migrations
 
-Application persistence uses `ApplicationDbContext`, which also hosts the ASP.NET Core Identity schema.
+Application persistence uses `ApplicationDbContext` with ASP.NET Core Identity.
 
-The project intentionally uses **no navigation properties in entity classes**. Entities store scalar foreign-key IDs, while relationships and all other EF mappings live in dedicated `IEntityTypeConfiguration<TEntity>` classes under:
+Project conventions:
 
-```text
-src/PRN222.RagAssistant/Data/Configurations/
-```
+- no navigation properties in domain entities
+- scalar foreign keys
+- dedicated `IEntityTypeConfiguration<TEntity>` per entity
+- entity-specific Fluent API stays out of `ApplicationDbContext`
+- application schema changes use EF Core migrations
 
-`ApplicationDbContext.OnModelCreating` only invokes Identity's base configuration and scans the assembly for these configuration classes.
-
-When the EF model changes, generate a migration with the repository-local tool:
+Generate a migration only when the EF model genuinely changes:
 
 ```text
 dotnet tool restore
@@ -272,7 +299,7 @@ dotnet ef migrations add <MigrationName> \
   --output-dir Data/Migrations
 ```
 
-Verify that the model is fully represented by committed migrations:
+Check for uncommitted model changes:
 
 ```text
 dotnet ef migrations has-pending-model-changes \
@@ -280,42 +307,29 @@ dotnet ef migrations has-pending-model-changes \
   --startup-project src/PRN222.RagAssistant
 ```
 
-Apply migrations manually when needed:
-
-```text
-dotnet ef database update \
-  --project src/PRN222.RagAssistant \
-  --startup-project src/PRN222.RagAssistant
-```
-
-Do not use PostgreSQL init scripts to create application tables. They are only for database-runtime concerns such as enabling the `vector` extension.
+Do not create application tables through PostgreSQL init scripts or `EnsureCreated`.
 
 ## PRN222 seed data
 
-Only the PRN222 subject identity/scope is seeded as the authoritative course baseline:
-
-```text
-Code: PRN222
-```
-
-Chapters are intentionally **not seed-only data**. Their names and numbers are created and maintained by the Subject Leader at runtime. Do not invent chapter names/numbers from FLM in code or migrations without a verified requirement.
+Only PRN222 subject identity/scope is seeded. Chapters are runtime-managed application data and must not be invented from FLM in code/migrations without a verified requirement.
 
 ## Ollama models
 
-Pull the default local AI models after Ollama is running:
+Default local models:
+
+```text
+Chat:      qwen3:4b
+Embedding: qwen3-embedding:0.6b
+```
+
+Pull them after Ollama is running:
 
 ```text
 docker compose exec ollama ollama pull qwen3:4b
 docker compose exec ollama ollama pull qwen3-embedding:0.6b
 ```
 
-List installed Ollama models:
-
-```text
-docker compose exec ollama ollama list
-```
-
-If you change `OLLAMA_CHAT_MODEL` or `OLLAMA_EMBEDDING_MODEL` in `.env`, pull those model names instead. If the embedding model changes after documents have been indexed, affected documents must be re-indexed so indexing and retrieval use compatible vectors.
+If the embedding model changes after indexing, affected documents must be re-indexed.
 
 ## Verify pgvector
 
@@ -323,41 +337,12 @@ If you change `OLLAMA_CHAT_MODEL` or `OLLAMA_EMBEDDING_MODEL` in `.env`, pull th
 docker compose exec postgres sh -lc 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT extversion FROM pg_extension WHERE extname = '\''vector'\'';"'
 ```
 
-The init script enables pgvector automatically when PostgreSQL creates a new database volume.
+## Run directly on host
 
-## Run the application directly
-
-Start PostgreSQL and Ollama with Compose, then run the web application on the host:
+Start PostgreSQL/Ollama with Compose, then:
 
 ```text
 dotnet run --project src/PRN222.RagAssistant
 ```
 
-`appsettings.Development.json` points the host-run application at `localhost:5432` and `localhost:11434` and enables migration-on-startup for local development.
-
-## Environment configuration
-
-`.env.example` documents local defaults for:
-
-- application/runtime ports
-- PostgreSQL and pgvector
-- EF migration-on-startup
-- optional Identity demo users
-- Ollama runtime and model names
-- uploaded-document storage
-
-The `.env` file is intentionally ignored by Git. Keep real credentials and machine-specific values there.
-
-ASP.NET Core settings use standard double-underscore environment-variable keys in Compose, including:
-
-```text
-ConnectionStrings__Postgres
-Database__ApplyMigrationsOnStartup
-Auth__SeedUsers__Enabled
-Rag__Ollama__BaseUrl
-Rag__Ollama__ChatModel
-Rag__Ollama__EmbeddingModel
-Rag__Storage__UploadsPath
-```
-
-For project-wide coding conventions, especially EF Core entity/configuration rules and team ownership boundaries, see `AGENTS.md`.
+For detailed project-wide conventions and ownership rules, see `AGENTS.md`.

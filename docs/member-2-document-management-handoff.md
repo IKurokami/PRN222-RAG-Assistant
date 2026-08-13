@@ -2,111 +2,149 @@
 
 ## Status
 
-Member 2's Flow 1 request/presentation work is merged into `master` through PR #5 at merge commit `4a038bbf428cf96eafb97846f5a00904f9d78b63`. The PR head commit `b5681e026de0dac94de0f04d8644305cff047a3b` passed CI before merge.
-
-Member 2 now has two clearly separated responsibilities:
+Member 2 owns two separate responsibilities:
 
 1. **Flow 1 request/presentation side - COMPLETE / MERGED**
-2. **Flow 3 - Report & Statistics - NEW / PENDING**
+2. **Flow 3 Report & Statistics - PENDING IMPLEMENTATION**
 
-The new Flow 3 assignment must not be used as a reason to reopen or redesign the already merged Flow 1 implementation. Later members should integrate with the existing Flow 1 handoff instead of creating a second document-management flow.
+Member 3's PR #9 has now completed the downstream indexing side of Flow 1, so the Member 2 -> Member 3 handoff is fulfilled and Flow 1 is end-to-end implemented.
 
-Conversation History is part of **Flow 2 - RAG Question & Answer & Conversation Management** and is owned on the presentation side by Member 5. It is not counted as the independent third workflow.
+Conversation History remains part of Flow 2 and belongs to Member 5 on the presentation side.
 
-## Completed Chapter Management scope
+## Completed Flow 1 request/presentation scope
 
-Razor Pages under `Pages/Chapters/` now provide runtime PRN222 chapter listing, creation, editing and removal.
+### Chapter Management
+
+Razor Pages under `Pages/Chapters/` provide:
+
+- list
+- create
+- edit
+- delete
 
 Important behavior:
 
 - write pages require `AppPolicies.ManageDocuments`
-- chapter number and title are validated
-- duplicate chapter numbers are checked within PRN222
-- chapters are runtime-managed data, not a fixed seed-only list
-- documents remain in the system when a chapter is removed; referenced `Document.ChapterId` values are cleared as part of the application workflow
-- the existing restrictive EF relationship remains intentional
+- chapter number/title validation
+- duplicate chapter-number checks within PRN222
+- runtime-managed chapters rather than fixed seed-only data
+- documents are preserved when a chapter is removed
+- referenced `Document.ChapterId` values are cleared before deleting the chapter
+- the restrictive EF relationship remains intentional
 
-## Completed Document Management scope
+### Document Management
 
-Razor Pages under `Pages/Documents/` now provide:
+Razor Pages under `Pages/Documents/` provide:
 
-- document list and chapter filtering
+- list/filter
 - upload
 - details
-- metadata/chapter editing
-- removal
+- metadata/chapter edit
+- delete
 - re-index request
 
 Upload behavior includes:
 
 - Subject Leader authorization
 - PDF/DOCX/PPTX validation
-- 50 MB size limit
+- 50 MB limit
 - configured source-file storage
 - `Document` metadata persistence with initial `Uploaded` status
-- optional validation that the selected chapter belongs to PRN222
-- enqueueing the persisted `Document.Id` through `IDocumentIndexingQueue`
-- cleanup of a newly written source file if database persistence fails
+- optional validation that selected `ChapterId` belongs to PRN222
+- enqueueing persisted `Document.Id` through `IDocumentIndexingQueue`
+- cleanup of a newly written source file when database persistence fails
 
 Students may read document list/details without management actions.
 
-## Temporary queue integration
+## Member 2 -> Member 3 handoff - FULFILLED
 
-`Infrastructure/Services/InMemoryDocumentIndexingQueue.cs` is intentionally temporary. It exists only to complete the Member 2 -> Member 3 handoff through `IDocumentIndexingQueue`.
+Member 3 has now merged the background indexing implementation through PR #9.
 
-It is not a real indexing subsystem and contains no document parsing, chunking, embedding or Ollama workflow.
+The active Flow 1 path is:
 
-## Handoff to Member 3
+```text
+Member 2 upload / re-index
+        |
+        v
+Persist Document
+        |
+        v
+IDocumentIndexingQueue.EnqueueAsync(documentId)
+        |
+        v
+InMemoryDocumentIndexingQueue
+        |
+        v
+DocumentIndexingWorker
+        |
+        v
+DocumentIndexingService
+        |
+        +--> parse PDF / DOCX / PPTX
+        +--> chunk
+        +--> batch embed
+        +--> replace DocumentChunk rows
+        \--> Indexed / Failed
+```
 
-Member 3 owns the background side of Flow 1:
+Member 2 must continue to preserve this boundary. Do not move parsing/chunking/embedding into Razor Page handlers.
 
-- final queue/worker integration
-- hosted background worker
-- `IDocumentIndexingService`
-- PDF/DOCX/PPTX extraction
-- chunking
-- `ITextEmbeddingService`
-- `DocumentChunk` replacement/persistence
-- index status, error and timestamp transitions
+The in-memory queue is now the active process-local transport consumed by the worker. Startup recovery re-enqueues persisted `Uploaded`/`Processing` documents.
 
-Expected state flow remains `Uploaded -> Processing -> Indexed` with `Failed` as the error state.
-
-The Member 2 request flow should continue to enqueue a persisted document ID. Member 3 may replace the temporary queue class and its DI registration, but should preserve the shared queue contract unless all consumers are migrated together.
+See `docs/member-3-document-indexing-handoff.md` for the completed indexing boundary.
 
 ## Handoff to Members 4 and 5
 
-Member 4 owns the Flow 2 retrieval and grounded-generation backend on indexed chunks behind the existing shared application contracts.
+Member 4 now builds Flow 2 retrieval on successfully indexed chunks and the merged `ITextEmbeddingService`.
 
-Member 5 owns Flow 2 presentation, including:
+Member 5 owns Flow 2 presentation:
 
 - chat UI
-- chat-session creation/opening/navigation
-- conversation history
+- session creation/opening/navigation
+- Conversation History
 - citation rendering
 - evaluation deliverable
 
-Neither later workflow should move pgvector or Ollama calls into Member 2 Razor Page handlers.
+Neither Member 4 nor Member 5 should put provider/retrieval logic into Member 2 pages.
 
-## Flow 3 - Report & Statistics - NEW / PENDING
+## Flow 3 - Report & Statistics - PENDING
 
-Member 2 additionally owns the independent third product workflow after the merged Flow 1 request-side work.
+Member 2 owns the independent third workflow in a separate focused branch.
 
 Primary actor: **Subject Leader**.
 
-Goal: inspect read-only aggregate state and usage of the PRN222 RAG Assistant without modifying source workflow records.
+Goal: inspect read-only aggregate state/usage of the PRN222 RAG Assistant.
 
-Initial Flow 3 scope:
+### Initial report scope
+
+At minimum:
 
 - total PRN222 chapters
 - total PRN222 documents
-- document counts grouped by indexing status
-- document counts grouped by chapter, including unassigned documents
+- documents grouped by `DocumentIndexStatus`
+- documents grouped by chapter
+- unassigned document count
 - total chat sessions
 - total chat messages
 - total persisted citations
-- clear zero/empty states while later workflows are still pending
+- clear empty/zero states
 
-Expected first implementation path:
+Now that Member 3 is merged, indexing metrics are immediately meaningful and can use real persisted states:
+
+- `Uploaded`
+- `Processing`
+- `Indexed`
+- `Failed`
+
+Optional presentation improvements that remain within scope include:
+
+- recent indexing failures with `IndexError`
+- recently indexed documents using existing timestamps
+- total persisted `DocumentChunk` count
+
+These should still be computed from existing persistence.
+
+### Suggested flow
 
 ```text
 Subject Leader
@@ -122,45 +160,65 @@ Reports / Statistics
 Read-only dashboard / tables
 ```
 
-Prefer aggregate, no-tracking EF Core queries over the existing model. Flow 3 should not introduce custom analytics persistence, scheduled aggregation, event tracking, a reporting warehouse, or a separate infrastructure service for the first version.
+### Implementation guidance
 
-### Flow 3 non-interference rules
+Prefer:
 
-Member 2 must not implement reporting by:
+- aggregate EF Core queries
+- `AsNoTracking()` for read-only report queries where appropriate
+- simple Razor Pages/MVC presentation
+- empty-state handling
+- focused authorization tests
+- focused aggregate/query tests
 
-- changing Member 3 parsing/chunking/embedding/worker behavior
-- changing Member 4 RAG retrieval or grounded-generation behavior
-- duplicating Member 5 chat/history pages
-- mutating documents, chapters, indexing state, chat sessions, messages, or citations from report pages
-- changing shared `Application/` contracts solely for reporting convenience
-- creating speculative analytics entities or EF migrations
+Do not add complexity solely for reporting.
 
-If a genuine persistence gap is discovered, document the requirement first and coordinate it through Member 1, who remains the schema/migration coordinator.
+### Non-interference rules
 
-Flow 3 should be implemented in a separate focused branch such as:
+Flow 3 must not:
+
+- enqueue/re-index documents
+- alter parsers/chunker/embedding/worker behavior
+- mutate document/chapter/index status
+- perform pgvector similarity retrieval
+- call Ollama
+- duplicate Member 5 chat/history pages
+- mutate chat sessions/messages/citations
+- introduce analytics entities, denormalized counters, event tracking, a reporting warehouse, or scheduled aggregation solely to show the dashboard
+- change shared `Application/` contracts only for convenience
+
+If a genuine persistence gap is found, document it and coordinate the schema/migration through Member 1.
+
+## Suggested branch
 
 ```text
 feature/report-statistics
 ```
 
-See `docs/flow-3-report-statistics-handoff.md` for detailed acceptance criteria.
+The Flow 3 PR should remain focused. Do not mix Flow 1 fixes, indexing refactors, RAG work, or chat UI changes into it.
 
-## Relevant tests merged with Member 2
+## Relevant existing tests
 
-- `ChapterAuthorizationTests.cs`
-- `ChapterManagementTests.cs`
-- `DocumentManagementTests.cs`
+Member 2's merged tests cover Chapter/Document Management authorization, validation, safety, upload behavior, and queue handoff expectations.
 
-They cover request-side authorization, chapter validation and safety rules, upload validation and temporary queue behavior.
+The future Flow 3 PR should add tests for:
 
-The future Flow 3 PR should add focused tests for aggregate/query behavior and Subject Leader access without changing the existing Flow 1 tests unnecessarily.
+- Subject Leader access
+- unauthorized/student behavior according to the intended policy
+- aggregate correctness
+- grouped index-status counts
+- chapter/unassigned counts
+- empty chat-data states
 
 ## Read before continuing
 
-- `AGENTS.md`
-- `src/PRN222.RagAssistant/Application/AGENTS.md`
-- `docs/project-status.md`
-- `docs/team-workflow.md`
-- `docs/infrastructure.md`
-- `docs/member-1-core-data-handoff.md`
-- `docs/flow-3-report-statistics-handoff.md`
+```text
+AGENTS.md
+src/PRN222.RagAssistant/Application/AGENTS.md
+docs/project-status.md
+docs/team-workflow.md
+docs/infrastructure.md
+docs/member-1-core-data-handoff.md
+docs/member-3-document-indexing-handoff.md
+docs/flow-3-report-statistics-handoff.md
+```

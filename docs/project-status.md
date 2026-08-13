@@ -1,32 +1,156 @@
 # Project status
 
-Last synchronized against `master` after PR #5 was merged.
+Last synchronized against `master` after the merge of PR #10 (three-workflow ownership/docs) and PR #9 (Member 3 document indexing).
 
 Source baseline reviewed:
 
-- `master` merge commit: `4a038bbf428cf96eafb97846f5a00904f9d78b63`
-- merged feature: PR #5 - document management
-- PR #5 head commit: `b5681e026de0dac94de0f04d8644305cff047a3b`
-- CI for the PR #5 head commit completed successfully before merge
+- `master` merge commit: `5591b8d872c1a6200ced0dd75ce7af7c524b3038`
+- PR #10: **merged** - defines Flow 3 Report & Statistics and folds Conversation History into Flow 2
+- PR #9: **merged** - implements Member 3 document parsing, chunking, embeddings, indexing service, and background worker
+- PR #9 head commit: `0237813e51414a7535a7da77990d4e3f4156881b`
+- PR #9 CI run #43: **successful** before merge
 
-This file is the quickest place for team members and coding agents to understand what is already implemented and what remains.
+This file is the quickest status snapshot for team members and coding agents. When another document disagrees with this file, verify against the latest merged code on `master` and then synchronize the documentation.
+
+## Product workflows
+
+The project defines three independent workflows:
+
+1. **Flow 1 - Document Management & Indexing**
+2. **Flow 2 - RAG Question & Answer & Conversation Management**
+3. **Flow 3 - Report & Statistics**
+
+Conversation History belongs to Flow 2. It is not counted as the independent third workflow.
 
 ## Current project state
 
 | Area | Owner | Status | Notes |
 |---|---|---|---|
-| Core domain/data/security | Member 1 | Complete baseline | Entities, EF Core configurations, migration baseline, Identity roles/policy, pgvector wiring, shared application contracts and architecture tests are in place. |
-| Chapter Management | Member 2 | Merged | Runtime list/create/edit/delete for PRN222 chapters is implemented. Chapters are not seed-only data. |
-| Document Management | Member 2 | Merged | Upload, list, details, edit, delete and re-index request flows are implemented with server-side authorization and validation. |
-| Upload-to-index queue handoff | Member 2 -> Member 3 | Complete | Document actions enqueue `Document.Id` through `IDocumentIndexingQueue`, consumed by `DocumentIndexingWorker`. |
-| Document parsing/chunking/indexing | Member 3 | Complete | Parsers for PDF (PdfPig), DOCX (OpenXml), PPTX (OpenXml), fixed-size TextChunker, OllamaTextEmbeddingService (`/api/embed`), DocumentIndexingService, and DocumentIndexingWorker are implemented and registered. |
-| Retrieval / grounded RAG backend | Member 4 | Pending | pgvector retrieval, grounded prompting, chat generation and `IRagQueryService` implementation remain. |
-| Chat UI / history / citations | Member 5 | Pending | Presentation for chat/history and citation rendering remains. |
-| Evaluation set | Member 5 | Pending | `evaluation/` is reserved for the required human-authored evaluation dataset. |
+| Core domain/data/security | Member 1 | Complete baseline | Entities, EF Core configurations/migration baseline, Identity roles/policy, pgvector wiring, shared application contracts, and architecture tests are in place. |
+| Chapter Management | Member 2 | Complete / merged | Runtime PRN222 chapter list/create/edit/delete is implemented; chapters are not seed-only data. |
+| Document Management | Member 2 | Complete / merged | Upload, list, details, edit, delete, re-index request, authorization, validation, storage, and queue handoff are implemented. |
+| Document parsing/chunking/indexing | Member 3 | Complete / merged | PDF (PdfPig), DOCX/PPTX (OpenXml), chunking, batch embeddings, indexing service, worker, chunk replacement, and index-state transitions are implemented. |
+| Flow 1 end-to-end | Members 2 + 3 | Complete | Upload/re-index -> queue -> worker -> parse -> chunk -> embed -> `DocumentChunk` persistence -> `Indexed`/`Failed`. |
+| RAG retrieval / grounded backend | Member 4 | Pending | Question embedding, pgvector retrieval, grounded prompt construction, Ollama chat generation, `IRagQueryService`, message/citation persistence remain. |
+| Chat UI / conversation history / citations | Member 5 | Pending | Chat/session UI, conversation history, citation rendering, and evaluation integration remain. |
+| Flow 3 Report & Statistics | Member 2 | Defined / pending implementation | Read-only Subject Leader reporting over existing document/indexing/chat persistence. |
+| Evaluation set | Member 5 | Pending | `evaluation/` remains reserved for the human-authored 50-question ground-truth set. |
 
-## What Member 1 has already established
+## Flow 1 - now end-to-end complete
 
-The shared persistence model already contains:
+### Member 2 request/presentation side
+
+Merged behavior includes:
+
+- PRN222 Chapter list/create/edit/delete
+- Document list/filter/upload/details/edit/delete/re-index request
+- PDF/DOCX/PPTX upload validation
+- 50 MB upload limit
+- configured source-file persistence
+- `Document` metadata persistence with initial `Uploaded` status
+- server-side validation that an optional `ChapterId` belongs to PRN222
+- `AppPolicies.ManageDocuments` enforcement on write operations
+- persisted `Document.Id` handoff through `IDocumentIndexingQueue`
+- safe chapter deletion by clearing referenced nullable `Document.ChapterId` values before removing the chapter
+
+### Member 3 background indexing side
+
+PR #9 completed the indexing pipeline:
+
+```text
+Document upload / re-index
+        |
+        v
+IDocumentIndexingQueue.EnqueueAsync(documentId)
+        |
+        v
+InMemoryDocumentIndexingQueue
+        |
+        v
+DocumentIndexingWorker
+        |
+        v
+IDocumentIndexingService.IndexAsync(documentId)
+        |
+        +--> DocumentParserFactory
+        |       +--> PdfDocumentParser (PdfPig)
+        |       +--> DocxDocumentParser (OpenXml)
+        |       \--> PptxDocumentParser (OpenXml)
+        +--> TextChunker
+        +--> TextEmbeddingBatcher
+        +--> ITextEmbeddingService / Ollama `/api/embed`
+        +--> replace/persist DocumentChunk rows
+        \--> update Document indexing state
+```
+
+Required state flow is implemented:
+
+```text
+Uploaded -> Processing -> Indexed
+                     \-> Failed
+```
+
+Successful indexing clears `IndexError` and sets `IndexedAtUtc`. Failures persist `Failed` plus a bounded error message. Re-indexing replaces existing chunks instead of appending duplicates.
+
+### Queue/runtime note
+
+`InMemoryDocumentIndexingQueue` is now the active in-process transport consumed by `DocumentIndexingWorker`; it is no longer an unused Member 2-only stub.
+
+It is intentionally process-local rather than a durable external queue. `DocumentIndexingWorker` rehydrates documents whose persisted state is `Uploaded` or `Processing` at application startup, so the database indexing state remains the recovery source for the course-demo architecture.
+
+Do not introduce Redis/RabbitMQ or a separate worker service unless a concrete requirement justifies it.
+
+## Current handoff to Member 4
+
+Member 4 can now depend on successfully indexed `DocumentChunk` rows and the merged `ITextEmbeddingService` implementation.
+
+Member 4 owns:
+
+- single-question embedding through `ITextEmbeddingService.EmbedAsync`
+- pgvector similarity retrieval over indexed PRN222 chunks
+- top-K context selection
+- grounded/no-evidence behavior
+- `IChatCompletionService` implementation for Ollama chat generation
+- `IRagQueryService` implementation
+- chat-session ownership validation
+- persistence of user/assistant `ChatMessage` rows
+- persistence of ordered `MessageCitation` rows
+
+Member 4 must not parse raw uploaded files or duplicate the indexing pipeline.
+
+See `docs/member-3-document-indexing-handoff.md` for the completed Member 3 boundary.
+
+## Current handoff to Member 5
+
+Member 5 owns Flow 2 presentation:
+
+- chat/session creation and navigation
+- asking questions through `IRagQueryService`
+- answer/citation rendering
+- persisted Conversation History
+- evaluation set and evaluation-facing tooling
+
+UI code must not call Ollama or query pgvector directly.
+
+## Flow 3 - Report & Statistics
+
+Member 2 owns Flow 3 in a separate focused branch such as `feature/report-statistics`.
+
+The initial workflow remains read-only and should use existing persistence to show, at minimum:
+
+- total PRN222 chapters/documents
+- document counts by `DocumentIndexStatus`
+- document counts by chapter, including unassigned documents
+- total chat sessions/messages/citations
+- zero/empty states where Flow 2 data does not exist yet
+
+Because Member 3 is now complete, document/indexing statistics can use real persisted index states immediately. Chat usage statistics will naturally remain zero until Members 4/5 populate Flow 2 data.
+
+Do not add analytics tables, event tracking, scheduled aggregation, or a reporting service merely to produce these counts.
+
+## Shared persistence and contracts
+
+Current domain model:
 
 - `ApplicationUser`
 - `Subject`
@@ -37,120 +161,19 @@ The shared persistence model already contains:
 - `ChatMessage`
 - `MessageCitation`
 
-Important invariants already established:
-
-- PRN222 is the current product subject.
-- `Chapter` rows may be created and maintained at runtime.
-- `(SubjectId, Number)` is unique for chapters.
-- `Document.ChapterId` is nullable.
-- deleting a chapter must not cascade-delete documents.
-- document-management writes use `AppPolicies.ManageDocuments`, restricted to `SubjectLeader`.
-- entities do not use navigation properties; EF mapping belongs in dedicated configuration classes.
-- application schema changes use the existing EF Core migration chain.
-
-Shared contracts available under `Application/`:
+Current shared application contracts/models:
 
 - `IDocumentIndexingQueue`
 - `IDocumentIndexingService`
-- `ITextEmbeddingService`
+- `ITextEmbeddingService` - single-text and ordered batch embedding
 - `IChatCompletionService`
 - `IRagQueryService`
 - `RagAnswer`
 - `RagCitation`
 
-## What Member 2 has now merged
+Treat these public signatures as cross-member integration points. Prefer additive changes and update all affected producers/consumers together if a signature genuinely must change.
 
-### Chapter Management
-
-The repository now contains Razor Pages under `Pages/Chapters/` for:
-
-- list
-- create
-- edit
-- delete
-
-The implementation includes:
-
-- `ManageDocuments` authorization on write pages
-- runtime chapter creation without seed/migration changes
-- chapter number/title validation
-- duplicate chapter-number checks within PRN222
-- explicit PRN222 subject scoping
-- safe chapter deletion that unlinks referenced documents by setting `Document.ChapterId = null` before deleting the chapter
-
-### Document Management
-
-The repository now contains Razor Pages under `Pages/Documents/` for:
-
-- list/filter
-- upload
-- details
-- edit
-- delete
-- re-index request
-
-The implementation includes:
-
-- Subject Leader authorization for write operations
-- PDF/DOCX/PPTX upload validation
-- 50 MB upload size limit
-- source-file persistence under configured upload storage
-- `Document` metadata persistence
-- optional server-side validation that a selected chapter belongs to PRN222
-- initial `Uploaded` index state
-- queue handoff using the persisted `Document.Id`
-- cleanup of the newly written source file if database persistence fails
-- Student read access to document list/details without management actions
-
-Tests added by the Member 2 work cover upload validation, temporary queue behavior, chapter input rules, duplicate detection, chapter delete safety, cross-subject/nonexistent chapter rejection and authorization expectations.
-
-## Current integration boundary for Member 3
-
-`InMemoryDocumentIndexingQueue` currently exists under:
-
-```text
-src/PRN222.RagAssistant/Infrastructure/Services/InMemoryDocumentIndexingQueue.cs
-```
-
-It is a temporary integration stub so Member 2 could complete request-side work independently.
-
-Member 3 should build on the existing contract instead of changing the upload flow unnecessarily:
-
-```text
-Document upload/re-index
-        |
-        v
-IDocumentIndexingQueue.EnqueueAsync(documentId)
-        |
-        v
-Member 3 hosted/background worker
-        |
-        v
-IDocumentIndexingService.IndexAsync(documentId)
-        |
-        +--> parse PDF/DOCX/PPTX
-        +--> chunk
-        +--> ITextEmbeddingService
-        +--> replace DocumentChunk rows
-        +--> update Document indexing state
-```
-
-Required state transitions remain:
-
-```text
-Uploaded -> Processing -> Indexed
-                     \-> Failed
-```
-
-Member 3 owns the real queue/worker/indexing implementation. The temporary queue class and its DI registration may be replaced as part of that integration, but the `IDocumentIndexingQueue` handoff used by Member 2 should remain stable unless all consumers are updated together.
-
-## Current integration boundary for Members 4 and 5
-
-Member 4 should implement `IRagQueryService` and provider/infrastructure services behind the existing shared contracts. The backend must validate chat-session ownership, retrieve indexed PRN222 chunks, generate grounded answers, persist messages/citations and return `RagAnswer` with ordered citations.
-
-Member 5 should consume `IRagQueryService` from the presentation layer and should not query pgvector or call Ollama directly from UI code.
-
-## Files team members should read before starting new work
+## Required reading before continuing
 
 ```text
 AGENTS.md
@@ -160,6 +183,8 @@ docs/team-workflow.md
 docs/infrastructure.md
 docs/member-1-core-data-handoff.md
 docs/member-2-document-management-handoff.md
+docs/member-3-document-indexing-handoff.md
+docs/flow-3-report-statistics-handoff.md
 ```
 
-When code and this status file disagree, the latest merged code on `master` is the source of truth. Update this document again after each major member workflow is merged.
+After each major workflow PR is merged, synchronize this status snapshot and every document whose ownership/status description changed.

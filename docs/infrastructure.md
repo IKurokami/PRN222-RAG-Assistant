@@ -2,9 +2,9 @@
 
 ## Product context
 
-The demo targets one subject: PRN222. Course documents are curated and uploaded by the Subject Leader; students consume indexed content through the chatbot. The system should not scrape FLM automatically. FLM remains an upstream reference for the Subject Leader when selecting course materials.
+The demo targets one subject: PRN222. Course documents are curated and uploaded by the Subject Leader; students consume indexed content through the chatbot. Automatic FLM crawling is not an authoritative ingestion path.
 
-Expected source formats are PDF, DOCX, and PPTX lecture slides.
+Expected source formats are PDF, DOCX, and PPTX.
 
 The project defines three independent product workflows:
 
@@ -12,84 +12,170 @@ The project defines three independent product workflows:
 2. **Flow 2 - RAG Question & Answer & Conversation Management**
 3. **Flow 3 - Report & Statistics**
 
-Conversation History belongs to Flow 2. It is not counted as the independent third workflow.
+Conversation History belongs to Flow 2.
 
-The merged baseline now includes:
+## Current merged infrastructure state
 
-- authentication/authorization
-- EF Core domain persistence and migration baseline
-- PostgreSQL + pgvector integration
-- shared application contracts
-- runtime Chapter Management for PRN222
-- document upload/list/details/edit/removal/re-index request flows
-- request-side queue handoff through `IDocumentIndexingQueue`
+After PR #9 and PR #10, the baseline includes:
 
-The following are still pending later workflow implementation:
+- ASP.NET Core MVC + Razor Pages
+- ASP.NET Core Identity
+- PostgreSQL + pgvector
+- EF Core persistence/migrations
+- SubjectLeader/Student roles and authorization
+- Ollama local runtime
+- uploaded-file storage
+- runtime PRN222 Chapter Management
+- Document Management request/presentation flow
+- complete document parsing/chunking/embedding/indexing pipeline
+- shared application contracts for indexing and RAG handoffs
+- three-flow ownership including Flow 3 Report & Statistics
 
-- Flow 1 real background indexing worker
-- Flow 1 document parsing/chunking
-- Flow 1 Ollama embedding implementation
-- Flow 2 retrieval and grounded prompting
-- Flow 2 chat backend
-- Flow 2 chat UI/conversation history/citation rendering
-- Flow 3 read-only Report & Statistics UI/query implementation
+Still pending:
 
-See `docs/project-status.md` for the current merged milestone, `docs/team-workflow.md` for ownership, and `docs/flow-3-report-statistics-handoff.md` for the reporting boundary.
+- Flow 2 pgvector retrieval and grounded RAG backend (Member 4)
+- Flow 2 chat/session/history/citation presentation (Member 5)
+- Flow 3 read-only Report & Statistics implementation (Member 2)
+
+See `docs/project-status.md` for the current milestone.
 
 ## Runtime components
 
 ### ASP.NET Core application
 
-The web application is the single application process for the course demo. Both MVC controllers/views and Razor Pages are enabled so the same shared services/data layer can support the course assignment requirements.
+The web application is the single application process for the course demo. Both MVC controllers/views and Razor Pages are enabled so assignment requirements can share the same data/application infrastructure.
 
-The application already hosts authentication/authorization and the merged document/chapter management endpoints.
+The same application currently hosts:
 
-Flow 3 should remain inside the same ASP.NET Core application. The initial reporting workflow does not justify a separate analytics service, warehouse, event pipeline, cache, or scheduled aggregation subsystem.
+- authentication/authorization
+- Chapter Management
+- Document Management
+- the document indexing background worker
+- future RAG and reporting endpoints
 
-For this project scale, document indexing should initially use an ASP.NET Core hosted/background service instead of introducing Redis, RabbitMQ, or a separate worker service. A separate worker can be introduced later only if a concrete scaling requirement justifies it.
+Do not split indexing/reporting into extra services without a concrete requirement.
 
-### Current queue state
+### Document indexing queue and worker
 
-`IDocumentIndexingQueue` is already the request-to-background handoff contract used by Member 2.
+`IDocumentIndexingQueue` is the request-to-background handoff contract.
 
-The repository currently registers:
+The active implementation is:
 
 ```text
 Infrastructure/Services/InMemoryDocumentIndexingQueue.cs
 ```
 
-This implementation is a **temporary integration stub** merged with Member 2. It only lets upload/re-index request code enqueue document IDs before the real Member 3 background subsystem exists.
+It is now consumed by the merged `DocumentIndexingWorker`; it is no longer merely an unused Member 2 integration stub.
 
-It must not be mistaken for completed indexing. No hosted worker currently consumes documents into parsed/chunked/embedded `DocumentChunk` data as part of the merged Member 2 scope.
+Architecture:
 
-Member 3 owns replacement/integration of this temporary queue with the hosted worker and `IDocumentIndexingService`.
+```text
+Document upload / re-index
+        |
+        v
+IDocumentIndexingQueue
+        |
+        v
+InMemoryDocumentIndexingQueue
+        |
+        v
+DocumentIndexingWorker
+        |
+        v
+IDocumentIndexingService
+```
 
-Flow 3 must only read the resulting persisted indexing state. Reporting code must not enqueue work, mutate index status, or become part of the worker pipeline.
+The queue is process-local, not a durable broker. Recovery comes from persisted document state: at worker startup, documents still marked `Uploaded` or `Processing` are queried and re-enqueued.
+
+For this single-app course demo, this is the intended baseline. Do not introduce Redis/RabbitMQ solely to replace the current channel-backed queue.
+
+### Document parsing
+
+Member 3's merged parser layer supports:
+
+- PDF through PdfPig
+- DOCX through OpenXml Wordprocessing
+- PPTX through OpenXml Presentation
+
+`DocumentParserFactory` selects the parser from the stored file extension. Parsed output preserves page/slide metadata where available.
+
+### Chunking and embeddings
+
+`TextChunker` creates ordered text chunks with overlap while retaining source page/slide metadata.
+
+`ITextEmbeddingService` supports:
+
+- single-text embedding for retrieval
+- ordered batch embedding for indexing
+
+`OllamaTextEmbeddingService` implements this boundary using Ollama `/api/embed`, and `TextEmbeddingBatcher` performs bounded ordered batching for document chunks.
+
+The same configured embedding model must be used for indexing and retrieval. Changing the embedding model requires affected documents to be re-indexed.
+
+Default development embedding model:
+
+```text
+qwen3-embedding:0.6b
+```
+
+### Document indexing service
+
+`DocumentIndexingService` implements the merged Flow 1 background pipeline:
+
+```text
+Uploaded
+   |
+   v
+Processing
+   |
+   +--> resolve source file
+   +--> parse
+   +--> chunk
+   +--> embed
+   +--> replace DocumentChunk rows
+   |
+   +--> Indexed
+   \--> Failed
+```
+
+On successful indexing:
+
+- stale chunks are removed
+- new chunks and embeddings are persisted
+- `IndexStatus = Indexed`
+- `IndexedAtUtc` is set
+- `IndexError` is cleared
+
+On failure:
+
+- `IndexStatus = Failed`
+- a bounded error message is persisted
 
 ### Authentication and authorization
 
-ASP.NET Core Identity is backed by the same PostgreSQL database.
+ASP.NET Core Identity is backed by PostgreSQL.
 
 Application roles:
 
 - `SubjectLeader`
 - `Student`
 
-Document-management and chapter-management write operations are protected by the `ManageDocuments` policy, which allows only the `SubjectLeader` role. Public role selection is intentionally not exposed.
+Document/Chapter write operations require `AppPolicies.ManageDocuments`, restricted to Subject Leaders.
 
-The merged Member 2 pages enforce this server-side rather than relying only on hidden UI controls.
-
-The initial Flow 3 Reports/Statistics area is intended for Subject Leaders. Access must be enforced server-side. Reporting remains read-only even for an authorized Subject Leader.
+The initial Flow 3 Reports/Statistics area is also Subject-Leader-facing and read-only. Access must be enforced server-side.
 
 ### PostgreSQL + pgvector
 
-PostgreSQL is the system of record for document metadata, chapters, users/roles, chat sessions, messages, indexing state, chunks, and citations.
+PostgreSQL is the system of record for:
 
-The Compose service uses a pgvector-enabled PostgreSQL image so document-chunk embeddings can live beside relational metadata. The database init script enables the `vector` extension for a new database. The .NET application registers both `NpgsqlDataSource` and EF Core provider support for pgvector.
+- subjects/chapters
+- documents/index state
+- document chunks/embeddings
+- users/roles
+- chat sessions/messages
+- citations
 
-The EF Core model and committed migration baseline already exist. Application schema changes must continue through EF Core migrations; PostgreSQL init scripts are only for runtime concerns such as enabling extensions.
-
-Current persistence includes:
+Current application entities:
 
 - `Subject`
 - `Chapter`
@@ -98,30 +184,28 @@ Current persistence includes:
 - `ChatSession`
 - `ChatMessage`
 - `MessageCitation`
-- ASP.NET Core Identity tables
+- ASP.NET Core Identity entities/tables
 
-The current model already carries document indexing state/error/timestamps, page/slide metadata, vector embeddings, chat history, and citation links. Do not add duplicate persistence fields unless a concrete workflow requirement cannot be represented by the existing model.
+Application schema changes use EF Core migrations. PostgreSQL init scripts are only for runtime concerns such as enabling the `vector` extension.
 
-Runtime Chapter CRUD does not require a schema change because the model already supports it. Member 2 now uses that capability directly.
-
-The initial Flow 3 scope also requires no new analytics schema. Aggregate counts should be derived from the existing tables with read-only/no-tracking queries. Do not add denormalized counters, analytics entities, or event tables merely to show a dashboard.
+Flow 3 should aggregate the existing persistence; do not add analytics tables or duplicated counters simply to display a dashboard.
 
 ### Ollama
 
-Ollama provides a local model runtime so the demo does not require a paid hosted AI API. It exposes HTTP endpoints used later for chat generation and embeddings.
+Ollama provides local embeddings and future chat generation.
 
 Default development models:
 
 - Chat: `qwen3:4b`
 - Embedding: `qwen3-embedding:0.6b`
 
-Model names are configuration, not hard-coded business rules. They can be replaced through environment configuration without changing business code.
+A named `Ollama` `HttpClient` is registered from `Rag:Ollama:BaseUrl`.
 
-A named `Ollama` `HttpClient` is already registered from `Rag:Ollama:BaseUrl`.
+Ownership:
 
-Member 2's Flow 1 request handlers do not call Ollama. Member 3 should use Ollama behind `ITextEmbeddingService`; Member 4 should use it behind `IChatCompletionService`.
-
-Flow 3 must not call Ollama at all in the initial reporting version. Reporting is based on persisted application data, not AI-generated analysis.
+- Member 3 uses Ollama behind `ITextEmbeddingService` for indexing.
+- Member 4 will use the same embedding boundary for question embeddings and `IChatCompletionService` for chat generation.
+- Flow 3 reporting must not call Ollama.
 
 ### Shared application contracts
 
@@ -131,104 +215,96 @@ Cross-workflow contracts live under:
 src/PRN222.RagAssistant/Application/
 ```
 
-Current contracts:
+Current contracts/models:
 
 - `IDocumentIndexingQueue`
 - `IDocumentIndexingService`
-- `ITextEmbeddingService` (single-text and ordered batch embedding)
+- `ITextEmbeddingService` - single and ordered batch embedding
 - `IChatCompletionService`
 - `IRagQueryService`
 - `RagAnswer`
 - `RagCitation`
 
-The Member 2 Flow 1 request side already consumes `IDocumentIndexingQueue`. The remaining contracts are intended for Members 3-5.
+Member 3 now provides the indexing-side implementations behind the first three contracts as appropriate. Member 4 should build on these boundaries rather than duplicating provider/indexing logic.
 
-The first Flow 3 implementation should not modify these shared interfaces simply to compute counts. Prefer direct aggregate EF Core queries over the existing model. If a future reporting requirement genuinely needs a reusable contract, add it only with an explicit cross-member need.
-
-See `src/PRN222.RagAssistant/Application/AGENTS.md`, `docs/team-workflow.md`, `docs/member-2-document-management-handoff.md`, and `docs/flow-3-report-statistics-handoff.md` before implementing later workflows.
+Flow 3 should not change these interfaces simply to compute counts.
 
 ### Document storage
 
-Uploaded source documents are persisted under `storage/uploads/` and mounted into the application container at `/app/storage/uploads`.
+Uploaded source documents are persisted under `storage/uploads/` and mounted into the app container at `/app/storage/uploads`.
 
-The directory is version-controlled only through `.gitkeep`; uploaded course files must never be committed. Runtime processing directories are also ignored according to `.gitignore`.
+Uploaded files are runtime data and must not be committed. PostgreSQL remains the metadata/index source of truth.
 
-Member 2 now writes source files into the configured upload path and stores document metadata in PostgreSQL. If database persistence fails after a new source file has been written, the upload flow removes that new file to avoid leaving an orphaned upload.
+Flow 3 must query persisted metadata rather than scanning the upload directory.
 
-PostgreSQL remains the source of truth for document metadata and chunk/index records, while original binaries stay in storage.
+## Product workflow architecture
 
-Flow 3 should query PostgreSQL metadata and must not scan the upload directory to derive document statistics.
-
-## Current product workflow architecture
-
-### Flow 1 - Document Management & Indexing
-
-The request side up to the queue handoff is merged; the background indexing section remains pending until Member 3 lands it.
+### Flow 1 - Document Management & Indexing - COMPLETE
 
 ```text
 Subject Leader
     |
-    | manages PRN222 Chapters
-    | uploads PDF / DOCX / PPTX
-    v
-Member 2 document-management workflow       [MERGED]
-    |
-    | persist source file + Document
-    v
+    +--> manages Chapters
+    \--> uploads / re-indexes document
+            |
+            v
+Member 2 request side                 [MERGED]
+            |
+            v
+Persist Document
+            |
+            v
 IDocumentIndexingQueue
-    |
-    v
-InMemoryDocumentIndexingQueue               [TEMPORARY STUB]
-    |
-    v
-Member 3 hosted worker                      [PENDING]
-    |
-    | IDocumentIndexingService
-    +--> parse document
-    +--> split into chunks
-    +--> ITextEmbeddingService -> Ollama embedding model
-    +--> PostgreSQL + pgvector
+            |
+            v
+DocumentIndexingWorker                [MERGED]
+            |
+            v
+Member 3 indexing pipeline            [MERGED]
+            |
+            +--> parse
+            +--> chunk
+            +--> embed
+            +--> DocumentChunk + pgvector
+            \--> Indexed / Failed
 ```
 
-### Flow 2 - RAG Question & Answer & Conversation Management
+Flow 1 is end-to-end implemented in `master`.
+
+### Flow 2 - RAG Question & Answer & Conversation Management - PENDING
 
 ```text
 Student
     |
-    | creates/opens a chat session
-    | asks a question
+    | creates/opens chat session
+    | asks question
     v
-Member 5 chat presentation                  [PENDING]
+Member 5 presentation                 [PENDING]
     |
-    | IRagQueryService
     v
-Member 4 RAG backend                        [PENDING]
+IRagQueryService
     |
-    +--> ITextEmbeddingService -> question embedding
-    +--> retrieve relevant indexed chunks from pgvector
-    +--> build grounded prompt with source metadata
-    +--> IChatCompletionService -> Ollama chat model
-    +--> persist chat messages + MessageCitation rows
+    v
+Member 4 RAG backend                  [PENDING]
+    |
+    +--> ITextEmbeddingService.EmbedAsync
+    +--> pgvector retrieval over indexed chunks
+    +--> grounded context
+    +--> IChatCompletionService -> Ollama chat
+    +--> persist messages + citations
     v
 RagAnswer + RagCitation[]
-    |
-    v
-Member 5 renders answer/citations and conversation history
 ```
 
-Conversation History stays inside this flow because reopening persisted sessions is part of the student's chat lifecycle.
+Conversation History remains part of this flow.
 
-The same embedding model must be used for indexing and querying a given vector collection. Changing the embedding model requires re-indexing affected documents.
-
-### Flow 3 - Report & Statistics
-
-Flow 3 is a separate read-only workflow owned by Member 2 after its merged Flow 1 request-side work.
+### Flow 3 - Report & Statistics - PENDING
 
 ```text
 Subject Leader
       |
       v
-Reports / Statistics                        [PENDING]
+Reports / Statistics
       |
       +--> Chapter/document totals
       +--> Documents by IndexStatus
@@ -236,60 +312,50 @@ Reports / Statistics                        [PENDING]
       +--> Chat session/message/citation totals
       |
       v
-Read-only aggregate dashboard / tables
+Read-only dashboard / tables
 ```
 
-Data dependencies are intentionally loose:
-
-- document/chapter metrics work from the merged Flow 1 persistence
-- indexing-state metrics become meaningful when Member 3 completes indexing
-- chat/session/message/citation metrics become non-zero when Members 4-5 complete Flow 2
-
-The reports page must handle zero rows gracefully and must not block on those later implementations.
+Document/indexing metrics can use real data now that Member 3 is merged. Chat metrics must handle empty data until Flow 2 lands.
 
 ## Flow 3 non-interference boundary
 
 The first reporting implementation must not:
 
-- alter the indexing queue/worker, parser, chunker, embedding model, or index-state transitions
+- alter the indexing queue/worker/parser/chunker/embedding behavior
+- enqueue or re-index documents as part of reporting
 - run pgvector similarity retrieval
 - call Ollama
 - duplicate chat/history presentation
-- mutate `Chapter`, `Document`, `DocumentChunk`, `ChatSession`, `ChatMessage`, or `MessageCitation`
-- add speculative analytics persistence or infrastructure
-- change shared contracts only to make dashboard code convenient
+- mutate workflow entities
+- add speculative analytics infrastructure or schema
 
-If reporting exposes a genuine missing persistence requirement, document it first and coordinate the schema through Member 1.
+If reporting exposes a genuine missing persistence requirement, coordinate through Member 1.
 
-## What is intentionally not added yet
+## Intentionally not added
 
-- Redis or RabbitMQ: unnecessary for the first single-app demo.
-- Qdrant or another separate vector database: pgvector is already the chosen vector store.
-- RAGFlow/LangChain service: orchestration should remain explicit in the .NET application unless a requirement justifies otherwise.
-- Automatic FLM crawling: Subject Leader uploads remain authoritative.
-- Real document parsing packages/worker: Member 3 responsibility until its implementation lands.
-- Retrieval/grounded generation: Member 4 responsibility.
-- Chat/history UI and citation rendering: Member 5 responsibility.
-- Analytics warehouse/event pipeline/scheduled reporting: unnecessary for initial Flow 3.
+- Redis/RabbitMQ or a separate worker service
+- Qdrant or another vector database
+- RAGFlow/LangChain service
+- automatic FLM crawling
+- analytics warehouse/event pipeline/scheduled reporting
 
-Document and Chapter Management are no longer in this "not added" list because Member 2 has merged them. Flow 3 is defined but not yet implemented.
+Pending product implementation is limited to the remaining Flow 2 and Flow 3 work described above.
 
 ## Evaluation deliverable
 
-The repository reserves `evaluation/` for the required human-authored PRN222 evaluation set. The final deliverable should contain at least 50 question/ground-truth-answer cases, ideally with source-document/chapter references so retrieval and citation quality can also be evaluated.
-
-Evaluation belongs to Member 5 and should not be folded into Flow 3 merely because both involve numbers or summaries.
+`evaluation/` is reserved for Member 5's human-authored PRN222 evaluation set of at least 50 question/ground-truth cases. Evaluation is not part of Flow 3 merely because it contains metrics.
 
 ## Configuration ownership
 
-- `.env.example`: local Docker Compose defaults and infrastructure model/image selection.
-- `.env`: developer-specific overrides; never commit it.
-- `appsettings.Development.json`: sensible defaults when running the ASP.NET Core app directly on the host.
-- Docker Compose environment variables: container-specific hostnames and mounted storage paths.
-- `AGENTS.md`: project-wide architecture, schema, authorization, current workflow status, and team ownership rules.
-- `src/PRN222.RagAssistant/Application/AGENTS.md`: shared application-contract rules.
-- `docs/project-status.md`: current merged milestone and next integration owner.
-- `docs/team-workflow.md`: canonical member/workflow ownership.
-- `docs/flow-3-report-statistics-handoff.md`: Flow 3 implementation boundary and acceptance criteria.
+- `.env.example`: local Docker Compose defaults
+- `.env`: developer-specific overrides; never commit
+- `appsettings.Development.json`: host-run development defaults
+- Docker Compose environment variables: container-specific settings
+- `AGENTS.md`: project-wide conventions/ownership
+- `src/PRN222.RagAssistant/Application/AGENTS.md`: shared contract rules
+- `docs/project-status.md`: current merged status
+- `docs/team-workflow.md`: canonical ownership
+- `docs/member-3-document-indexing-handoff.md`: completed indexing -> RAG handoff
+- `docs/flow-3-report-statistics-handoff.md`: reporting boundary
 
-Secrets should never be added to committed configuration files.
+Secrets must never be committed.

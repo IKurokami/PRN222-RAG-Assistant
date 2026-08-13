@@ -2,255 +2,203 @@
 
 ## Current status
 
-Member 1's shared baseline is complete and already consumed by the merged Member 2 Document Management work.
+Member 1's shared Core/Data baseline is **complete** and is now consumed by completed Flow 1 plus the pending Flow 2/Flow 3 work.
 
-Since this handoff was originally written, PR #5 has merged Member 2's runtime Chapter Management and Document Management request/presentation flow into `master`. The project now also defines an independent **Flow 3 - Report & Statistics**, assigned to Member 2 as a separate read-only workflow.
+Latest merged milestone:
 
-For the latest project milestone, read `docs/project-status.md`. For workflow ownership, read `docs/team-workflow.md`. For reporting scope, read `docs/flow-3-report-statistics-handoff.md`.
+- Member 1 Core/Data: complete
+- Member 2 Flow 1 request/presentation: complete
+- Member 3 Flow 1 indexing: complete through PR #9
+- Member 4 Flow 2 backend: pending
+- Member 5 Flow 2 presentation/evaluation: pending
+- Member 2 Flow 3 Report & Statistics: pending
 
-## Product workflow relationship to the Core/Data baseline
+For the canonical snapshot, read `docs/project-status.md`.
 
-The shared model supports three product workflows:
+## Relationship to the three workflows
 
-1. **Flow 1 - Document Management & Indexing**
-2. **Flow 2 - RAG Question & Answer & Conversation Management**
-3. **Flow 3 - Report & Statistics**
+The shared model supports:
 
-Conversation History belongs to Flow 2 and is not counted as the independent third workflow.
+1. **Flow 1 - Document Management & Indexing** - now end-to-end complete
+2. **Flow 2 - RAG Question & Answer & Conversation Management** - pending Members 4/5
+3. **Flow 3 - Report & Statistics** - pending Member 2
 
-Member 1 remains the Core/Data and schema/migration coordinator across all three flows. Flow 3 must consume the existing persisted data read-only before requesting any new schema.
+Conversation History remains part of Flow 2.
+
+Member 1 continues to own schema/migration coordination across all workflows but should not absorb later members' business logic.
 
 ## Scope completed by Member 1
 
-Member 1 owns the shared application/data baseline that the remaining workflows build on.
+Member 1 established:
 
-The repository already had the required persistent entities, EF Core configurations, migration baseline, PostgreSQL/pgvector integration, Identity roles, and the `ManageDocuments` policy. This handoff intentionally did **not** add speculative schema fields or an unnecessary migration.
+- core domain entities/enums
+- EF Core configurations
+- migration baseline
+- PostgreSQL/pgvector integration
+- ASP.NET Core Identity integration
+- `SubjectLeader` and `Student` roles
+- `ManageDocuments` authorization policy
+- shared `Application/` abstractions/models
+- architecture/convention tests
+- schema/migration coordination rules
 
-Validated existing persistence covers:
+Validated persistence covers:
 
-- PRN222 subject and runtime-manageable chapters
-- document metadata, source storage path, upload owner, indexing status/error/timestamps
-- document chunks with page/slide metadata and pgvector embeddings
-- chat sessions and messages
-- citations linking assistant messages to source chunks
-- `SubjectLeader` and `Student` Identity roles
-- document-management authorization restricted to `SubjectLeader`
+- PRN222 subject and runtime-managed chapters
+- document metadata/storage/indexing state
+- document chunks with page/slide metadata and embeddings
+- chat sessions/messages
+- message citations
 
-These same existing records are sufficient for the initial Flow 3 aggregate dashboard. Reporting should derive counts from `Chapter`, `Document`, `DocumentChunk`, `ChatSession`, `ChatMessage`, and `MessageCitation` rather than introducing duplicate analytics entities.
+The existing persistence is sufficient for the initial Flow 3 dashboard; reporting should aggregate existing rows before proposing new storage.
 
-`Chapter` persistence is intentionally reusable at runtime. The existing model supports Subject Leader-managed Chapter CRUD without a schema change: `Chapter` has `Id`, `SubjectId`, `Number`, and `Title`; `(SubjectId, Number)` is unique; and `Document.ChapterId` is nullable.
+## Core domain invariants
 
-Member 2 now uses this model directly in the merged Chapter Management flow.
+Important rules remain:
 
-## Shared contracts established
+- entities use scalar foreign keys and no navigation properties
+- EF mapping belongs in dedicated `IEntityTypeConfiguration<TEntity>` classes
+- `ApplicationDbContext` stays thin
+- application schema changes use EF Core migrations
+- `(SubjectId, Number)` is unique for chapters
+- `Document.ChapterId` is nullable
+- removing a chapter must not cascade-delete documents
+- timestamps are persisted as UTC
+- domain enums are persisted according to established configuration conventions
 
-### Upload -> indexing
+## Shared contracts
+
+### Document Management -> Indexing
 
 `IDocumentIndexingQueue`
 
-The document-management workflow persists the source file and `Document` record first, then enqueues only the persisted `Document.Id`.
+Member 2 persists the document first, then enqueues only the persisted `Document.Id`.
 
-This handoff is now active in merged Member 2 code. The current `InMemoryDocumentIndexingQueue` is only a temporary integration stub until Member 3 supplies the real background integration.
+### Indexing pipeline
 
 `IDocumentIndexingService`
 
-The Member 3 background worker should invoke this service for each dequeued document. The implementation owns parsing, chunk replacement, embedding, and index-state transitions.
-
-### Indexing/retrieval -> AI provider
+Member 3 now provides the merged indexing implementation.
 
 `ITextEmbeddingService`
 
-Both document indexing and question retrieval must use the same configured embedding implementation/model for a given index.
+Member 3 extended/implemented the provider-neutral embedding boundary with:
+
+- single-text embedding for retrieval
+- ordered batch embedding for indexing
+
+The same configured embedding model must be used for indexing and retrieval.
+
+### RAG backend
 
 `IChatCompletionService`
 
-The RAG layer uses this provider-neutral boundary instead of coupling business logic directly to Ollama request/response DTOs.
-
-### Chat presentation -> RAG
+Provider-neutral chat-generation boundary owned for implementation by Member 4.
 
 `IRagQueryService`
 
-The presentation layer supplies the authenticated `userId`, an existing `chatSessionId`, and the question. The implementation is responsible for session ownership validation, persistence, grounded generation, and citations.
+Presentation-facing grounded-question boundary to be implemented by Member 4 and consumed by Member 5.
 
-The result is returned as:
+Result models:
 
 - `RagAnswer`
 - `RagCitation`
 
-These models keep the chat UI independent from database entities and provider-specific DTOs.
-
 ### Reporting
 
-The first Flow 3 implementation should **not require a new cross-workflow application contract** merely to calculate aggregate counts.
+Initial Flow 3 does not need a new shared contract merely to count existing data. Prefer focused read-only aggregate queries unless a concrete reusable application-layer need emerges.
 
-Prefer direct read-only EF Core aggregate queries from the reporting presentation/application code using the existing `ApplicationDbContext` conventions. If reporting later becomes complex enough to justify an abstraction, add it only when there is a concrete need and coordinate the public contract with the affected owners.
+## Flow 1 completion validates the baseline
 
-## Core invariants protected by tests
+### Member 2 merged behavior
 
-`CoreDataArchitectureTests` provides regression protection for:
+- runtime Chapter CRUD
+- document upload/list/details/edit/delete/re-index request
+- authorization/validation
+- configured source storage
+- `Uploaded` metadata persistence
+- queue handoff
 
-- explicit delete behavior on core relationships
-- presence/nullability of RAG persistence fields
-- the `ManageDocuments` policy allowing only `SubjectLeader`
+### Member 3 merged behavior
 
-`EntityModelConventionsTests` enforces:
+PR #9 completed:
 
-- no navigation properties in domain entities
-- one dedicated `IEntityTypeConfiguration<TEntity>` per entity
+- PDF/DOCX/PPTX parsing
+- chunking
+- bounded/ordered embeddings
+- `DocumentIndexingWorker`
+- `DocumentIndexingService`
+- `DocumentChunk` replacement/persistence
+- index-state transitions
+- startup rehydration of `Uploaded`/`Processing` documents
 
-Member 2 has since added request-side tests for Chapter and Document Management. Those later tests do not replace the core architecture tests; both sets of invariants should stay green.
-
-Future Flow 3 tests should verify aggregate/query correctness and access restrictions without weakening these conventions.
-
-## Why Member 1 added no new migration
-
-No persistence gap was found that required a schema change before later members started.
-
-The existing model already has:
-
-```text
-Chapter
-- SubjectId
-- Number
-- Title
-
-Document
-- SubjectId
-- ChapterId (nullable)
-- UploadedByUserId
-- title/file metadata/storage path
-- IndexStatus
-- IndexError
-- UploadedAtUtc
-- IndexedAtUtc
-
-DocumentChunk
-- DocumentId
-- ChunkIndex
-- Content
-- PageNumber
-- SlideNumber
-- Embedding
-
-ChatSession
-- UserId
-- Title
-- CreatedAtUtc
-- UpdatedAtUtc
-
-ChatMessage
-- ChatSessionId
-- Role
-- Content
-- CreatedAtUtc
-
-MessageCitation
-- ChatMessageId
-- DocumentChunkId
-- Rank
-```
-
-Member 2's merged Chapter and Document Management features confirmed this decision: runtime Chapter CRUD and document metadata/upload flows were implemented without a new schema migration.
-
-The initial Flow 3 scope also does not require a new migration because it only aggregates these existing records. A dashboard is not justification for adding duplicated counters, analytics tables, or event records.
-
-Later schema changes must follow the coordination rules in `AGENTS.md` and `docs/team-workflow.md`.
-
-## Member 2 Flow 1 handoff - NOW MERGED
-
-The original Member 1 -> Member 2 Flow 1 expectations have been implemented.
-
-Merged Chapter Management behavior includes:
-
-- Subject Leader authorization
-- runtime PRN222 Chapter list/create/edit/removal
-- chapter number/title validation
-- unique number validation within PRN222
-- preserving documents when a chapter is removed by clearing referenced nullable `ChapterId` values before removing the chapter
-
-Merged document flow includes:
-
-```text
-Authorize SubjectLeader
-        |
-Validate PDF/DOCX/PPTX and size
-        |
-Validate optional ChapterId belongs to PRN222
-        |
-Persist source file
-        |
-Create Document with IndexStatus = Uploaded
-        |
-SaveChanges
-        |
-IDocumentIndexingQueue.EnqueueAsync(document.Id)
-```
-
-Member 2 correctly leaves parsing/chunking/embedding outside the request handler.
-
-See `docs/member-2-document-management-handoff.md` for the current downstream integration contract.
-
-## Member 2 Flow 3 assignment - NEW / PENDING
-
-Member 2 additionally owns **Flow 3 - Report & Statistics** in a separate focused branch after synchronizing with the latest `master`.
-
-The initial reporting workflow is deliberately read-only:
-
-- chapter/document totals
-- documents grouped by indexing status
-- documents grouped by chapter, including unassigned documents
-- total chat sessions/messages/citations
-- clear zero/empty states before Flow 2 data exists
-
-Member 2 must not create a migration simply to support these counts. If a genuine persistence gap appears, Member 2 must document it and coordinate with Member 1 before touching the schema.
-
-## Handoff to Member 3 - Flow 1 background side
-
-Member 3 should implement:
-
-- final/integrated `IDocumentIndexingQueue` behavior
-- hosted/background worker
-- `IDocumentIndexingService`
-- parsers/chunking
-- `ITextEmbeddingService`
-
-The indexing implementation owns:
+Implemented state flow:
 
 ```text
 Uploaded -> Processing -> Indexed
                      \-> Failed
 ```
 
-On success, clear `IndexError` and set `IndexedAtUtc`.
-On failure, persist a useful bounded `IndexError` and set status to `Failed`.
-Re-indexing should replace stale chunks rather than append duplicates.
+No new domain entity or migration was required for this indexing implementation, confirming that the original persistence baseline was sufficient.
 
-Member 3 should preserve the merged Member 2 request-side handoff. The temporary `InMemoryDocumentIndexingQueue` and its DI registration may be replaced as part of the real worker integration.
+## Current handoff to Member 4
 
-## Handoff to Member 4 - Flow 2 backend
+Member 4 should build RAG retrieval on the existing model and completed indexing output.
 
-Member 4 should implement:
+Expected behavior:
 
-- pgvector retrieval
-- grounded context/prompt construction
-- `IChatCompletionService`
-- `IRagQueryService`
-
-`IRagQueryService` must:
-
-1. validate that `chatSessionId` belongs to `userId`;
+1. validate `chatSessionId` ownership for `userId`;
 2. persist the user message;
-3. retrieve only successfully indexed PRN222 document chunks;
-4. generate an answer using grounded document context;
-5. provide explicit no-evidence/out-of-scope behavior when retrieval is insufficient;
-6. persist the assistant message and source `MessageCitation` rows;
-7. return `RagAnswer` with ordered `RagCitation` values.
+3. embed the question with `ITextEmbeddingService.EmbedAsync`;
+4. retrieve successfully indexed PRN222 chunks with pgvector;
+5. construct grounded context;
+6. call `IChatCompletionService`;
+7. persist the assistant message and ordered `MessageCitation` rows;
+8. return `RagAnswer` / `RagCitation`;
+9. handle insufficient evidence explicitly.
 
-## Handoff to Member 5 - Flow 2 presentation/evaluation
+Member 4 should not request schema changes unless the current persistence genuinely cannot represent the requirement.
 
-Member 5 should treat `IRagQueryService` as the chat backend boundary and render `RagAnswer`/`RagCitation` results. UI code should not depend on Ollama payloads or raw pgvector queries.
+## Current handoff to Member 5
 
-Member 5 owns chat-session creation/opening/navigation and **Conversation History as part of Flow 2**, plus the `evaluation/` human-authored evaluation deliverable.
+Member 5 owns Flow 2 presentation and evaluation:
+
+- chat/session UI
+- Conversation History
+- citation rendering
+- evaluation set/tooling
+
+Presentation should consume `IRagQueryService` and not leak provider or pgvector details.
+
+## Member 2 Flow 3 assignment
+
+Member 2 owns Flow 3 in a separate branch.
+
+Initial read-only metrics:
+
+- chapters/documents
+- documents by index status
+- documents by chapter/unassigned
+- chat sessions/messages/citations
+
+Because Member 3 is complete, indexing metrics can now show real persisted status immediately.
+
+The initial reporting scope still does **not** justify:
+
+- analytics entities
+- denormalized counters
+- event tracking
+- scheduled aggregation
+- a reporting warehouse
+- a migration solely for dashboard counts
+
+If a genuine persistence gap appears, Member 2 must document it and coordinate the change with Member 1.
+
+## Core tests
+
+`CoreDataArchitectureTests` and `EntityModelConventionsTests` remain regression protection for the shared baseline.
+
+Later workflow tests must not weaken these invariants.
 
 ## Files to read before continuing
 
@@ -261,9 +209,10 @@ docs/project-status.md
 docs/team-workflow.md
 docs/infrastructure.md
 docs/member-2-document-management-handoff.md
+docs/member-3-document-indexing-handoff.md
 docs/flow-3-report-statistics-handoff.md
 ```
 
 ## Validation note
 
-Member 1's no-new-migration decision remains valid after Member 2's merge and after defining Flow 3. The restrictive `Document -> Chapter` relationship remains intentional; runtime document unassignment is handled in the application workflow rather than by changing the schema to cascade.
+The original no-speculative-migration decision remains valid after both Member 2 and Member 3 merges. Continue using the existing migration chain and coordinate genuine model changes through Member 1.
