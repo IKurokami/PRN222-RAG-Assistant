@@ -71,6 +71,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<PRN222.RagAssistant.Infrastructure.Parsing.DocumentParserFactory>();
         services.AddSingleton<PRN222.RagAssistant.Infrastructure.Parsing.TextChunker>();
         services.AddScoped<PRN222.RagAssistant.Application.Abstractions.ITextEmbeddingService, PRN222.RagAssistant.Infrastructure.Services.OllamaTextEmbeddingService>();
+        services.AddScoped<PRN222.RagAssistant.Infrastructure.Services.TextEmbeddingBatcher>();
         services.AddScoped<PRN222.RagAssistant.Application.Abstractions.IDocumentIndexingService, PRN222.RagAssistant.Infrastructure.Services.DocumentIndexingService>();
         services.AddHostedService<PRN222.RagAssistant.Infrastructure.Services.DocumentIndexingWorker>();
 

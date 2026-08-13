@@ -49,7 +49,7 @@ See `docs/project-status.md`, `docs/team-workflow.md`, `docs/member-2-document-m
 
 - `IDocumentIndexingQueue`: handoff from the merged document upload/re-index actions to the Member 3 background indexing worker.
 - `IDocumentIndexingService`: one-document indexing pipeline executed by the worker.
-- `ITextEmbeddingService`: provider-neutral text embedding boundary shared by indexing and retrieval.
+- `ITextEmbeddingService`: provider-neutral text embedding boundary shared by indexing and retrieval. It supports both single-text embedding for retrieval and ordered batch embedding for indexing.
 - `IChatCompletionService`: provider-neutral chat-generation boundary used by the RAG workflow.
 - `IRagQueryService`: presentation-facing boundary for asking a grounded question in an existing chat session.
 - `RagAnswer` / `RagCitation`: presentation-safe RAG result models used by the chat UI.

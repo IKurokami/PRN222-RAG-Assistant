@@ -11,7 +11,7 @@ namespace PRN222.RagAssistant.Infrastructure.Services;
 public sealed class DocumentIndexingService : IDocumentIndexingService
 {
     private readonly ApplicationDbContext _dbContext;
-    private readonly ITextEmbeddingService _embeddingService;
+    private readonly TextEmbeddingBatcher _embeddingBatcher;
     private readonly DocumentParserFactory _parserFactory;
     private readonly TextChunker _textChunker;
     private readonly IConfiguration _configuration;
@@ -19,14 +19,14 @@ public sealed class DocumentIndexingService : IDocumentIndexingService
 
     public DocumentIndexingService(
         ApplicationDbContext dbContext,
-        ITextEmbeddingService embeddingService,
+        TextEmbeddingBatcher embeddingBatcher,
         DocumentParserFactory parserFactory,
         TextChunker textChunker,
         IConfiguration configuration,
         ILogger<DocumentIndexingService> logger)
     {
         _dbContext = dbContext;
-        _embeddingService = embeddingService;
+        _embeddingBatcher = embeddingBatcher;
         _parserFactory = parserFactory;
         _textChunker = textChunker;
         _configuration = configuration;
@@ -87,13 +87,15 @@ public sealed class DocumentIndexingService : IDocumentIndexingService
             _logger.LogInformation("Created {ChunkCount} chunks from document {DocumentId}",
                 chunks.Count, documentId);
 
-            // 4. Embed each chunk
+            // 4. Embed chunks in bounded batches while preserving chunk order
             var documentChunks = new List<DocumentChunk>();
+            var embeddings = await _embeddingBatcher.EmbedAsync(
+                chunks.Select(chunk => chunk.Content).ToArray(),
+                cancellationToken);
 
-            foreach (var chunk in chunks)
+            for (var index = 0; index < chunks.Count; index++)
             {
-                var embedding = await _embeddingService.EmbedAsync(chunk.Content, cancellationToken);
-
+                var chunk = chunks[index];
                 documentChunks.Add(new DocumentChunk
                 {
                     Id = Guid.NewGuid(),
@@ -102,7 +104,7 @@ public sealed class DocumentIndexingService : IDocumentIndexingService
                     Content = chunk.Content,
                     PageNumber = chunk.PageNumber,
                     SlideNumber = chunk.SlideNumber,
-                    Embedding = new Vector(embedding)
+                    Embedding = new Vector(embeddings[index])
                 });
             }
 
