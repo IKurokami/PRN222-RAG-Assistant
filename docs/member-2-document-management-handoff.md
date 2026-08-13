@@ -1,10 +1,17 @@
-# Member 2 - Document Management handoff
+# Member 2 - Document Management and Report & Statistics handoff
 
 ## Status
 
-Member 2's work is merged into `master` through PR #5 at merge commit `4a038bbf428cf96eafb97846f5a00904f9d78b63`. The PR head commit `b5681e026de0dac94de0f04d8644305cff047a3b` passed CI before merge.
+Member 2's Flow 1 request/presentation work is merged into `master` through PR #5 at merge commit `4a038bbf428cf96eafb97846f5a00904f9d78b63`. The PR head commit `b5681e026de0dac94de0f04d8644305cff047a3b` passed CI before merge.
 
-Member 2 is now the completed request/presentation-side baseline for Flow 1. Later members should integrate with this work instead of creating a second document-management flow.
+Member 2 now has two clearly separated responsibilities:
+
+1. **Flow 1 request/presentation side - COMPLETE / MERGED**
+2. **Flow 3 - Report & Statistics - NEW / PENDING**
+
+The new Flow 3 assignment must not be used as a reason to reopen or redesign the already merged Flow 1 implementation. Later members should integrate with the existing Flow 1 handoff instead of creating a second document-management flow.
+
+Conversation History is part of **Flow 2 - RAG Question & Answer & Conversation Management** and is owned on the presentation side by Member 5. It is not counted as the independent third workflow.
 
 ## Completed Chapter Management scope
 
@@ -68,9 +75,75 @@ The Member 2 request flow should continue to enqueue a persisted document ID. Me
 
 ## Handoff to Members 4 and 5
 
-Member 4 should build retrieval and grounded generation on indexed chunks behind the existing shared application contracts. Member 5 should consume `IRagQueryService` for chat/history presentation and citation rendering.
+Member 4 owns the Flow 2 retrieval and grounded-generation backend on indexed chunks behind the existing shared application contracts.
 
-Neither later workflow should move pgvector or Ollama calls into the Member 2 Razor Page handlers.
+Member 5 owns Flow 2 presentation, including:
+
+- chat UI
+- chat-session creation/opening/navigation
+- conversation history
+- citation rendering
+- evaluation deliverable
+
+Neither later workflow should move pgvector or Ollama calls into Member 2 Razor Page handlers.
+
+## Flow 3 - Report & Statistics - NEW / PENDING
+
+Member 2 additionally owns the independent third product workflow after the merged Flow 1 request-side work.
+
+Primary actor: **Subject Leader**.
+
+Goal: inspect read-only aggregate state and usage of the PRN222 RAG Assistant without modifying source workflow records.
+
+Initial Flow 3 scope:
+
+- total PRN222 chapters
+- total PRN222 documents
+- document counts grouped by indexing status
+- document counts grouped by chapter, including unassigned documents
+- total chat sessions
+- total chat messages
+- total persisted citations
+- clear zero/empty states while later workflows are still pending
+
+Expected first implementation path:
+
+```text
+Subject Leader
+      |
+      v
+Reports / Statistics
+      |
+      +--> Document overview
+      +--> Indexing overview
+      +--> Chat usage overview
+      |
+      v
+Read-only dashboard / tables
+```
+
+Prefer aggregate, no-tracking EF Core queries over the existing model. Flow 3 should not introduce custom analytics persistence, scheduled aggregation, event tracking, a reporting warehouse, or a separate infrastructure service for the first version.
+
+### Flow 3 non-interference rules
+
+Member 2 must not implement reporting by:
+
+- changing Member 3 parsing/chunking/embedding/worker behavior
+- changing Member 4 RAG retrieval or grounded-generation behavior
+- duplicating Member 5 chat/history pages
+- mutating documents, chapters, indexing state, chat sessions, messages, or citations from report pages
+- changing shared `Application/` contracts solely for reporting convenience
+- creating speculative analytics entities or EF migrations
+
+If a genuine persistence gap is discovered, document the requirement first and coordinate it through Member 1, who remains the schema/migration coordinator.
+
+Flow 3 should be implemented in a separate focused branch such as:
+
+```text
+feature/report-statistics
+```
+
+See `docs/flow-3-report-statistics-handoff.md` for detailed acceptance criteria.
 
 ## Relevant tests merged with Member 2
 
@@ -80,10 +153,14 @@ Neither later workflow should move pgvector or Ollama calls into the Member 2 Ra
 
 They cover request-side authorization, chapter validation and safety rules, upload validation and temporary queue behavior.
 
+The future Flow 3 PR should add focused tests for aggregate/query behavior and Subject Leader access without changing the existing Flow 1 tests unnecessarily.
+
 ## Read before continuing
 
 - `AGENTS.md`
 - `src/PRN222.RagAssistant/Application/AGENTS.md`
 - `docs/project-status.md`
 - `docs/team-workflow.md`
+- `docs/infrastructure.md`
 - `docs/member-1-core-data-handoff.md`
+- `docs/flow-3-report-statistics-handoff.md`

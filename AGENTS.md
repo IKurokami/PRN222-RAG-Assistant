@@ -17,6 +17,7 @@ docs/infrastructure.md
 ```
 
 For indexing work, also read `docs/member-2-document-management-handoff.md`.
+For Flow 3 reporting work, also read `docs/flow-3-report-statistics-handoff.md`.
 
 ## Current project baseline
 
@@ -35,19 +36,30 @@ This repository is a PRN222 course RAG assistant with:
 
 The product is scoped to one subject, PRN222. Course documents are selected and uploaded by the Subject Leader. Chapters are runtime-managed organizational data and must not be treated as a fixed seed-only list. Students consume indexed material through chat. Automatic FLM crawling is not an authoritative ingestion path.
 
+The project defines three product workflows:
+
+1. **Flow 1 - Document Management & Indexing**
+2. **Flow 2 - RAG Question & Answer & Conversation Management**
+3. **Flow 3 - Report & Statistics**
+
+Conversation history is part of Flow 2 and must not be treated as the independent third workflow.
+
 ### Current merged milestone
 
 The source baseline reviewed after PR #5 is:
 
 - Member 1 Core/Data baseline: **merged/complete**
 - Member 2 Document Management + Chapter Management: **merged/complete request side**
+- Member 2 Flow 3 Report & Statistics: **planned/pending in a separate focused branch**
 - Member 3 Document Indexing/Ingestion: **pending**
 - Member 4 RAG/Chat backend: **pending**
-- Member 5 Chat UI/History/Evaluation: **pending**
+- Member 5 Chat UI/Conversation Management/Evaluation: **pending**
 
 Member 2's merged work includes runtime Chapter CRUD and Document list/upload/details/edit/removal/re-index request flows.
 
 The current `InMemoryDocumentIndexingQueue` is a **temporary integration stub**. It exists so Member 2 can enqueue a persisted `Document.Id` through `IDocumentIndexingQueue`; it is not a completed indexing worker. Member 3 owns the real background worker, indexing service, parsing, chunking and embedding pipeline.
+
+Flow 3 is intentionally read-only against existing persistence. It must not be used as a reason to redesign the data model, create speculative analytics tables, or modify Member 3/4/5 workflow behavior.
 
 When status is unclear, treat the latest merged code on `master` as the source of truth and consult `docs/project-status.md`.
 
@@ -71,9 +83,11 @@ Member 1 is the default owner/coordinator for genuine EF Core schema changes and
 
 Do not move later workflow business logic into Member 1 simply because the baseline contracts live under `Application/`.
 
-### Member 2 - Document Management - MERGED
+### Member 2 - Document Management + Report & Statistics
 
-Owns the request/presentation side of Flow 1.
+Member 2 owns two clearly separated responsibilities: the already merged request/presentation side of Flow 1 and the pending read-only Flow 3 reporting workflow.
+
+#### Flow 1 request/presentation side - MERGED
 
 Already merged:
 
@@ -93,9 +107,38 @@ Chapter Management is part of the merged document-management workflow. Subject L
 
 Removing a chapter must preserve documents. Keep the existing restrictive `Document -> Chapter` relationship; when a referenced chapter is removed, the application layer must unassign affected documents (`ChapterId = null`) before removing the chapter. Never use cascade delete to make this flow easier.
 
-Member 2 request handlers must not parse, chunk, embed, query pgvector, or call Ollama.
+Member 2 Flow 1 request handlers must not parse, chunk, embed, query pgvector, or call Ollama.
 
 Do not create a second upload/chapter-management implementation in later member branches unless the team explicitly decides to replace the merged flow.
+
+#### Flow 3 Report & Statistics - NEW / PENDING
+
+Member 2 owns Flow 3 after synchronizing a separate reporting branch with the latest `master`.
+
+Initial scope:
+
+- Subject-Leader Reports/Statistics page
+- total PRN222 chapters/documents
+- document counts grouped by indexing state
+- document counts grouped by chapter, including unassigned documents
+- aggregate chat-session/message/citation counts from persisted Flow 2 data
+- graceful zero/empty states while Members 3-5 are still pending
+
+Flow 3 is read-only. Prefer aggregate/no-tracking EF Core queries over the existing persistence model.
+
+Member 2 must not implement reporting by:
+
+- modifying parsers, chunking, embedding, queues, workers, or index-state behavior owned by Member 3
+- calling Ollama or implementing pgvector similarity retrieval owned by Member 4
+- duplicating Member 5 chat/session/history UI
+- mutating documents, chapters, indexing state, chat sessions, messages, or citations from report pages
+- adding speculative analytics entities, custom event tracking, or migrations merely to produce counts
+
+If reporting exposes a genuine persistence gap, document it and coordinate any schema/migration change through Member 1.
+
+Keep Flow 3 in a focused branch such as `feature/report-statistics`. Do not mix Flow 1 fixes or unrelated architecture refactors into the reporting PR.
+
+See `docs/flow-3-report-statistics-handoff.md` for detailed acceptance criteria.
 
 ### Member 3 - Document Indexing / Ingestion - NEXT / PENDING
 
@@ -136,11 +179,11 @@ IDocumentIndexingService.IndexAsync(documentId)
 
 Member 3 may replace `InMemoryDocumentIndexingQueue` and its DI registration with the real integration, but should preserve `IDocumentIndexingQueue` unless all affected consumers are updated together.
 
-Do not place parsing/chunking/embedding work directly inside MVC/Razor request handlers.
+Do not place parsing/chunking/embedding work directly inside MVC/Razor request handlers. Member 3 does not own report/dashboard implementation.
 
 ### Member 4 - RAG / Chat Backend - PENDING
 
-Owns retrieval and grounded answer generation:
+Owns Flow 2 retrieval and grounded answer generation:
 
 - question embedding through `ITextEmbeddingService`
 - pgvector similarity retrieval
@@ -153,23 +196,30 @@ Member 4 must validate chat-session ownership using the authenticated user ID su
 
 Retrieval should use successfully indexed PRN222 chunks as evidence.
 
-### Member 5 - Chat UI / History / Evaluation - PENDING
+Member 4 does not own aggregate reporting queries or report presentation.
 
-Owns chat/history presentation and the evaluation deliverable:
+### Member 5 - Chat UI / Conversation Management / Evaluation - PENDING
+
+Owns Flow 2 presentation and the evaluation deliverable:
 
 - chat UI and chat-session/history UI
 - rendering citations returned by `IRagQueryService`
 - presentation-side session creation/opening/navigation
+- persisted conversation-history presentation
 - `evaluation/` human-authored 50-question ground-truth set
 - evaluation-facing tests/tools that do not redefine the RAG backend
 
 Member 5 depends on `IRagQueryService`; browser/UI code must not call Ollama or query pgvector directly.
+
+Conversation history is part of Flow 2. Member 5 does not own the Flow 3 Reports/Statistics pages.
 
 ### Shared-contract rule
 
 Cross-member integration points live under `src/PRN222.RagAssistant/Application/`. The deeper `Application/AGENTS.md` documents those contracts.
 
 Treat existing public signatures as stable. Prefer additive changes. If a shared contract must change, update all affected consumers/implementations together and update the coordination docs.
+
+Flow 3 should not add a cross-member application contract unless a concrete implementation requirement justifies it.
 
 ## Repository layout
 
@@ -185,6 +235,7 @@ Treat existing public signatures as stable. Prefer additive changes. If a shared
 - `src/PRN222.RagAssistant/Pages/Documents/`: merged Document Management UI
 - `tests/PRN222.RagAssistant.Tests/`: unit and architecture/convention tests
 - `docs/`: architecture, project status, team workflow, and member handoff documentation
+- `docs/flow-3-report-statistics-handoff.md`: Flow 3 ownership, boundaries, and acceptance criteria
 - `evaluation/`: version-controlled evaluation sets and human-authored ground truth
 - `infrastructure/postgres/init/`: PostgreSQL runtime initialization such as enabling extensions; application tables must not be created here
 - `storage/uploads/`: runtime upload storage; never commit uploaded documents
@@ -248,6 +299,7 @@ builder.HasOne<Subject>()
 - Application role names live in `Security/AppRoles.cs`; do not scatter role-name string literals.
 - Authorization policy names live in `Security/AppPolicies.cs`.
 - Document-management and chapter-management writes require `AppPolicies.ManageDocuments`, restricted to `AppRoles.SubjectLeader`.
+- Flow 3 reports are Subject-Leader-facing and read-only. Do not make aggregate reporting public to Students without an explicit requirement.
 - Hiding a management button is not authorization. Enforce authorization server-side.
 - Do not add public role selection during registration. Users must never self-select `SubjectLeader`.
 - Local demo-user seeding is configuration-driven and disabled by default. Never commit real credentials.
@@ -269,6 +321,8 @@ Only PRN222 is seeded. The seeded subject establishes current course scope, but 
 
 The model already contains the planned persistence for document index status/error/timestamps, chunk content/page/slide/embedding, chat timestamps, and message-to-chunk citations. Do not add speculative duplicate fields simply because later workflows are still pending.
 
+Use these existing records as the first source for Flow 3 aggregate counts. Do not introduce an analytics schema solely for dashboard convenience.
+
 ## Infrastructure configuration
 
 - `ConnectionStrings:Postgres` is the PostgreSQL configuration key; use `ConnectionStrings__Postgres` for environment overrides.
@@ -289,6 +343,7 @@ Default local models are `qwen3:4b` for chat and `qwen3-embedding:0.6b` for embe
 - Source documents are bind-mounted from `storage/uploads/` into the app container.
 - Keep named PostgreSQL and Ollama volumes persistent unless the user explicitly requests a reset.
 - Do not add pgAdmin, Qdrant, Redis, RabbitMQ, Elasticsearch, RAGFlow, or other services without an explicit requirement.
+- Flow 3 must not add a separate analytics service/database for its initial scope.
 
 ## Dependencies and frontend assets
 
@@ -328,9 +383,10 @@ Do not run `docker compose down -v` or remove named PostgreSQL/Ollama volumes un
 - The remote default branch is `origin/master`; `origin/main` does not exist.
 - Use focused feature branches and pull requests.
 - Do not have multiple members independently modify the same shared contract/schema file without coordination.
+- Member 2 must implement Flow 3 on a separate reporting branch; do not mix it into Member 3/4/5 branches.
 - Never commit `.env`, real credentials, private keys, database dumps, logs, uploaded documents, build output, downloaded Ollama models, or runtime data.
 - Keep `.env.example`, `docker-compose.yml`, `README.md`, solution files, source, tests, docs, migrations, and `evaluation/` version-controlled.
 - `storage/uploads/` is runtime data except for `.gitkeep`; processing/temp/chunk storage paths are also ignored.
 - Preserve unrelated user changes.
 
-Before handing off a change, report validation results and any remaining warnings or errors. After a major member workflow is merged, update `docs/project-status.md`, `docs/team-workflow.md`, relevant handoff docs, and these agent instructions if ownership/integration status changed.
+Before handing off a change, report validation results and any remaining warnings or errors. After a major member workflow is merged, update `docs/project-status.md`, `docs/team-workflow.md`, relevant handoff docs, `README.md`, and these agent instructions if ownership/integration status changed.

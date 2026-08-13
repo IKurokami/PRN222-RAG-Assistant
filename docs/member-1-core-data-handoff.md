@@ -4,9 +4,21 @@
 
 Member 1's shared baseline is complete and already consumed by the merged Member 2 Document Management work.
 
-Since this handoff was originally written, PR #5 has merged Member 2's runtime Chapter Management and Document Management request/presentation flow into `master`. Therefore, the old "Handoff to Member 2" section below is now historical/validated rather than future work.
+Since this handoff was originally written, PR #5 has merged Member 2's runtime Chapter Management and Document Management request/presentation flow into `master`. The project now also defines an independent **Flow 3 - Report & Statistics**, assigned to Member 2 as a separate read-only workflow.
 
-For the latest project milestone, read `docs/project-status.md`. For the next implementation handoff, read `docs/member-2-document-management-handoff.md`.
+For the latest project milestone, read `docs/project-status.md`. For workflow ownership, read `docs/team-workflow.md`. For reporting scope, read `docs/flow-3-report-statistics-handoff.md`.
+
+## Product workflow relationship to the Core/Data baseline
+
+The shared model supports three product workflows:
+
+1. **Flow 1 - Document Management & Indexing**
+2. **Flow 2 - RAG Question & Answer & Conversation Management**
+3. **Flow 3 - Report & Statistics**
+
+Conversation History belongs to Flow 2 and is not counted as the independent third workflow.
+
+Member 1 remains the Core/Data and schema/migration coordinator across all three flows. Flow 3 must consume the existing persisted data read-only before requesting any new schema.
 
 ## Scope completed by Member 1
 
@@ -23,6 +35,8 @@ Validated existing persistence covers:
 - citations linking assistant messages to source chunks
 - `SubjectLeader` and `Student` Identity roles
 - document-management authorization restricted to `SubjectLeader`
+
+These same existing records are sufficient for the initial Flow 3 aggregate dashboard. Reporting should derive counts from `Chapter`, `Document`, `DocumentChunk`, `ChatSession`, `ChatMessage`, and `MessageCitation` rather than introducing duplicate analytics entities.
 
 `Chapter` persistence is intentionally reusable at runtime. The existing model supports Subject Leader-managed Chapter CRUD without a schema change: `Chapter` has `Id`, `SubjectId`, `Number`, and `Title`; `(SubjectId, Number)` is unique; and `Document.ChapterId` is nullable.
 
@@ -65,6 +79,12 @@ The result is returned as:
 
 These models keep the chat UI independent from database entities and provider-specific DTOs.
 
+### Reporting
+
+The first Flow 3 implementation should **not require a new cross-workflow application contract** merely to calculate aggregate counts.
+
+Prefer direct read-only EF Core aggregate queries from the reporting presentation/application code using the existing `ApplicationDbContext` conventions. If reporting later becomes complex enough to justify an abstraction, add it only when there is a concrete need and coordinate the public contract with the affected owners.
+
 ## Core invariants protected by tests
 
 `CoreDataArchitectureTests` provides regression protection for:
@@ -79,6 +99,8 @@ These models keep the chat UI independent from database entities and provider-sp
 - one dedicated `IEntityTypeConfiguration<TEntity>` per entity
 
 Member 2 has since added request-side tests for Chapter and Document Management. Those later tests do not replace the core architecture tests; both sets of invariants should stay green.
+
+Future Flow 3 tests should verify aggregate/query correctness and access restrictions without weakening these conventions.
 
 ## Why Member 1 added no new migration
 
@@ -130,11 +152,13 @@ MessageCitation
 
 Member 2's merged Chapter and Document Management features confirmed this decision: runtime Chapter CRUD and document metadata/upload flows were implemented without a new schema migration.
 
+The initial Flow 3 scope also does not require a new migration because it only aggregates these existing records. A dashboard is not justification for adding duplicated counters, analytics tables, or event records.
+
 Later schema changes must follow the coordination rules in `AGENTS.md` and `docs/team-workflow.md`.
 
-## Member 2 handoff - NOW MERGED
+## Member 2 Flow 1 handoff - NOW MERGED
 
-The original Member 1 -> Member 2 expectations have been implemented.
+The original Member 1 -> Member 2 Flow 1 expectations have been implemented.
 
 Merged Chapter Management behavior includes:
 
@@ -166,7 +190,21 @@ Member 2 correctly leaves parsing/chunking/embedding outside the request handler
 
 See `docs/member-2-document-management-handoff.md` for the current downstream integration contract.
 
-## Handoff to Member 3 - CURRENT NEXT STEP
+## Member 2 Flow 3 assignment - NEW / PENDING
+
+Member 2 additionally owns **Flow 3 - Report & Statistics** in a separate focused branch after synchronizing with the latest `master`.
+
+The initial reporting workflow is deliberately read-only:
+
+- chapter/document totals
+- documents grouped by indexing status
+- documents grouped by chapter, including unassigned documents
+- total chat sessions/messages/citations
+- clear zero/empty states before Flow 2 data exists
+
+Member 2 must not create a migration simply to support these counts. If a genuine persistence gap appears, Member 2 must document it and coordinate with Member 1 before touching the schema.
+
+## Handoff to Member 3 - Flow 1 background side
 
 Member 3 should implement:
 
@@ -189,7 +227,7 @@ Re-indexing should replace stale chunks rather than append duplicates.
 
 Member 3 should preserve the merged Member 2 request-side handoff. The temporary `InMemoryDocumentIndexingQueue` and its DI registration may be replaced as part of the real worker integration.
 
-## Handoff to Member 4
+## Handoff to Member 4 - Flow 2 backend
 
 Member 4 should implement:
 
@@ -208,11 +246,11 @@ Member 4 should implement:
 6. persist the assistant message and source `MessageCitation` rows;
 7. return `RagAnswer` with ordered `RagCitation` values.
 
-## Handoff to Member 5
+## Handoff to Member 5 - Flow 2 presentation/evaluation
 
 Member 5 should treat `IRagQueryService` as the chat backend boundary and render `RagAnswer`/`RagCitation` results. UI code should not depend on Ollama payloads or raw pgvector queries.
 
-Member 5 also owns the `evaluation/` human-authored evaluation deliverable.
+Member 5 owns chat-session creation/opening/navigation and **Conversation History as part of Flow 2**, plus the `evaluation/` human-authored evaluation deliverable.
 
 ## Files to read before continuing
 
@@ -223,8 +261,9 @@ docs/project-status.md
 docs/team-workflow.md
 docs/infrastructure.md
 docs/member-2-document-management-handoff.md
+docs/flow-3-report-statistics-handoff.md
 ```
 
 ## Validation note
 
-Member 1's no-new-migration decision remains valid after Member 2's merge. The restrictive `Document -> Chapter` relationship also remains intentional; runtime document unassignment is handled in the application workflow rather than by changing the schema to cascade.
+Member 1's no-new-migration decision remains valid after Member 2's merge and after defining Flow 3. The restrictive `Document -> Chapter` relationship remains intentional; runtime document unassignment is handled in the application workflow rather than by changing the schema to cascade.
