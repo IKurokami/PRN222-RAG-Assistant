@@ -40,22 +40,22 @@ The demo is scoped to PRN222. Subject Leaders curate/upload course documents. Ch
 
 1. **Flow 1 - Document Management & Indexing** - COMPLETE
 2. **Flow 2 - RAG Question & Answer & Conversation Management** - PENDING
-3. **Flow 3 - Report & Statistics** - PENDING
+3. **Flow 3 - Report & Statistics** - COMPLETE
 
 Conversation History belongs to Flow 2 and is not counted as Flow 3.
 
 ## Current merged milestone
 
-Latest synchronized baseline after PR #10 and PR #9:
+Latest synchronized baseline after PR #12:
 
 - Member 1 Core/Data: **complete**
 - Member 2 Flow 1 Document/Chapter Management request side: **complete / merged**
 - Member 3 Flow 1 Document Indexing/Ingestion: **complete / merged through PR #9**
+- Member 2 Flow 3 Report & Statistics: **complete / merged through PR #12**
 - Member 4 Flow 2 RAG backend: **pending**
 - Member 5 Flow 2 chat/history/citation presentation + evaluation: **pending**
-- Member 2 Flow 3 Report & Statistics: **defined / pending implementation**
 
-PR #9 completed the Member 2 -> Member 3 handoff. Flow 1 is end-to-end implemented.
+PR #9 completed the Member 2 -> Member 3 Flow 1 handoff. PR #12 completed Member 2's independent Flow 3 reporting assignment. The main unfinished product work is now Flow 2.
 
 When status is unclear, latest merged code on `master` is the source of truth; synchronize docs afterward.
 
@@ -76,7 +76,7 @@ Owns:
 
 Do not move later workflow business logic into Member 1 simply because shared contracts live under `Application/`.
 
-### Member 2 - Document Management + Report & Statistics
+### Member 2 - Document Management + Report & Statistics - COMPLETE CURRENT ASSIGNMENT
 
 #### Flow 1 request/presentation - COMPLETE
 
@@ -95,23 +95,27 @@ Merged behavior includes:
 
 Flow 1 request handlers must not parse, chunk, embed, query pgvector, or call Ollama.
 
-#### Flow 3 Report & Statistics - PENDING
+#### Flow 3 Report & Statistics - COMPLETE
 
-Member 2 owns Flow 3 in a separate focused branch such as `feature/report-statistics`.
+PR #12 merged a read-only Subject Leader reporting dashboard under `Pages/Reports/`.
 
-Initial scope is read-only:
+Implemented reporting includes:
 
 - total PRN222 chapters/documents
 - documents by indexing state
 - documents by chapter/unassigned
+- total PRN222 `DocumentChunk` count
+- indexing completion percentage
+- recent indexing failures / `IndexError`
+- recently indexed documents with chunk counts/timestamps
 - total chat sessions/messages/citations
-- graceful empty states
+- graceful empty/zero states before Flow 2 data exists
 
-Because Member 3 is complete, indexing metrics can use real persisted `Uploaded`/`Processing`/`Indexed`/`Failed` data now.
+The Reports page uses `AppPolicies.ManageDocuments` and is server-side restricted to `SubjectLeader`.
 
-Flow 3 must not:
+Flow 3 must remain read-only and must not:
 
-- enqueue/re-index documents
+- enqueue/re-index documents as part of reporting
 - alter parser/chunker/embedding/worker behavior
 - mutate workflow data
 - run pgvector similarity retrieval
@@ -121,6 +125,8 @@ Flow 3 must not:
 - change shared contracts solely for dashboard convenience
 
 If reporting exposes a genuine persistence gap, coordinate through Member 1.
+
+Do not recreate `feature/report-statistics` as a competing implementation; Flow 3 is already merged.
 
 ### Member 3 - Document Indexing / Ingestion - COMPLETE
 
@@ -154,6 +160,8 @@ See `docs/member-3-document-indexing-handoff.md`.
 
 ### Member 4 - RAG / Chat Backend - PENDING
 
+Member 4 is the primary remaining backend implementation owner.
+
 Owns Flow 2 backend:
 
 - question embedding through `ITextEmbeddingService.EmbedAsync`
@@ -167,7 +175,7 @@ Owns Flow 2 backend:
 - user/assistant message persistence
 - ordered `MessageCitation` persistence
 
-Member 4 must not parse raw source files, chunk documents, generate document embeddings, or mutate indexing state as part of normal Q&A.
+Member 4 must not parse raw source files, chunk documents, generate document embeddings, mutate indexing state as part of normal Q&A, or recreate Flow 3 reporting.
 
 ### Member 5 - Chat UI / Conversation Management / Evaluation - PENDING
 
@@ -182,6 +190,8 @@ Owns Flow 2 presentation and evaluation:
 - evaluation-facing tooling/tests
 
 Browser/UI code must not call Ollama or query pgvector directly.
+
+Member 5 must not count Conversation History as a separate workflow or duplicate the completed Reports page.
 
 ## Shared-contract rules
 
@@ -201,7 +211,7 @@ Current contracts/models:
 
 Treat public signatures as stable. Prefer additive changes. If a contract genuinely must change, update all affected producers/consumers together and synchronize docs.
 
-Flow 3 should not add a cross-member contract unless a concrete need justifies it.
+Flow 3 completed without a reporting-specific shared contract. Do not add one unless a concrete new requirement justifies it.
 
 ## Repository layout
 
@@ -215,6 +225,7 @@ Flow 3 should not add a cross-member contract unless a concrete need justifies i
 - `src/PRN222.RagAssistant/Pages/Account/`: auth UI
 - `src/PRN222.RagAssistant/Pages/Chapters/`: Chapter Management
 - `src/PRN222.RagAssistant/Pages/Documents/`: Document Management
+- `src/PRN222.RagAssistant/Pages/Reports/`: completed Flow 3 Reports/Statistics
 - `tests/PRN222.RagAssistant.Tests/`: unit/architecture/convention tests
 - `docs/`: project status/architecture/ownership/handoffs
 - `evaluation/`: version-controlled evaluation set
@@ -266,7 +277,7 @@ builder.HasOne<Subject>()
 8. **Convention tests must stay green.**
    - `EntityModelConventionsTests`
    - `CoreDataArchitectureTests`
-   - existing Chapter/Document/indexing tests
+   - existing Chapter/Document/indexing/reporting tests
 
 ## Identity and authorization rules
 
@@ -274,7 +285,7 @@ builder.HasOne<Subject>()
 - Role names live in `Security/AppRoles.cs`.
 - Policy names live in `Security/AppPolicies.cs`.
 - Document/Chapter writes require `AppPolicies.ManageDocuments` and `SubjectLeader`.
-- Initial Flow 3 reports are Subject-Leader-facing and read-only.
+- Flow 3 Reports also require `AppPolicies.ManageDocuments` and are read-only.
 - Hiding UI is not authorization; enforce server-side.
 - Users must never self-select `SubjectLeader` through public registration.
 - Demo-user seeding is config-driven and disabled by default.
@@ -293,7 +304,7 @@ builder.HasOne<Subject>()
 
 Only PRN222 is seeded as subject scope. Chapters are runtime-managed and must not be invented from FLM in migrations/code without verified requirements.
 
-The model already supports completed Flow 1, planned Flow 2 persistence, and initial Flow 3 aggregate reporting. Do not add duplicate fields merely because a later workflow is pending.
+The model supports completed Flow 1, pending Flow 2 persistence, and completed Flow 3 aggregate reporting. Do not add duplicate fields merely because Flow 2 is still pending.
 
 ## Indexing rules
 
@@ -305,6 +316,15 @@ The model already supports completed Flow 1, planned Flow 2 persistence, and ini
 - Do not use a different embedding model for retrieval than indexing.
 - If embedding model changes, re-index affected documents.
 - Do not introduce an external broker unless required.
+
+## Reporting rules
+
+- Reports read existing PostgreSQL persistence only.
+- Use aggregate EF Core queries and `AsNoTracking()` where appropriate.
+- Do not scan `storage/uploads/` for counts.
+- Do not mutate workflow rows from report handlers.
+- Chat metrics must tolerate zero data until Flow 2 persists sessions/messages/citations.
+- Preserve the Subject-Leader-only authorization boundary.
 
 ## Infrastructure configuration
 
@@ -359,8 +379,7 @@ Do not run `docker compose down -v` or remove named volumes unless explicitly re
 - Remote default branch is `origin/master`.
 - Use focused feature branches/PRs.
 - Do not have multiple members independently modify the same shared schema/contract without coordination.
-- Do not recreate the already merged document-indexing implementation.
-- Member 2 Flow 3 work stays on a separate reporting branch.
+- Do not recreate already merged document-indexing or report-statistics implementations.
 - Never commit `.env`, credentials, keys, DB dumps, logs, uploaded documents, build output, downloaded Ollama models, or runtime data.
 - Keep source/tests/docs/migrations/config examples version-controlled.
 - `storage/uploads/` is runtime data except `.gitkeep`; temp/processed/chunks paths remain ignored.
