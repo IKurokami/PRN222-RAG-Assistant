@@ -1,45 +1,15 @@
 @model ChapterCreateViewModel
 @{
-    ViewData["Title"] = "Tạo chương mới - PRN222";
+    ViewData["Title"] = $"Tạo chương - {Model.SubjectCode}";
 }
-
-<div class="row justify-content-center">
-    <div class="col-md-6">
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <div>
-                <h2 class="mb-1">Tạo chương mới</h2>
-                <p class="text-muted mb-0">Thêm chương học mới cho môn PRN222.</p>
-            </div>
-            <a asp-controller="Chapters" asp-action="Index" class="btn btn-outline-secondary">Quay lại</a>
-        </div>
-
-        <div class="card shadow-sm">
-            <div class="card-body">
-                <form method="post" asp-controller="Chapters" asp-action="Create">
-                    <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
-
-                    <div class="mb-3">
-                        <label asp-for="Input.Number" class="form-label fw-bold"></label>
-                        <input asp-for="Input.Number" class="form-control" type="number" min="1" max="999" placeholder="Ví dụ: 1" />
-                        <span asp-validation-for="Input.Number" class="text-danger"></span>
-                    </div>
-
-                    <div class="mb-4">
-                        <label asp-for="Input.Title" class="form-label fw-bold"></label>
-                        <input asp-for="Input.Title" class="form-control" placeholder="Ví dụ: Giới thiệu về C# và .NET" />
-                        <span asp-validation-for="Input.Title" class="text-danger"></span>
-                    </div>
-
-                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
-                        <a asp-controller="Chapters" asp-action="Index" class="btn btn-light me-md-2">Hủy bỏ</a>
-                        <button type="submit" class="btn btn-primary px-4">Tạo chương</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
-</div>
-
-@section Scripts {
-    <partial name="_ValidationScriptsPartial" />
-}
+<div class="row justify-content-center"><div class="col-md-6">
+    <div class="d-flex justify-content-between align-items-start mb-4"><div><div class="small text-muted">@Model.SubjectCode - @Model.SubjectName</div><h2 class="mb-1">Tạo chương mới</h2></div><a asp-controller="Chapters" asp-action="Index" asp-route-subjectId="@Model.SubjectId" class="btn btn-outline-secondary">Quay lại</a></div>
+    <div class="card shadow-sm"><div class="card-body"><form method="post" asp-controller="Chapters" asp-action="Create">
+        <input asp-for="SubjectId" type="hidden" />
+        <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+        <div class="mb-3"><label asp-for="Input.Number" class="form-label fw-bold"></label><input asp-for="Input.Number" class="form-control" type="number" min="1" max="999" /><span asp-validation-for="Input.Number" class="text-danger"></span></div>
+        <div class="mb-4"><label asp-for="Input.Title" class="form-label fw-bold"></label><input asp-for="Input.Title" class="form-control" /><span asp-validation-for="Input.Title" class="text-danger"></span></div>
+        <div class="d-flex justify-content-end gap-2"><a asp-controller="Chapters" asp-action="Index" asp-route-subjectId="@Model.SubjectId" class="btn btn-light">Hủy</a><button type="submit" class="btn btn-primary">Tạo chương</button></div>
+    </form></div></div>
+</div></div>
+@section Scripts { <partial name="_ValidationScriptsPartial" /> }

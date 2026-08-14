@@ -1,7 +1,6 @@
 @{
     var isAdmin = User.IsInRole(AppRoles.Admin);
     var isSubjectLeader = User.IsInRole(AppRoles.SubjectLeader);
-    var canManageAcademicContent = isAdmin || isSubjectLeader;
 }
 <!DOCTYPE html>
 <html lang="vi">
@@ -14,124 +13,50 @@
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/PRN222.RagAssistant.styles.css" asp-append-version="true" />
     <style>
-        .navbar-custom {
-            background-color: #ffffff;
-            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
-            border-bottom: 1px solid #e2e8f0;
-        }
-        .nav-link-custom {
-            font-weight: 500;
-            color: #475569;
-            padding: 0.5rem 0.9rem !important;
-            border-radius: 6px;
-            transition: all 0.15s ease-in-out;
-        }
-        .nav-link-custom:hover {
-            color: #0d6efd;
-            background-color: #f1f5f9;
-        }
-        .user-pill {
-            background-color: #f8fafc;
-            border: 1px solid #cbd5e1;
-            border-radius: 20px;
-            padding: 0.3rem 0.85rem;
-        }
+        .navbar-custom { background-color:#fff; box-shadow:0 2px 12px rgba(0,0,0,.06); border-bottom:1px solid #e2e8f0; }
+        .nav-link-custom { font-weight:500; color:#475569; padding:.5rem .9rem !important; border-radius:6px; transition:all .15s ease-in-out; }
+        .nav-link-custom:hover { color:#0d6efd; background-color:#f1f5f9; }
+        .user-pill { background-color:#f8fafc; border:1px solid #cbd5e1; border-radius:20px; padding:.3rem .85rem; }
     </style>
 </head>
 <body>
-    <header>
-        <nav class="navbar navbar-expand-md navbar-light navbar-custom py-2.5 mb-4">
-            <div class="container">
-                <a class="navbar-brand fw-bold d-flex align-items-center gap-2" asp-area="" asp-page="/Index">
-                    <span class="badge bg-primary px-2.5 py-1.5 rounded-2 fs-6">PRN222</span>
-                    <span class="text-dark fs-5">RAG Assistant</span>
-                </a>
-                <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target=".navbar-collapse" aria-controls="navbarSupportedContent"
-                        aria-expanded="false" aria-label="Toggle navigation">
-                    <span class="navbar-toggler-icon"></span>
-                </button>
-                <div class="navbar-collapse collapse d-md-inline-flex justify-content-between">
-                    <ul class="navbar-nav gap-1 flex-grow-1 ms-md-3">
-                        <li class="nav-item">
-                            <a class="nav-link nav-link-custom" asp-area="" asp-page="/Index">Home</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link nav-link-custom" asp-area="" asp-controller="Documents" asp-action="Index">Documents</a>
-                        </li>
-                        @if (canManageAcademicContent)
-                        {
-                            <li class="nav-item">
-                                <a class="nav-link nav-link-custom" asp-area="" asp-controller="Chapters" asp-action="Index">Chapters</a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link nav-link-custom" asp-area="" asp-page="/Reports/Index">Reports</a>
-                            </li>
-                        }
-                        @if (isAdmin)
-                        {
-                            <li class="nav-item">
-                                <a class="nav-link nav-link-custom" asp-area="" asp-controller="AdminUsers" asp-action="Index">Users</a>
-                            </li>
-                        }
-                        <li class="nav-item">
-                            <a class="nav-link nav-link-custom" asp-area="" asp-page="/Privacy">Privacy</a>
-                        </li>
-                    </ul>
-                    <ul class="navbar-nav align-items-center gap-2 mt-2 mt-md-0">
-                        @if (User.Identity?.IsAuthenticated == true)
-                        {
-                            <li class="nav-item">
-                                <div class="user-pill d-flex align-items-center gap-2 small">
-                                    <span class="fw-bold text-dark">@User.Identity.Name</span>
-                                    @if (isAdmin)
-                                    {
-                                        <span class="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25 px-2">Admin</span>
-                                    }
-                                    else if (isSubjectLeader)
-                                    {
-                                        <span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 px-2">Subject Leader</span>
-                                    }
-                                    else
-                                    {
-                                        <span class="badge bg-secondary bg-opacity-10 text-secondary border px-2">Student</span>
-                                    }
-                                </div>
-                            </li>
-                            <li class="nav-item">
-                                <form method="post" asp-page="/Account/Logout" class="m-0">
-                                    <button type="submit" class="btn btn-sm btn-outline-danger px-3 py-1 fw-medium" style="border-radius:18px;">
-                                        Logout
-                                    </button>
-                                </form>
-                            </li>
-                        }
-                        else
-                        {
-                            <li class="nav-item">
-                                <a class="btn btn-sm btn-primary px-3 fw-medium" asp-page="/Account/Login">Login</a>
-                            </li>
-                        }
-                    </ul>
-                </div>
-            </div>
-        </nav>
-    </header>
-    <div class="container">
-        <main role="main" class="pb-4">
-            @RenderBody()
-        </main>
+<header>
+<nav class="navbar navbar-expand-md navbar-light navbar-custom py-2 mb-4"><div class="container">
+    <a class="navbar-brand fw-bold d-flex align-items-center gap-2" asp-page="/Index"><span class="badge bg-primary px-2 py-1 fs-6">PRN222</span><span class="text-dark fs-5">RAG Assistant</span></a>
+    <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target=".navbar-collapse"><span class="navbar-toggler-icon"></span></button>
+    <div class="navbar-collapse collapse d-md-inline-flex justify-content-between">
+        <ul class="navbar-nav gap-1 flex-grow-1 ms-md-3">
+            <li class="nav-item"><a class="nav-link nav-link-custom" asp-page="/Index">Home</a></li>
+            @if (User.Identity?.IsAuthenticated == true)
+            {
+                <li class="nav-item"><a class="nav-link nav-link-custom" asp-controller="Subjects" asp-action="Index">Subjects</a></li>
+            }
+            @if (isAdmin)
+            {
+                <li class="nav-item"><a class="nav-link nav-link-custom" asp-controller="AdminSubjects" asp-action="Index">Manage Subjects</a></li>
+                <li class="nav-item"><a class="nav-link nav-link-custom" asp-controller="AdminUsers" asp-action="Index">Users</a></li>
+            }
+            <li class="nav-item"><a class="nav-link nav-link-custom" asp-page="/Privacy">Privacy</a></li>
+        </ul>
+        <ul class="navbar-nav align-items-center gap-2 mt-2 mt-md-0">
+            @if (User.Identity?.IsAuthenticated == true)
+            {
+                <li class="nav-item"><div class="user-pill d-flex align-items-center gap-2 small"><span class="fw-bold text-dark">@User.Identity.Name</span>@if (isAdmin) { <span class="badge bg-danger">Admin</span> } else if (isSubjectLeader) { <span class="badge bg-primary">Subject Leader</span> } else { <span class="badge bg-secondary">Student</span> }</div></li>
+                <li class="nav-item"><form method="post" asp-page="/Account/Logout" class="m-0"><button type="submit" class="btn btn-sm btn-outline-danger px-3">Logout</button></form></li>
+            }
+            else
+            {
+                <li class="nav-item"><a class="btn btn-sm btn-primary px-3" asp-page="/Account/Login">Login</a></li>
+            }
+        </ul>
     </div>
-
-    <footer class="border-top footer text-muted py-3 bg-white mt-auto">
-        <div class="container text-center small">
-            &copy; 2026 - PRN222.RagAssistant - <a asp-area="" asp-page="/Privacy" class="text-decoration-none">Privacy</a>
-        </div>
-    </footer>
-
-    <script src="~/lib/jquery/dist/jquery.min.js"></script>
-    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="~/js/site.js" asp-append-version="true"></script>
-
-    @await RenderSectionAsync("Scripts", required: false)
+</div></nav>
+</header>
+<div class="container"><main role="main" class="pb-4">@RenderBody()</main></div>
+<footer class="border-top footer text-muted py-3 bg-white mt-auto"><div class="container text-center small">&copy; 2026 - PRN222.RagAssistant - <a asp-page="/Privacy" class="text-decoration-none">Privacy</a></div></footer>
+<script src="~/lib/jquery/dist/jquery.min.js"></script>
+<script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+<script src="~/js/site.js" asp-append-version="true"></script>
+@await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>
