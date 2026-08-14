@@ -182,7 +182,7 @@ Member 4 must not parse raw source files, chunk documents, generate document emb
 
 ### Member 5 - Flow 2 MVC Presentation / Conversation Management / Evaluation - PENDING
 
-Flow 2 presentation is now explicitly assigned to **ASP.NET Core MVC Controllers + Views**, not Razor Pages.
+Flow 2 presentation is explicitly assigned to **ASP.NET Core MVC Controllers + Views**, not Razor Pages.
 
 Member 5 owns:
 
