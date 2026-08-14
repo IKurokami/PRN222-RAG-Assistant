@@ -2,14 +2,16 @@
 
 ## Status
 
-Member 2 owns two separate responsibilities:
+Member 2 owns two separate responsibilities and **both are now complete/merged**:
 
 1. **Flow 1 request/presentation side - COMPLETE / MERGED**
-2. **Flow 3 Report & Statistics - PENDING IMPLEMENTATION**
+2. **Flow 3 Report & Statistics - COMPLETE / MERGED through PR #12**
 
-Member 3's PR #9 has now completed the downstream indexing side of Flow 1, so the Member 2 -> Member 3 handoff is fulfilled and Flow 1 is end-to-end implemented.
+Member 3's PR #9 completed the downstream indexing side of Flow 1, so the Member 2 -> Member 3 handoff is fulfilled and Flow 1 is end-to-end implemented.
 
-Conversation History remains part of Flow 2 and belongs to Member 5 on the presentation side.
+PR #12 completed Member 2's independent Flow 3 reporting assignment. Conversation History remains part of Flow 2 and belongs to Member 5 on the presentation side.
+
+For the canonical whole-project snapshot, see `docs/project-status.md`.
 
 ## Completed Flow 1 request/presentation scope
 
@@ -58,7 +60,7 @@ Students may read document list/details without management actions.
 
 ## Member 2 -> Member 3 handoff - FULFILLED
 
-Member 3 has now merged the background indexing implementation through PR #9.
+Member 3 merged the background indexing implementation through PR #9.
 
 The active Flow 1 path is:
 
@@ -89,62 +91,59 @@ DocumentIndexingService
 
 Member 2 must continue to preserve this boundary. Do not move parsing/chunking/embedding into Razor Page handlers.
 
-The in-memory queue is now the active process-local transport consumed by the worker. Startup recovery re-enqueues persisted `Uploaded`/`Processing` documents.
+The in-memory queue is the active process-local transport consumed by the worker. Startup recovery re-enqueues persisted `Uploaded`/`Processing` documents.
 
 See `docs/member-3-document-indexing-handoff.md` for the completed indexing boundary.
 
-## Handoff to Members 4 and 5
+## Flow 3 - Report & Statistics - COMPLETE / MERGED
 
-Member 4 now builds Flow 2 retrieval on successfully indexed chunks and the merged `ITextEmbeddingService`.
+PR #12 merged the independent third workflow at master commit:
 
-Member 5 owns Flow 2 presentation:
-
-- chat UI
-- session creation/opening/navigation
-- Conversation History
-- citation rendering
-- evaluation deliverable
-
-Neither Member 4 nor Member 5 should put provider/retrieval logic into Member 2 pages.
-
-## Flow 3 - Report & Statistics - PENDING
-
-Member 2 owns the independent third workflow in a separate focused branch.
+```text
+00903a38693956f59090f71649ca8a99e053e604
+```
 
 Primary actor: **Subject Leader**.
 
 Goal: inspect read-only aggregate state/usage of the PRN222 RAG Assistant.
 
-### Initial report scope
+### Merged report pages
 
-At minimum:
+```text
+src/PRN222.RagAssistant/Pages/Reports/Index.cshtml
+src/PRN222.RagAssistant/Pages/Reports/Index.cshtml.cs
+```
+
+The shared layout now exposes a Reports navigation entry to Subject Leaders.
+
+Server-side access uses:
+
+```text
+[Authorize(Policy = AppPolicies.ManageDocuments)]
+```
+
+The policy requires `SubjectLeader`; UI visibility is not relied on as the authorization boundary.
+
+### Implemented metrics
+
+The report now includes:
 
 - total PRN222 chapters
 - total PRN222 documents
 - documents grouped by `DocumentIndexStatus`
 - documents grouped by chapter
 - unassigned document count
+- total persisted `DocumentChunk` count
+- recent indexing failures using existing `IndexError`
+- recently indexed documents using existing `IndexedAtUtc` plus chunk count
 - total chat sessions
 - total chat messages
 - total persisted citations
-- clear empty/zero states
+- graceful zero/empty states while Flow 2 has no chat data
 
-Now that Member 3 is merged, indexing metrics are immediately meaningful and can use real persisted states:
+The page uses read-only EF Core aggregate queries and `AsNoTracking()` where appropriate.
 
-- `Uploaded`
-- `Processing`
-- `Indexed`
-- `Failed`
-
-Optional presentation improvements that remain within scope include:
-
-- recent indexing failures with `IndexError`
-- recently indexed documents using existing timestamps
-- total persisted `DocumentChunk` count
-
-These should still be computed from existing persistence.
-
-### Suggested flow
+### Flow 3 boundary
 
 ```text
 Subject Leader
@@ -160,24 +159,13 @@ Reports / Statistics
 Read-only dashboard / tables
 ```
 
-### Implementation guidance
-
-Prefer:
-
-- aggregate EF Core queries
-- `AsNoTracking()` for read-only report queries where appropriate
-- simple Razor Pages/MVC presentation
-- empty-state handling
-- focused authorization tests
-- focused aggregate/query tests
-
-Do not add complexity solely for reporting.
+Flow 3 remains a consumer of existing persisted state. It does not participate in indexing or RAG generation.
 
 ### Non-interference rules
 
-Flow 3 must not:
+Future Member 2/reporting changes must not:
 
-- enqueue/re-index documents
+- enqueue/re-index documents as part of reporting
 - alter parsers/chunker/embedding/worker behavior
 - mutate document/chapter/index status
 - perform pgvector similarity retrieval
@@ -187,28 +175,35 @@ Flow 3 must not:
 - introduce analytics entities, denormalized counters, event tracking, a reporting warehouse, or scheduled aggregation solely to show the dashboard
 - change shared `Application/` contracts only for convenience
 
-If a genuine persistence gap is found, document it and coordinate the schema/migration through Member 1.
+If a genuine persistence gap is found, document it and coordinate schema/migration changes through Member 1.
 
-## Suggested branch
+## Handoff to Members 4 and 5
 
-```text
-feature/report-statistics
-```
+With Member 2's assigned work complete, the remaining product implementation is Flow 2.
 
-The Flow 3 PR should remain focused. Do not mix Flow 1 fixes, indexing refactors, RAG work, or chat UI changes into it.
+Member 4 builds RAG retrieval on successfully indexed chunks and the merged `ITextEmbeddingService`.
 
-## Relevant existing tests
+Member 5 owns Flow 2 presentation:
 
-Member 2's merged tests cover Chapter/Document Management authorization, validation, safety, upload behavior, and queue handoff expectations.
+- chat UI
+- session creation/opening/navigation
+- Conversation History
+- citation rendering
+- evaluation deliverable
 
-The future Flow 3 PR should add tests for:
+Neither Member 4 nor Member 5 should put provider/retrieval logic into Member 2 pages, and Flow 2 should not recreate Flow 3 reporting pages.
 
-- Subject Leader access
-- unauthorized/student behavior according to the intended policy
-- aggregate correctness
-- grouped index-status counts
-- chapter/unassigned counts
-- empty chat-data states
+## Validation
+
+PR #12 reported `75/75` automated tests passing.
+
+Post-merge local smoke testing also confirmed:
+
+- anonymous access to `/Reports/Index` redirects to login
+- Student access is denied
+- Subject Leader access succeeds
+- a Chapter can be created and a PDF uploaded/indexed through the completed Flow 1 pipeline
+- the Flow 3 dashboard updates chapter/document/chunk/indexing metrics from the resulting persisted data
 
 ## Read before continuing
 
@@ -222,3 +217,5 @@ docs/member-1-core-data-handoff.md
 docs/member-3-document-indexing-handoff.md
 docs/flow-3-report-statistics-handoff.md
 ```
+
+Member 2 should now be treated as complete for the currently assigned Flow 1 request-side and Flow 3 reporting work unless a new requirement explicitly reopens those scopes.
