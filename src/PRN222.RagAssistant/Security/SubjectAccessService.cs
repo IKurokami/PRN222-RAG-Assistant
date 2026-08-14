@@ -1,47 +1,39 @@
 using System.Security.Claims;
-using Microsoft.EntityFrameworkCore;
-using PRN222.RagAssistant.Data;
 using PRN222.RagAssistant.Domain.Entities;
 
 namespace PRN222.RagAssistant.Security;
 
 public sealed class SubjectAccessService : ISubjectAccessService
 {
-    private readonly ApplicationDbContext _dbContext;
+    private readonly ISubjectAccessRepository _repository;
 
-    public SubjectAccessService(ApplicationDbContext dbContext)
+    public SubjectAccessService(ISubjectAccessRepository repository)
     {
-        _dbContext = dbContext;
+        _repository = repository;
     }
 
     public async Task<IReadOnlyList<Subject>> GetAccessibleSubjectsAsync(
         ClaimsPrincipal user,
         CancellationToken cancellationToken = default)
     {
+        var subjects = await _repository.GetSubjectsAsync(cancellationToken);
+
         if (user.IsInRole(AppRoles.Admin))
         {
-            return await _dbContext.Subjects
-                .AsNoTracking()
-                .OrderBy(subject => subject.Code)
-                .ToListAsync(cancellationToken);
+            return subjects;
         }
 
         if (user.IsInRole(AppRoles.SubjectLeader))
         {
             var assignedSubjectIds = await GetAssignedSubjectIdsAsync(user, cancellationToken);
-
-            return await _dbContext.Subjects
-                .AsNoTracking()
+            return subjects
                 .Where(subject => subject.IsActive || assignedSubjectIds.Contains(subject.Id))
-                .OrderBy(subject => subject.Code)
-                .ToListAsync(cancellationToken);
+                .ToList();
         }
 
-        return await _dbContext.Subjects
-            .AsNoTracking()
+        return subjects
             .Where(subject => subject.IsActive)
-            .OrderBy(subject => subject.Code)
-            .ToListAsync(cancellationToken);
+            .ToList();
     }
 
     public async Task<IReadOnlySet<Guid>> GetManageableSubjectIdsAsync(
@@ -50,11 +42,8 @@ public sealed class SubjectAccessService : ISubjectAccessService
     {
         if (user.IsInRole(AppRoles.Admin))
         {
-            return (await _dbContext.Subjects
-                    .AsNoTracking()
-                    .Select(subject => subject.Id)
-                    .ToListAsync(cancellationToken))
-                .ToHashSet();
+            var subjects = await _repository.GetSubjectsAsync(cancellationToken);
+            return subjects.Select(subject => subject.Id).ToHashSet();
         }
 
         if (!user.IsInRole(AppRoles.SubjectLeader))
@@ -75,12 +64,7 @@ public sealed class SubjectAccessService : ISubjectAccessService
             return false;
         }
 
-        var subject = await _dbContext.Subjects
-            .AsNoTracking()
-            .Where(candidate => candidate.Id == subjectId)
-            .Select(candidate => new { candidate.Id, candidate.IsActive })
-            .FirstOrDefaultAsync(cancellationToken);
-
+        var subject = await _repository.FindSubjectAsync(subjectId, cancellationToken);
         if (subject is null)
         {
             return false;
@@ -115,7 +99,7 @@ public sealed class SubjectAccessService : ISubjectAccessService
             return false;
         }
 
-        if (!await _dbContext.Subjects.AsNoTracking().AnyAsync(subject => subject.Id == subjectId, cancellationToken))
+        if (await _repository.FindSubjectAsync(subjectId, cancellationToken) is null)
         {
             return false;
         }
@@ -134,31 +118,16 @@ public sealed class SubjectAccessService : ISubjectAccessService
         return assignedSubjectIds.Contains(subjectId);
     }
 
-    private async Task<HashSet<Guid>> GetAssignedSubjectIdsAsync(
+    private async Task<IReadOnlySet<Guid>> GetAssignedSubjectIdsAsync(
         ClaimsPrincipal user,
         CancellationToken cancellationToken)
     {
         var userIdValue = user.FindFirstValue(ClaimTypes.NameIdentifier);
         if (!Guid.TryParse(userIdValue, out var userId))
         {
-            return [];
+            return new HashSet<Guid>();
         }
 
-        var claimValues = await _dbContext.UserClaims
-            .AsNoTracking()
-            .Where(claim => claim.UserId == userId && claim.ClaimType == AppClaimTypes.ManagedSubject)
-            .Select(claim => claim.ClaimValue)
-            .ToListAsync(cancellationToken);
-
-        var subjectIds = new HashSet<Guid>();
-        foreach (var claimValue in claimValues)
-        {
-            if (Guid.TryParse(claimValue, out var subjectId))
-            {
-                subjectIds.Add(subjectId);
-            }
-        }
-
-        return subjectIds;
+        return await _repository.GetAssignedSubjectIdsAsync(userId, cancellationToken);
     }
 }

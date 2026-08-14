@@ -1,10 +1,4 @@
 using System.Security.Claims;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Diagnostics;
-using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.Metadata;
-using PRN222.RagAssistant.Data;
 using PRN222.RagAssistant.Domain.Entities;
 using PRN222.RagAssistant.Security;
 
@@ -15,12 +9,8 @@ public sealed class SubjectAccessServiceTests
     [Fact]
     public async Task Admin_can_manage_any_existing_subject()
     {
-        await using var context = CreateContext();
         var subject = CreateSubject("PRJ301", isActive: false);
-        context.Subjects.Add(subject);
-        await context.SaveChangesAsync();
-
-        var service = new SubjectAccessService(context);
+        var service = CreateService([subject]);
         var admin = CreatePrincipal(Guid.NewGuid(), AppRoles.Admin);
 
         Assert.True(await service.CanViewSubjectAsync(admin, subject.Id));
@@ -30,21 +20,15 @@ public sealed class SubjectAccessServiceTests
     [Fact]
     public async Task SubjectLeader_can_manage_only_assigned_subjects()
     {
-        await using var context = CreateContext();
         var assigned = CreateSubject("PRN222", isActive: true);
         var unassigned = CreateSubject("SWT301", isActive: true);
         var leaderId = Guid.NewGuid();
-
-        context.Subjects.AddRange(assigned, unassigned);
-        context.UserClaims.Add(new IdentityUserClaim<Guid>
-        {
-            UserId = leaderId,
-            ClaimType = AppClaimTypes.ManagedSubject,
-            ClaimValue = assigned.Id.ToString("D")
-        });
-        await context.SaveChangesAsync();
-
-        var service = new SubjectAccessService(context);
+        var service = CreateService(
+            [assigned, unassigned],
+            new Dictionary<Guid, IReadOnlySet<Guid>>
+            {
+                [leaderId] = new HashSet<Guid> { assigned.Id }
+            });
         var leader = CreatePrincipal(leaderId, AppRoles.SubjectLeader);
 
         Assert.True(await service.CanManageSubjectAsync(leader, assigned.Id));
@@ -55,13 +39,9 @@ public sealed class SubjectAccessServiceTests
     [Fact]
     public async Task Student_can_view_active_but_not_inactive_subjects()
     {
-        await using var context = CreateContext();
         var active = CreateSubject("PRN222", isActive: true);
         var inactive = CreateSubject("PRJ301", isActive: false);
-        context.Subjects.AddRange(active, inactive);
-        await context.SaveChangesAsync();
-
-        var service = new SubjectAccessService(context);
+        var service = CreateService([active, inactive]);
         var student = CreatePrincipal(Guid.NewGuid(), AppRoles.Student);
 
         Assert.True(await service.CanViewSubjectAsync(student, active.Id));
@@ -72,20 +52,14 @@ public sealed class SubjectAccessServiceTests
     [Fact]
     public async Task SubjectLeader_can_view_and_manage_an_assigned_inactive_subject()
     {
-        await using var context = CreateContext();
         var inactive = CreateSubject("SWP391", isActive: false);
         var leaderId = Guid.NewGuid();
-
-        context.Subjects.Add(inactive);
-        context.UserClaims.Add(new IdentityUserClaim<Guid>
-        {
-            UserId = leaderId,
-            ClaimType = AppClaimTypes.ManagedSubject,
-            ClaimValue = inactive.Id.ToString("D")
-        });
-        await context.SaveChangesAsync();
-
-        var service = new SubjectAccessService(context);
+        var service = CreateService(
+            [inactive],
+            new Dictionary<Guid, IReadOnlySet<Guid>>
+            {
+                [leaderId] = new HashSet<Guid> { inactive.Id }
+            });
         var leader = CreatePrincipal(leaderId, AppRoles.SubjectLeader);
 
         Assert.True(await service.CanViewSubjectAsync(leader, inactive.Id));
@@ -95,22 +69,17 @@ public sealed class SubjectAccessServiceTests
     [Fact]
     public async Task Accessible_subjects_are_filtered_by_role_and_activity()
     {
-        await using var context = CreateContext();
         var active = CreateSubject("PRN222", isActive: true);
         var inactiveAssigned = CreateSubject("PRJ301", isActive: false);
         var inactiveUnassigned = CreateSubject("SWT301", isActive: false);
         var leaderId = Guid.NewGuid();
+        var service = CreateService(
+            [active, inactiveAssigned, inactiveUnassigned],
+            new Dictionary<Guid, IReadOnlySet<Guid>>
+            {
+                [leaderId] = new HashSet<Guid> { inactiveAssigned.Id }
+            });
 
-        context.Subjects.AddRange(active, inactiveAssigned, inactiveUnassigned);
-        context.UserClaims.Add(new IdentityUserClaim<Guid>
-        {
-            UserId = leaderId,
-            ClaimType = AppClaimTypes.ManagedSubject,
-            ClaimValue = inactiveAssigned.Id.ToString("D")
-        });
-        await context.SaveChangesAsync();
-
-        var service = new SubjectAccessService(context);
         var leaderSubjects = await service.GetAccessibleSubjectsAsync(
             CreatePrincipal(leaderId, AppRoles.SubjectLeader));
         var studentSubjects = await service.GetAccessibleSubjectsAsync(
@@ -123,17 +92,24 @@ public sealed class SubjectAccessServiceTests
         Assert.Equal(active.Id, studentSubjects[0].Id);
     }
 
-    private static ApplicationDbContext CreateContext()
+    [Fact]
+    public async Task Principal_without_a_valid_user_id_cannot_use_SubjectLeader_assignments()
     {
-        var options = new DbContextOptionsBuilder<ApplicationDbContext>()
-            .UseInMemoryDatabase($"subject-access-{Guid.NewGuid():N}")
-            // The production model contains Pgvector.Vector, while these tests only touch
-            // Subjects and Identity claims. The InMemory provider cannot validate that
-            // provider-specific CLR type, so replace validation in this test-only context.
-            .ReplaceService<IModelValidator, InMemoryPgvectorModelValidator>()
-            .Options;
+        var subject = CreateSubject("PRN222", isActive: false);
+        var repository = new FakeSubjectAccessRepository([subject]);
+        var service = new SubjectAccessService(repository);
+        var principal = new ClaimsPrincipal(new ClaimsIdentity(
+            [new Claim(ClaimTypes.Role, AppRoles.SubjectLeader)],
+            authenticationType: "TestAuth"));
 
-        return new ApplicationDbContext(options);
+        Assert.False(await service.CanManageSubjectAsync(principal, subject.Id));
+    }
+
+    private static SubjectAccessService CreateService(
+        IReadOnlyList<Subject> subjects,
+        IReadOnlyDictionary<Guid, IReadOnlySet<Guid>>? assignments = null)
+    {
+        return new SubjectAccessService(new FakeSubjectAccessRepository(subjects, assignments));
     }
 
     private static Subject CreateSubject(string code, bool isActive)
@@ -158,15 +134,37 @@ public sealed class SubjectAccessServiceTests
             authenticationType: "TestAuth"));
     }
 
-    public sealed class InMemoryPgvectorModelValidator : IModelValidator
+    private sealed class FakeSubjectAccessRepository : ISubjectAccessRepository
     {
-        public void Validate(
-            IModel model,
-            IDiagnosticsLogger<DbLoggerCategory.Model.Validation> logger)
+        private readonly IReadOnlyList<Subject> _subjects;
+        private readonly IReadOnlyDictionary<Guid, IReadOnlySet<Guid>> _assignments;
+
+        public FakeSubjectAccessRepository(
+            IReadOnlyList<Subject> subjects,
+            IReadOnlyDictionary<Guid, IReadOnlySet<Guid>>? assignments = null)
         {
-            // Intentionally empty for the narrow InMemory authorization test harness.
-            // Production/Npgsql model validation remains covered by the normal build,
-            // pending-model check, migrations, and PostgreSQL CI validation.
+            _subjects = subjects;
+            _assignments = assignments ?? new Dictionary<Guid, IReadOnlySet<Guid>>();
+        }
+
+        public Task<IReadOnlyList<Subject>> GetSubjectsAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(_subjects);
+        }
+
+        public Task<Subject?> FindSubjectAsync(Guid subjectId, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(_subjects.FirstOrDefault(subject => subject.Id == subjectId));
+        }
+
+        public Task<IReadOnlySet<Guid>> GetAssignedSubjectIdsAsync(
+            Guid userId,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(
+                _assignments.TryGetValue(userId, out var ids)
+                    ? ids
+                    : (IReadOnlySet<Guid>)new HashSet<Guid>());
         }
     }
 }

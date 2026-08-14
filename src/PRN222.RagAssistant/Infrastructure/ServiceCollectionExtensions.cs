@@ -60,6 +60,7 @@ public static class ServiceCollectionExtensions
                 policy => policy.RequireRole(AppRoles.Admin));
         });
 
+        services.AddScoped<ISubjectAccessRepository, SubjectAccessRepository>();
         services.AddScoped<ISubjectAccessService, SubjectAccessService>();
 
         var ollamaBaseUrl = configuration["Rag:Ollama:BaseUrl"];
