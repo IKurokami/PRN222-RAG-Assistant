@@ -1,6 +1,6 @@
 # Project status
 
-Last synchronized against `master` after the merge of PR #12 (Member 2 Flow 3 Report & Statistics).
+Last synchronized against `master` after the merge of PR #12 (Member 2 Flow 3 Report & Statistics), with the team presentation decision that pending **Flow 2 will use ASP.NET Core MVC Controllers + Views**.
 
 Source baseline reviewed:
 
@@ -18,31 +18,45 @@ This file is the quickest status snapshot for team members and coding agents. Wh
 
 The project defines three independent workflows:
 
-1. **Flow 1 - Document Management & Indexing** - COMPLETE
-2. **Flow 2 - RAG Question & Answer & Conversation Management** - PENDING
-3. **Flow 3 - Report & Statistics** - COMPLETE
+1. **Flow 1 - Document Management & Indexing** - COMPLETE - Razor Pages
+2. **Flow 2 - RAG Question & Answer & Conversation Management** - PENDING - **ASP.NET Core MVC Controllers + Views**
+3. **Flow 3 - Report & Statistics** - COMPLETE - Razor Pages
 
 Conversation History belongs to Flow 2. It is not counted as the independent third workflow.
+
+## Presentation allocation
+
+The mixed presentation host is intentional:
+
+```text
+Flow 1 -> Razor Pages   [COMPLETE]
+Flow 2 -> MVC           [PENDING]
+Flow 3 -> Razor Pages   [COMPLETE]
+```
+
+Flow 2 is the workflow selected by the team for the MVC implementation requirement. New Flow 2 presentation must use `Controllers/` and `Views/`; do not create `Pages/Chat`, `Pages/Conversation`, or a parallel Razor Pages chat implementation.
+
+Existing Flow 1 and Flow 3 Razor Pages should not be migrated merely for consistency.
 
 ## Current project state
 
 | Area | Owner | Status | Notes |
 |---|---|---|---|
 | Core domain/data/security | Member 1 | Complete baseline | Entities, EF Core configurations/migration baseline, Identity roles/policy, pgvector wiring, shared application contracts, and architecture tests are in place. |
-| Chapter Management | Member 2 | Complete / merged | Runtime PRN222 chapter list/create/edit/delete is implemented; chapters are not seed-only data. |
-| Document Management | Member 2 | Complete / merged | Upload, list, details, edit, delete, re-index request, authorization, validation, storage, and queue handoff are implemented. |
+| Chapter Management | Member 2 | Complete / merged | Runtime PRN222 chapter list/create/edit/delete is implemented with Razor Pages; chapters are not seed-only data. |
+| Document Management | Member 2 | Complete / merged | Razor Pages upload, list, details, edit, delete, re-index request, authorization, validation, storage, and queue handoff are implemented. |
 | Document parsing/chunking/indexing | Member 3 | Complete / merged | PDF (PdfPig), DOCX/PPTX (OpenXml), chunking, batch embeddings, indexing service, worker, chunk replacement, and index-state transitions are implemented. |
 | Flow 1 end-to-end | Members 2 + 3 | Complete | Upload/re-index -> queue -> worker -> parse -> chunk -> embed -> `DocumentChunk` persistence -> `Indexed`/`Failed`. |
-| Flow 3 Report & Statistics | Member 2 | Complete / merged through PR #12 | Subject-Leader-only read-only dashboard over PRN222 chapter/document/indexing/chunk/chat aggregate data. |
-| RAG retrieval / grounded backend | Member 4 | Pending | Question embedding, pgvector retrieval, grounded prompt construction, Ollama chat generation, `IRagQueryService`, message/citation persistence remain. |
-| Chat UI / conversation history / citations | Member 5 | Pending | Chat/session UI, Conversation History, citation rendering, and evaluation integration remain. |
+| Flow 3 Report & Statistics | Member 2 | Complete / merged through PR #12 | Subject-Leader-only read-only Razor Pages dashboard over PRN222 chapter/document/indexing/chunk/chat aggregate data. |
+| RAG retrieval / grounded backend | Member 4 | Pending | Presentation-agnostic question embedding, pgvector retrieval, grounded prompt construction, Ollama chat generation, `IRagQueryService`, message/citation persistence remain. |
+| Flow 2 MVC presentation / conversation history / citations | Member 5 | Pending | MVC Controllers + Views for chat/session UI, Conversation History, citation rendering, and evaluation integration remain. |
 | Evaluation set | Member 5 | Pending | `evaluation/` remains reserved for the human-authored 50-question ground-truth set. |
 
 ## Flow 1 - end-to-end complete
 
 ### Member 2 request/presentation side
 
-Merged behavior includes:
+Merged Razor Pages behavior includes:
 
 - PRN222 Chapter list/create/edit/delete
 - Document list/filter/upload/details/edit/delete/re-index request
@@ -98,7 +112,7 @@ Successful indexing clears `IndexError` and sets `IndexedAtUtc`. Failures persis
 
 ## Flow 3 - Report & Statistics - complete
 
-PR #12 completed Member 2's independent reporting workflow.
+PR #12 completed Member 2's independent Razor Pages reporting workflow.
 
 Primary merged files:
 
@@ -130,7 +144,7 @@ Post-merge local smoke testing reported that a real PDF upload progressed throug
 
 See `docs/flow-3-report-statistics-handoff.md` for the completed reporting boundary.
 
-## Current handoff to Member 4
+## Current handoff to Member 4 - Flow 2 backend
 
 Member 4 is now the primary remaining backend implementation owner.
 
@@ -148,21 +162,32 @@ Member 4 owns:
 - persistence of user/assistant `ChatMessage` rows
 - persistence of ordered `MessageCitation` rows
 
-Member 4 must not parse raw uploaded files or duplicate the indexing pipeline.
+Member 4's code must remain presentation-agnostic. It must not depend on MVC controllers/views or Razor Page models, and it must not place retrieval/Ollama logic inside a controller.
 
 See `docs/member-3-document-indexing-handoff.md` for the completed Member 3 boundary.
 
-## Current handoff to Member 5
+## Current handoff to Member 5 - Flow 2 MVC presentation
 
-Member 5 owns Flow 2 presentation/evaluation:
+Member 5 owns **ASP.NET Core MVC** presentation/evaluation for Flow 2:
 
-- chat/session creation and navigation
+- MVC controller/actions for chat/session workflows
+- MVC Views for chat/session display
+- chat/session creation and navigation presentation
 - asking questions through `IRagQueryService`
 - answer/citation rendering
-- persisted Conversation History
+- persisted Conversation History presentation
 - evaluation set and evaluation-facing tooling
 
-UI code must not call Ollama or query pgvector directly.
+Expected presentation locations:
+
+```text
+src/PRN222.RagAssistant/Controllers/
+src/PRN222.RagAssistant/Views/Chat/
+```
+
+Flow 2 must **not** be implemented as new Razor Pages. Do not add `Pages/Chat` or `Pages/Conversation`.
+
+MVC controllers must remain thin HTTP adapters and must not call Ollama or query pgvector directly.
 
 ## Shared persistence and contracts
 
@@ -193,14 +218,14 @@ Flow 3 did not need a new cross-member reporting contract or schema change.
 
 ## Remaining work
 
-The main unfinished product work is now **Flow 2**:
+The main unfinished product work is now **Flow 2 using MVC**:
 
 ```text
 Member 4: RAG backend / retrieval / generation / persistence
-Member 5: chat UI / Conversation History / citations / evaluation
+Member 5: MVC Controllers + Views / Conversation History / citations / evaluation
 ```
 
-Do not recreate Flow 1 indexing or Flow 3 reporting in later branches.
+Do not recreate Flow 1 indexing or Flow 3 reporting in later branches, and do not create a parallel Razor Pages version of Flow 2.
 
 ## Required reading before continuing
 

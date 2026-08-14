@@ -16,11 +16,36 @@ See:
 
 The project defines three independent workflows:
 
-1. **Flow 1 - Document Management & Indexing** - COMPLETE. Subject Leader manages chapters/documents; uploaded material is parsed, chunked, embedded, and indexed.
-2. **Flow 2 - RAG Question & Answer & Conversation Management** - PENDING. Student asks grounded questions, receives citations, and can reopen Conversation History.
-3. **Flow 3 - Report & Statistics** - COMPLETE. Subject Leader reviews read-only document/indexing/chat-usage statistics.
+1. **Flow 1 - Document Management & Indexing** - COMPLETE, implemented with Razor Pages. Subject Leader manages chapters/documents; uploaded material is parsed, chunked, embedded, and indexed.
+2. **Flow 2 - RAG Question & Answer & Conversation Management** - PENDING, and **must be implemented with ASP.NET Core MVC Controllers + Views**. Student asks grounded questions, receives citations, and can reopen Conversation History.
+3. **Flow 3 - Report & Statistics** - COMPLETE, implemented with Razor Pages. Subject Leader reviews read-only document/indexing/chat-usage statistics.
 
 Conversation History belongs to Flow 2 rather than being counted as Flow 3.
+
+## Presentation model decision
+
+The application intentionally hosts both ASP.NET Core presentation models:
+
+```text
+Flow 1 -> Razor Pages   [COMPLETE]
+Flow 2 -> MVC           [PENDING]
+Flow 3 -> Razor Pages   [COMPLETE]
+```
+
+Flow 2 is the workflow selected by the team to satisfy the MVC implementation requirement.
+
+`Program.cs` already registers both `AddControllersWithViews()` and `AddRazorPages()` and maps both controller routes and Razor Pages.
+
+For Flow 2, new presentation code should be created under MVC areas such as:
+
+```text
+src/PRN222.RagAssistant/Controllers/
+src/PRN222.RagAssistant/Views/Chat/
+```
+
+Do **not** create a parallel `Pages/Chat` or other Razor Pages implementation for Flow 2. Existing Flow 1 and Flow 3 Razor Pages should remain unchanged.
+
+MVC controllers should stay thin and delegate grounded Q&A to the application/service layer, especially `IRagQueryService`; they must not call Ollama or query pgvector directly.
 
 ## Current project status
 
@@ -33,13 +58,13 @@ Latest merged baseline after PR #12:
 | Member 3 | Flow 1 parsing, chunking, embeddings, indexing worker/service | Complete / merged through PR #9 |
 | Member 2 | Flow 3 Report & Statistics | Complete / merged through PR #12 |
 | Member 4 | Flow 2 pgvector retrieval, grounded RAG backend, chat/citation persistence | Pending |
-| Member 5 | Flow 2 chat UI, Conversation History, citation rendering, evaluation | Pending |
+| Member 5 | Flow 2 **MVC** chat UI, Conversation History, citation rendering, evaluation | Pending |
 
 PR #12 reported `75/75` automated tests passing. Post-merge local smoke testing also confirmed Flow 1 indexing and Flow 3 reporting against real PostgreSQL/pgvector + Ollama runtime data.
 
 ## Implemented Flow 1
 
-Flow 1 is end-to-end implemented.
+Flow 1 is end-to-end implemented with Razor Pages on the request/presentation side.
 
 ```text
 Subject Leader
@@ -49,7 +74,7 @@ Subject Leader
     \--> Upload / manage / re-index documents
             |
             v
-Member 2 request side
+Member 2 Razor Pages request side
             |
             +--> validate PDF / DOCX / PPTX and size
             +--> validate optional ChapterId
@@ -108,7 +133,7 @@ Member 3's merged PR #9 includes:
 
 ## Implemented Flow 3
 
-PR #12 completed **Report & Statistics** for the Subject Leader.
+PR #12 completed **Report & Statistics** for the Subject Leader using Razor Pages.
 
 Primary route:
 
@@ -138,9 +163,9 @@ Post-merge local smoke testing confirmed that after a PDF was uploaded and index
 
 See `docs/flow-3-report-statistics-handoff.md`.
 
-## Pending Flow 2
+## Pending Flow 2 - ASP.NET Core MVC
 
-The main unfinished product work is now Flow 2.
+The main unfinished product work is now Flow 2, and **Flow 2 is the workflow chosen to satisfy the MVC presentation requirement**.
 
 Member 4 owns the RAG backend and can rely on successfully indexed `DocumentChunk` rows.
 
@@ -168,17 +193,35 @@ IChatCompletionService -> Ollama
 RagAnswer + RagCitation[]
 ```
 
-Member 5 owns presentation, session navigation, Conversation History, citation rendering, and the evaluation deliverable.
+Member 5 owns the MVC presentation layer:
+
+```text
+Student browser
+    |
+    v
+ChatController / MVC actions
+    |
+    v
+IRagQueryService
+    |
+    v
+Member 4 RAG backend
+    |
+    v
+MVC Views/Chat -> answer + citations + Conversation History
+```
+
+Member 5 owns MVC chat/session views, session navigation, Conversation History, citation rendering, and the evaluation deliverable.
 
 Flow 2 must build on the completed Flow 1 indexing pipeline and must not recreate the completed Flow 3 reporting workflow.
 
 ## Team development boundaries
 
 - **Member 1 - Core/Data Lead:** schema/migration coordination, domain/data/security/shared contracts.
-- **Member 2 - Document Management + Reporting:** completed Flow 1 request side and completed Flow 3.
+- **Member 2 - Document Management + Reporting:** completed Flow 1 Razor Pages request side and completed Flow 3 Razor Pages reporting.
 - **Member 3 - Document Indexing:** completed parser/chunker/embedding/worker/index-state pipeline.
-- **Member 4 - RAG Backend:** pending question embedding/retrieval/grounding/generation/chat persistence.
-- **Member 5 - Chat UI / Conversation Management / Evaluation:** pending Flow 2 presentation/evaluation.
+- **Member 4 - RAG Backend:** pending question embedding/retrieval/grounding/generation/chat persistence; stays presentation-agnostic.
+- **Member 5 - MVC Chat UI / Conversation Management / Evaluation:** pending Flow 2 Controllers + Views, Conversation History, citations, and evaluation.
 
 Before implementing new workflow work, read:
 
@@ -194,7 +237,7 @@ docs/member-3-document-indexing-handoff.md
 docs/flow-3-report-statistics-handoff.md
 ```
 
-Do not duplicate cross-member contracts under `Application/` or bypass them by putting Ollama/pgvector logic directly in Razor Page models/controllers.
+Do not duplicate cross-member contracts under `Application/`. Flow 2 MVC controllers/views must not bypass `IRagQueryService` by putting Ollama/pgvector retrieval logic directly in the presentation layer.
 
 ## Local setup
 

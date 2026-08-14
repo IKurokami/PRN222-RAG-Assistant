@@ -11,19 +11,33 @@ As of `master` after PR #12 was merged:
 - Member 3 Flow 1 Document Indexing/Ingestion: **complete / merged through PR #9**.
 - Member 2 Flow 3 Report & Statistics: **complete / merged through PR #12**.
 - Member 4 Flow 2 RAG backend: **pending**.
-- Member 5 Flow 2 chat/conversation-history presentation + evaluation: **pending**.
+- Member 5 Flow 2 **MVC** chat/conversation-history presentation + evaluation: **pending**.
 
-Flow 1 is end-to-end complete. Flow 3 is complete. The remaining product implementation is Flow 2.
+Flow 1 is end-to-end complete. Flow 3 is complete. The remaining product implementation is Flow 2, and Flow 2 presentation is fixed to ASP.NET Core MVC Controllers + Views.
 
 ## Product workflows
 
 The project defines three independent functional workflows for the course requirement:
 
-1. **Flow 1 - Document Management & Indexing** - COMPLETE. Subject Leader manages PRN222 chapters/documents; the system stores, parses, chunks, embeds, indexes, and exposes indexing state.
-2. **Flow 2 - RAG Question & Answer & Conversation Management** - PENDING. Student creates/opens a chat session, asks grounded questions, receives citations, and can reopen persisted Conversation History.
-3. **Flow 3 - Report & Statistics** - COMPLETE. Subject Leader reviews read-only aggregate document/indexing and chat-usage statistics.
+1. **Flow 1 - Document Management & Indexing** - COMPLETE, Razor Pages presentation. Subject Leader manages PRN222 chapters/documents; the system stores, parses, chunks, embeds, indexes, and exposes indexing state.
+2. **Flow 2 - RAG Question & Answer & Conversation Management** - PENDING, **MVC presentation required**. Student creates/opens a chat session, asks grounded questions, receives citations, and can reopen persisted Conversation History.
+3. **Flow 3 - Report & Statistics** - COMPLETE, Razor Pages presentation. Subject Leader reviews read-only aggregate document/indexing and chat-usage statistics.
 
 **Conversation History is part of Flow 2, not the independent third workflow.**
+
+## Presentation model decision
+
+The application intentionally uses both ASP.NET Core presentation models:
+
+```text
+Flow 1 -> Razor Pages   [COMPLETE]
+Flow 2 -> MVC           [PENDING]
+Flow 3 -> Razor Pages   [COMPLETE]
+```
+
+Flow 2 is the selected MVC workflow. New Flow 2 presentation code belongs under `Controllers/` and `Views/`, not under `Pages/`.
+
+Do not migrate completed Flow 1 or Flow 3 merely to make every workflow use the same presentation model.
 
 ## Member responsibilities and status
 
@@ -48,7 +62,7 @@ Member 2 owns two separate completed responsibilities.
 
 #### Flow 1 request/presentation side - COMPLETE / MERGED
 
-Merged scope:
+Merged Razor Pages scope:
 
 - chapter list/create/edit/delete for PRN222
 - document list/filter/upload/details/edit/delete/re-index request
@@ -64,7 +78,7 @@ Member 2 request handlers must not parse, chunk, embed, run pgvector retrieval, 
 
 #### Flow 3 Report & Statistics - COMPLETE / MERGED THROUGH PR #12
 
-PR #12 added the Subject-Leader reporting dashboard using read-only EF Core aggregate queries.
+PR #12 added the Subject-Leader Razor Pages reporting dashboard using read-only EF Core aggregate queries.
 
 Implemented scope:
 
@@ -120,7 +134,7 @@ Re-indexing replaces stale chunks coherently rather than appending duplicates.
 
 The active `InMemoryDocumentIndexingQueue` is consumed by `DocumentIndexingWorker`. It is an in-process transport, not a durable broker. Recovery is driven by persisted document state during worker startup.
 
-Member 3 does not own Flow 2 retrieval, Flow 2 chat UI, or Flow 3 reporting.
+Member 3 does not own Flow 2 retrieval, Flow 2 MVC presentation, or Flow 3 reporting.
 
 See `docs/member-3-document-indexing-handoff.md`.
 
@@ -141,21 +155,39 @@ Owns Flow 2 backend:
 - persistence of user/assistant `ChatMessage` rows
 - persistence of ordered `MessageCitation` rows
 
-Member 4 must not parse raw uploaded files, duplicate the indexing pipeline, or implement a second reporting workflow.
+Member 4's implementation must remain presentation-agnostic. It must not depend on MVC `Controller`, Razor Pages `PageModel`, `HttpContext`, or browser-specific types.
 
-### Member 5 - Chat UI / Conversation Management / Evaluation - PENDING
+Member 4 must not parse raw uploaded files, duplicate the indexing pipeline, implement a second reporting workflow, or put pgvector/Ollama business logic directly in a controller.
 
-Owns Flow 2 presentation and evaluation:
+### Member 5 - Flow 2 MVC Presentation / Conversation Management / Evaluation - PENDING
 
-- chat UI
-- chat-session creation/opening/navigation
-- Conversation History
+Member 5 owns **ASP.NET Core MVC Controllers + Views** for Flow 2 presentation and evaluation.
+
+Owns:
+
+- MVC chat controller/actions
+- MVC chat/session views
+- chat-session creation/opening/navigation presentation
+- Conversation History presentation
 - citation/source rendering
 - consumption of `IRagQueryService`
 - `evaluation/` 50-question human-authored ground-truth set
 - evaluation-facing tooling/tests
 
-Browser/UI code must not call Ollama or query pgvector directly.
+Expected presentation structure:
+
+```text
+src/PRN222.RagAssistant/Controllers/
+src/PRN222.RagAssistant/Views/Chat/
+```
+
+Supporting MVC files such as `Views/_ViewImports.cshtml`, `Views/_ViewStart.cshtml`, and `Views/Shared/` may be added as needed.
+
+**Do not create `Pages/Chat`, `Pages/Conversation`, or another Razor Pages implementation of Flow 2.**
+
+MVC controllers should remain thin HTTP adapters. They may handle model binding, authorization, redirects, and presentation orchestration, but grounded retrieval/generation must go through `IRagQueryService` and other application/service boundaries.
+
+Browser/controller code must not call Ollama or query pgvector directly.
 
 Member 5 should not duplicate the completed Flow 3 Reports page; chat/history presentation remains Flow 2.
 
@@ -184,7 +216,7 @@ Flow 3 completed without introducing a reporting-specific cross-member contract.
 ## Flow 1 - complete integration
 
 ```text
-Member 2 - MERGED
+Member 2 - MERGED Razor Pages
 Manage Chapters / Documents
         |
         v
@@ -212,16 +244,19 @@ IDocumentIndexingService.IndexAsync(documentId)
 
 Flow 1 is end-to-end complete in the merged baseline.
 
-## Flow 2 handoff - remaining implementation
+## Flow 2 handoff - MVC remaining implementation
 
 ```text
-Member 5 UI / Conversation History       [PENDING]
+Student browser
+        |
+        v
+Member 5 MVC Controller + Views         [PENDING]
         |
         v
 IRagQueryService.AskAsync(userId, sessionId, question)
         |
         v
-Member 4 RAG backend                      [PENDING]
+Member 4 RAG backend                    [PENDING]
         |
         +--> ITextEmbeddingService.EmbedAsync(question)
         +--> pgvector retrieval over indexed chunks
@@ -230,9 +265,14 @@ Member 4 RAG backend                      [PENDING]
         |
         v
 RagAnswer + RagCitation[]
+        |
+        v
+Member 5 MVC Views -> answer / citations / history
 ```
 
 Member 4 may assume indexed chunks already exist through the completed Flow 1 pipeline.
+
+Member 5 must not bypass the service boundary by implementing retrieval/generation inside `ChatController`.
 
 ## Flow 3 - complete integration
 
@@ -240,7 +280,7 @@ Member 4 may assume indexed chunks already exist through the completed Flow 1 pi
 Subject Leader
         |
         v
-Member 2 Reports/Statistics UI           [MERGED PR #12]
+Member 2 Reports/Statistics Razor Pages [MERGED PR #12]
         |
         v
 Read-only aggregate EF Core queries
@@ -278,7 +318,7 @@ Recommended focused branches for unfinished work:
 
 ```text
 feature/rag-chat
-feature/chat-ui-history
+feature/mvc-chat-ui-history
 ```
 
 Do not recreate already merged branches/implementations for:
@@ -287,6 +327,8 @@ Do not recreate already merged branches/implementations for:
 feature/document-indexing
 feature/report-statistics
 ```
+
+Do not create a competing `feature/razor-chat-*` branch; Flow 2 presentation is MVC.
 
 ## Validation snapshot
 
@@ -300,7 +342,7 @@ PR #12 reported `75/75` automated tests passing. Post-merge local smoke testing 
 - Chapter creation and PDF upload/indexing successful
 - Flow 3 aggregate values updated from real persisted Flow 1 data
 
-Treat these as validation of the current merged baseline; future branches must rerun relevant checks for their own changes.
+Treat these as validation of the current merged baseline; future Flow 2 MVC branches must rerun relevant checks for their own changes.
 
 ## Required reading before coding
 
