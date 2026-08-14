@@ -20,7 +20,8 @@ public sealed class SubjectAuthorizationTests
 
         Assert.NotNull(policy);
         var roleRequirement = Assert.Single(policy!.Requirements.OfType<RolesAuthorizationRequirement>());
-        Assert.Equal([AppRoles.Admin], roleRequirement.AllowedRoles);
+        var allowedRole = Assert.Single(roleRequirement.AllowedRoles);
+        Assert.Equal(AppRoles.Admin, allowedRole);
     }
 
     [Fact]

@@ -39,8 +39,8 @@ public sealed class IndexModel : PageModel
     public List<RecentFailureViewModel> RecentFailures { get; set; } = [];
     public List<RecentIndexedViewModel> RecentlyIndexed { get; set; } = [];
 
-    // ChatSession does not have SubjectId yet because Flow 2 is still pending.
-    // These values remain explicitly global until Member 4 introduces subject-scoped chat persistence.
+    // Flow 2 is still pending and ChatSession currently has no SubjectId.
+    // Keep these explicitly global until subject-scoped chat persistence exists.
     public int TotalChatSessions { get; set; }
     public int TotalChatMessages { get; set; }
     public int TotalMessageCitations { get; set; }
@@ -49,7 +49,7 @@ public sealed class IndexModel : PageModel
     {
         if (subjectId == Guid.Empty)
         {
-            return RedirectToAction("Index", "Subjects");
+            return Redirect("/subjects");
         }
 
         if (!await _subjectAccessService.CanManageSubjectAsync(User, subjectId, cancellationToken))
@@ -57,7 +57,10 @@ public sealed class IndexModel : PageModel
             return Forbid();
         }
 
-        var subject = await _dbContext.Subjects.AsNoTracking().FirstOrDefaultAsync(candidate => candidate.Id == subjectId, cancellationToken);
+        var subject = await _dbContext.Subjects
+            .AsNoTracking()
+            .FirstOrDefaultAsync(candidate => candidate.Id == subjectId, cancellationToken);
+
         if (subject is null)
         {
             return NotFound();
@@ -114,10 +117,18 @@ public sealed class IndexModel : PageModel
         {
             switch (item.Status)
             {
-                case DocumentIndexStatus.Uploaded: UploadedCount = item.Count; break;
-                case DocumentIndexStatus.Processing: ProcessingCount = item.Count; break;
-                case DocumentIndexStatus.Indexed: IndexedCount = item.Count; break;
-                case DocumentIndexStatus.Failed: FailedCount = item.Count; break;
+                case DocumentIndexStatus.Uploaded:
+                    UploadedCount = item.Count;
+                    break;
+                case DocumentIndexStatus.Processing:
+                    ProcessingCount = item.Count;
+                    break;
+                case DocumentIndexStatus.Indexed:
+                    IndexedCount = item.Count;
+                    break;
+                case DocumentIndexStatus.Failed:
+                    FailedCount = item.Count;
+                    break;
             }
         }
 
