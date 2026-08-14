@@ -1,49 +1,19 @@
-# RAG infrastructure baseline
+# Infrastructure baseline
 
-## Product context
+## Runtime stack
 
-The demo targets PRN222. Course documents are curated by Subject Leaders; Admins manage application accounts/roles and can override academic-management operations; Students consume successfully indexed content through pending Flow 2 chat.
+- ASP.NET Core .NET 10 host with MVC + Razor Pages.
+- ASP.NET Core Identity.
+- EF Core + PostgreSQL.
+- pgvector for embeddings.
+- Ollama for local chat/embedding models.
+- runtime source storage under `storage/uploads/`.
 
-Workflows:
+PRN222 is the seeded demo subject; the runtime application is multi-subject.
 
-1. **Flow 1 - Document Management & Indexing** - complete - MVC
-2. **Flow 2 - RAG Question & Answer & Conversation Management** - pending - MVC
-3. **Flow 3 - Report & Statistics** - complete - Razor Pages
+## Authentication/authorization
 
-## Current infrastructure state
-
-The baseline includes:
-
-- ASP.NET Core MVC + Razor Pages in one host;
-- ASP.NET Core Identity;
-- `Admin`, `SubjectLeader`, `Student` roles;
-- `ManageUsers` and `ManageDocuments` policies;
-- Admin MVC user/role administration;
-- PostgreSQL + pgvector;
-- EF Core persistence/migrations;
-- Ollama local runtime;
-- uploaded-file storage;
-- complete Flow 1 request/indexing pipeline;
-- complete read-only Flow 3 dashboard;
-- shared application contracts for indexing and RAG handoffs.
-
-Still pending:
-
-- Flow 2 pgvector retrieval and grounded RAG backend;
-- Flow 2 chat/session/history/citation MVC presentation and evaluation.
-
-## ASP.NET Core host
-
-```text
-MVC Controllers + Views -> Flow 1 + pending Flow 2 + Admin user management
-Razor Pages             -> Flow 3 + auth/shell pages
-```
-
-`Program.cs` keeps both MVC and Razor Pages registered/mapped.
-
-## Authentication and authorization
-
-### Roles
+Roles:
 
 ```text
 Admin
@@ -51,262 +21,149 @@ SubjectLeader
 Student
 ```
 
-### Policies
+Policies:
 
 ```text
-AppPolicies.ManageUsers     -> Admin
-AppPolicies.ManageDocuments -> Admin OR SubjectLeader
+ManageUsers     -> Admin
+ManageSubjects  -> Admin
+ManageDocuments -> Admin OR SubjectLeader
 ```
 
-`ManageDocuments` protects Flow 1 document/chapter writes and Flow 3 reports. `ManageUsers` protects the Admin account/role management controller.
+Subject-resource authorization is implemented by `ISubjectAccessService` and must accompany `ManageDocuments` for subject-specific writes/reports.
 
-Role-aware navigation is presentation only; policy attributes remain the server-side boundary.
-
-Canonical role design: `docs/role-access-control.md`.
-
-### Admin user management
-
-Member 1 owns:
+Subject Leader assignment uses existing Identity user claims:
 
 ```text
-Controllers/AdminUsersController.cs
-Models/Admin/AdminUserViewModels.cs
-Views/AdminUsers/
+Claim type  = prn222:managed-subject
+Claim value = Subject Guid
 ```
 
-The controller uses `UserManager<ApplicationUser>` to create accounts and change application role membership.
+`AspNetUserClaims` already exists, so this feature adds no EF migration.
 
-Safety rules:
+## PostgreSQL system of record
 
-- POST actions validate anti-forgery tokens;
-- Subject Leader and Student cannot satisfy `ManageUsers`;
-- a signed-in Admin cannot remove their own Admin role;
-- the last Admin cannot be demoted;
-- hard-delete is intentionally not exposed because persisted workflow rows reference users.
+PostgreSQL persists:
 
-No new entity/column is required for Admin or role membership; existing Identity tables are used, so no EF migration is required.
+- Subjects/Chapters;
+- Documents/index state;
+- DocumentChunks/embeddings;
+- Identity users/roles/claims;
+- ChatSessions/ChatMessages;
+- MessageCitations.
 
-## Demo user configuration
+Application schema changes use EF Core migrations. Init SQL is limited to runtime database concerns such as enabling `vector`.
 
-Demo-user seeding is disabled by default through:
+## Subject lifecycle
+
+Admin creates/edits/toggles Subjects at runtime. No hard-delete is exposed because data references Subjects.
+
+Visibility:
+
+- Admin: all subjects.
+- Subject Leader: active subjects plus assigned inactive subjects.
+- Student: active subjects.
+
+Management:
+
+- Admin: all subjects.
+- Subject Leader: assigned subjects.
+- Student: none.
+
+## MVC/Razor allocation
 
 ```text
-Auth:SeedUsers:Enabled
+MVC:
+  Flow 1 Documents/Chapters
+  pending Flow 2 Chat
+  Admin Users
+  Subjects/Admin Subjects
+
+Razor Pages:
+  Auth/shell
+  Flow 3 Reports
 ```
 
-When enabled, `IdentitySeeder` ensures all three roles and can seed:
+Global Documents/Chapters/Reports navigation is avoided because those screens need a selected Subject.
+
+## Flow 1 indexing pipeline
 
 ```text
-Auth:SeedUsers:Admin:Email
-Auth:SeedUsers:Admin:Password
-Auth:SeedUsers:Admin:DisplayName
-
-Auth:SeedUsers:SubjectLeader:Email
-Auth:SeedUsers:SubjectLeader:Password
-Auth:SeedUsers:SubjectLeader:DisplayName
-
-Auth:SeedUsers:Student:Email
-Auth:SeedUsers:Student:Password
-Auth:SeedUsers:Student:DisplayName
+subject-aware HTTP request
+ -> persist Document with SubjectId
+ -> IDocumentIndexingQueue
+ -> InMemoryDocumentIndexingQueue
+ -> DocumentIndexingWorker
+ -> IDocumentIndexingService
+ -> parse/chunk/embed/persist
 ```
 
-Docker Compose maps:
+The queue is process-local. Startup recovery re-enqueues persisted Uploaded/Processing documents.
 
-```text
-AUTH_ADMIN_EMAIL
-AUTH_ADMIN_PASSWORD
-AUTH_ADMIN_DISPLAY_NAME
-AUTH_SUBJECT_LEADER_EMAIL
-AUTH_SUBJECT_LEADER_PASSWORD
-AUTH_SUBJECT_LEADER_DISPLAY_NAME
-AUTH_STUDENT_EMAIL
-AUTH_STUDENT_PASSWORD
-AUTH_STUDENT_DISPLAY_NAME
-```
+Parsers:
 
-Example credentials belong only in `.env.example`; real credentials must never be committed.
+- PDF: PdfPig;
+- DOCX/PPTX: OpenXml.
 
-## Flow 1 MVC boundary
-
-```text
-Controllers/DocumentsController.cs
-Controllers/ChaptersController.cs
-Models/Documents/
-Models/Chapters/
-Views/Documents/
-Views/Chapters/
-```
-
-Flow 1 controllers handle request-side validation/persistence/orchestration and hand off indexing through `IDocumentIndexingQueue`. They must not parse/chunk/embed, call Ollama directly, or run pgvector similarity retrieval.
-
-Access:
-
-```text
-read catalogue/details -> authenticated users
-write chapter/document actions -> Admin OR SubjectLeader through ManageDocuments
-```
-
-## Document indexing queue and worker
-
-```text
-DocumentsController upload / re-index
-        |
-        v
-IDocumentIndexingQueue
-        |
-        v
-InMemoryDocumentIndexingQueue
-        |
-        v
-DocumentIndexingWorker
-        |
-        v
-IDocumentIndexingService
-```
-
-The queue is process-local. Startup recovery re-enqueues persisted `Uploaded`/`Processing` documents.
-
-Merged parser support:
-
-- PDF via PdfPig;
-- DOCX via OpenXml Wordprocessing;
-- PPTX via OpenXml Presentation.
-
-`ITextEmbeddingService` supports single-text retrieval embedding and ordered batch indexing embedding. Indexing and retrieval must use the same configured model.
-
-## PostgreSQL + pgvector
-
-PostgreSQL is the system of record for:
-
-- subjects/chapters;
-- documents/index state;
-- chunks/embeddings;
-- users/roles/user-role membership;
-- chat sessions/messages;
-- citations.
-
-Application schema changes use EF Core migrations. PostgreSQL init scripts are limited to runtime concerns such as enabling `vector`.
+The indexing pipeline is not duplicated per subject.
 
 ## Ollama
 
-Default development models:
+Default local models:
 
 ```text
 Chat:      qwen3:4b
 Embedding: qwen3-embedding:0.6b
 ```
 
-Member 3 uses embeddings for indexing. Member 4 will use question embeddings and chat completion for Flow 2. Controllers and Flow 3 reporting do not call Ollama directly.
+Indexing and future retrieval must use compatible embedding configuration. MVC/Razor request code and Flow 3 reports do not call Ollama directly.
 
-## Workflow architecture
+## Flow 3
 
-### Flow 1 - COMPLETE
+Subject-scoped report metrics read PostgreSQL with no workflow mutation.
 
-```text
-Admin or Subject Leader
-    |
-    +--> ChaptersController
-    \--> DocumentsController
-            |
-            +--> validate / persist / manage
-            |
-            v
-IDocumentIndexingQueue
-            |
-            v
-DocumentIndexingWorker
-            |
-            v
-DocumentIndexingService
-            |
-            +--> parse
-            +--> chunk
-            +--> embed
-            +--> DocumentChunk + pgvector
-            \--> Indexed / Failed
-```
+Current chat metrics are global because Flow 2 has not established Subject ownership for ChatSession yet.
 
-### Admin identity management - COMPLETE on this branch
+## Flow 2 infrastructure requirement
+
+Before retrieval implementation, Flow 2 must establish a subject-scoped session/query boundary. Retrieval must join/filter through `Document.SubjectId`; citations must stay within that boundary.
+
+A future `ChatSession.SubjectId` model change will require an EF migration. Member 1 coordinates it.
+
+## Demo-user configuration
+
+Demo seeding is disabled by default.
 
 ```text
-Admin
-  |
-  v
-/admin/users
-  |
-  v
-AdminUsersController
-  |
-  +--> create Identity user
-  +--> assign managed role
-  +--> protect self/last Admin
-  \--> Identity persistence
+Auth:SeedUsers:Enabled
+Auth:SeedUsers:Admin:*
+Auth:SeedUsers:SubjectLeader:*
+Auth:SeedUsers:Student:*
 ```
 
-### Flow 2 - PENDING
+Docker Compose maps the corresponding `AUTH_ADMIN_*`, `AUTH_SUBJECT_LEADER_*`, and `AUTH_STUDENT_*` variables.
 
-```text
-Student browser
-    |
-    v
-ChatController + Views/Chat
-    |
-    v
-IRagQueryService
-    |
-    +--> authenticated session ownership
-    +--> question embedding
-    +--> pgvector retrieval
-    +--> grounded generation
-    +--> persist messages/citations
-```
-
-### Flow 3 - COMPLETE
-
-```text
-Admin or Subject Leader
-      |
-      v
-Pages/Reports
-      |
-      v
-Read-only aggregate EF Core queries
-```
-
-## Shared application contracts
-
-- `IDocumentIndexingQueue`
-- `IDocumentIndexingService`
-- `ITextEmbeddingService`
-- `IChatCompletionService`
-- `IRagQueryService`
-- `RagAnswer`
-- `RagCitation`
-
-## Document storage
-
-Uploaded sources live under `storage/uploads/` and are mounted at `/app/storage/uploads` in Compose. Runtime uploads must not be committed.
+Never commit real credentials.
 
 ## Intentionally not added
 
-- Redis/RabbitMQ or separate worker service;
-- another vector database;
+- Redis/RabbitMQ/external broker;
+- another vector DB;
 - RAGFlow/LangChain service;
+- pgAdmin by default;
 - automatic FLM crawling;
-- analytics warehouse/event pipeline;
-- public role self-selection;
-- hard-delete user lifecycle;
-- duplicate Razor Pages implementations for Flow 1 or Flow 2.
+- subject hard delete;
+- public elevated-role self-selection;
+- duplicate Flow 1/Flow 2 Razor Pages.
 
-## Documentation ownership
+## Validation
 
-Member 1 is the sole editor for:
+Before merge run:
 
 ```text
-README.md
-AGENTS.md
-src/PRN222.RagAssistant/Application/AGENTS.md
-docs/*
+dotnet restore
+dotnet build
+dotnet test
+dotnet ef migrations has-pending-model-changes ...
+docker compose config
+PostgreSQL migration/schema/pgvector validation through CI
 ```
-
-Members 2-5 report configuration/architecture/status changes to Member 1 rather than editing these files in parallel.

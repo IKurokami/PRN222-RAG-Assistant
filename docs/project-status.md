@@ -1,152 +1,118 @@
 # Project status
 
-This snapshot reflects the latest `master` baseline after Flow 1 was migrated to MVC, plus the Admin/SubjectLeader RBAC extension on this branch.
+This document describes the intended post-merge state of the current multi-subject feature branch, based on `master` after merged PR #17 (`feat: add Admin and Subject Leader RBAC`). Member 1 owns synchronization of this status file.
 
-When documentation disagrees with code, the latest merged `master` is the source of truth. Member 1 is the documentation owner and synchronizes these files after major merges.
+## Workflows
 
-## Product workflows
+| Workflow | Presentation | Status | Owner |
+|---|---|---|---|
+| Flow 1 - Document Management & Indexing | MVC | Complete | Member 2 request side + Member 3 indexing; Member 1 subject/RBAC integration |
+| Flow 2 - RAG Q&A + Conversation Management | MVC | Pending | Member 4 backend + Member 5 UI/evaluation |
+| Flow 3 - Report & Statistics | Razor Pages | Complete | Member 2; Member 1 subject/RBAC integration |
 
-1. **Flow 1 - Document Management & Indexing** - COMPLETE - MVC Controllers + Views
-2. **Flow 2 - RAG Question & Answer & Conversation Management** - PENDING - MVC Controllers + Views
-3. **Flow 3 - Report & Statistics** - COMPLETE - Razor Pages
+Conversation History is part of Flow 2.
 
-Conversation History belongs to Flow 2 and is not counted as a separate workflow.
+## Platform/RBAC state
 
-## Presentation allocation
+| Area | Status | Owner |
+|---|---|---|
+| Core/Data/Identity | Complete | Member 1 |
+| Admin/SubjectLeader/Student roles | Complete | Member 1 |
+| Admin user/role management | Complete | Member 1 |
+| Subject catalogue | Complete on current branch | Member 1 |
+| Admin Subject CRUD (create/edit/activate/deactivate) | Complete on current branch | Member 1 |
+| Subject Leader assignment | Complete on current branch | Member 1 |
+| Subject-specific authorization service | Complete on current branch | Member 1 |
+| Flow 1 subject scoping | Complete on current branch | Member 1 cross-cutting integration |
+| Flow 3 subject scoping | Complete on current branch | Member 1 cross-cutting integration |
+| Documentation synchronization | Complete on current branch | Member 1 |
+
+## Multi-subject state
+
+PRN222 remains seeded but is no longer the application-wide hard-coded scope.
+
+Runtime model:
 
 ```text
-Flow 1 -> MVC                    [COMPLETE]
-Flow 2 -> MVC                    [PENDING]
-Flow 3 -> Razor Pages            [COMPLETE]
-Auth/shell -> Razor Pages
-Admin user management -> MVC     [COMPLETE on this branch]
+Subjects
+  +--> Chapters (SubjectId)
+  +--> Documents (SubjectId)
+  +--> Subject Leader assignments (Identity user claims)
+  \--> future ChatSessions/RAG subject boundary [Flow 2 pending]
 ```
 
-## Role/access baseline
-
-Roles:
+Subject Leader assignment:
 
 ```text
-Admin
-SubjectLeader
-Student
+Claim type:  prn222:managed-subject
+Claim value: Subject Guid
 ```
 
-Policies:
+No EF migration is required for this assignment because `AspNetUserClaims` already exists.
+
+## Authorization state
 
 ```text
 ManageUsers     -> Admin
+ManageSubjects  -> Admin
 ManageDocuments -> Admin OR SubjectLeader
 ```
 
-Responsibility summary:
+Resource authorization:
 
-- **Admin:** account/role administration, academic-management override, reports.
-- **Subject Leader:** PRN222 chapters/documents/re-index requests and reports; no user administration.
-- **Student:** learning consumer; pending own Flow 2 sessions/history; no management permissions.
+- Admin manages any existing subject.
+- Subject Leader manages only subjects assigned through managed-subject claims.
+- Student manages none.
+- Active subjects are visible to authenticated learners.
+- An assigned Subject Leader may still access an inactive subject for operational cleanup.
+- Subject-specific actions must use `ISubjectAccessService`; role policy alone is insufficient.
 
-Canonical design: `docs/role-access-control.md`.
-
-## Current project state
-
-| Area | Owner | Status | Notes |
-|---|---|---|---|
-| Core domain/data/security | Member 1 | Complete baseline | Entities, EF Core configuration/migrations, Identity, pgvector wiring, shared contracts, architecture tests. |
-| RBAC: Admin / Subject Leader / Student | Member 1 | Complete on this branch | Role catalogue, `ManageUsers`, Admin-or-SubjectLeader `ManageDocuments`, seeding/configuration. |
-| Admin user/role management UI | Member 1 | Complete on this branch | MVC list/create/edit-role surface under `/admin/users`; last-Admin/self-demotion guards. |
-| Role-aware shared navigation/UI | Member 1 | Complete on this branch | Admin/Subject Leader management navigation and role badges. |
-| Repository documentation | Member 1 | Exclusive owner | README, AGENTS files, `docs/`, status/handoff synchronization after merges. |
-| Chapter Management | Member 2 | Complete | MVC runtime PRN222 chapter CRUD; writes protected by `ManageDocuments`. |
-| Document Management | Member 2 | Complete | MVC list/filter/upload/details/edit/delete/re-index, storage, validation, queue handoff. |
-| Document parsing/chunking/indexing | Member 3 | Complete / merged through PR #9 | PDF/DOCX/PPTX parsing, chunking, embeddings, worker/service, state transitions. |
-| Flow 3 Report & Statistics | Member 2 | Complete / merged through PR #12 | Read-only Razor Pages dashboard; now accessible to Admin or Subject Leader through policy. |
-| RAG retrieval / grounded backend | Member 4 | Pending | Question embedding, pgvector retrieval, grounded generation, chat/citation persistence. |
-| Flow 2 MVC presentation / history / citations | Member 5 | Pending | MVC chat/session UI, Conversation History, citations, evaluation integration. |
-| Evaluation set | Member 5 | Pending | Human-authored 50-question ground-truth set. |
-
-## Member 1 - RBAC + documentation ownership
-
-Member 1 now owns the role feature end-to-end, including shared UI changes that expose role capabilities.
-
-Primary files:
+## UI/routes
 
 ```text
-src/PRN222.RagAssistant/Security/AppRoles.cs
-src/PRN222.RagAssistant/Security/AppPolicies.cs
-src/PRN222.RagAssistant/Infrastructure/Identity/IdentitySeeder.cs
-src/PRN222.RagAssistant/Infrastructure/ServiceCollectionExtensions.cs
-src/PRN222.RagAssistant/Controllers/AdminUsersController.cs
-src/PRN222.RagAssistant/Models/Admin/AdminUserViewModels.cs
-src/PRN222.RagAssistant/Views/AdminUsers/
-src/PRN222.RagAssistant/Pages/Shared/_Layout.cshtml
+GET /subjects
+GET /admin/users
+GET /admin/subjects
+GET/POST /admin/subjects/create
+GET/POST /admin/subjects/{id}/edit
+GET/POST /admin/subjects/{id}/leaders
 ```
 
-Admin user management supports:
+Global Documents/Chapters/Reports navigation has been replaced by Subject-first navigation because those screens require subject context.
 
-- list users and their current roles;
-- create a user through `UserManager<ApplicationUser>`;
-- assign `Admin`, `SubjectLeader`, or `Student`;
-- prevent the signed-in Admin from removing their own Admin role;
-- prevent demotion of the last Admin;
-- anti-forgery validation on state-changing actions.
+## Flow 1 state
 
-Hard-delete is intentionally not included because workflow rows reference users and account deletion would require a separate lifecycle/data-retention design.
+Flow 1 controllers/views now use a `subjectId` context rather than `SeedData.Prn222SubjectId`.
 
-No EF migration is required for this change because the existing ASP.NET Core Identity schema already stores roles and user-role membership.
+- document list/filter/upload is subject-scoped;
+- chapter CRUD/validation is subject-scoped;
+- edit/delete/re-index authorization is checked against the document/chapter's persisted SubjectId;
+- chapter options cannot come from another subject;
+- redirects preserve subject context;
+- indexing handoff remains by Document.Id and does not need per-subject indexing workers.
 
-## Flow 1 - complete MVC workflow
+## Flow 3 state
 
-Flow 1 remains owned by Members 2 + 3 for business behavior/indexing. Member 1 owns global role-policy changes around it.
+Report document/chapter/index/chunk/failure/recent-index metrics are subject-scoped.
 
-```text
-Admin or Subject Leader
-        |
-        v
-DocumentsController / ChaptersController
-        |
-        +--> validate / persist / manage
-        |
-        v
-IDocumentIndexingQueue
-        |
-        v
-DocumentIndexingWorker
-        |
-        v
-DocumentIndexingService
-        |
-        +--> parse
-        +--> chunk
-        +--> embed
-        +--> persist DocumentChunk
-        \--> Indexed / Failed
-```
+Chat metrics remain global because Flow 2 is pending and current `ChatSession` has no SubjectId. This is a known, explicit transitional state.
 
-Students may view authenticated catalogue/details but cannot execute write actions.
+## Flow 2 remaining requirement
 
-## Flow 3 - complete Razor Pages workflow
+Member 4/5 must not implement global-corpus chat.
 
-Flow 3 remains under `Pages/Reports/` and is read-only.
+Before backend implementation begins, coordinate with Member 1 on:
 
-`AppPolicies.ManageDocuments` now allows Admin or Subject Leader. The report implementation itself remains Member 2-owned and must not mutate workflow state, call Ollama, or run similarity retrieval.
+- subject ownership for `ChatSession`;
+- a subject-aware RAG query boundary;
+- pgvector retrieval constrained to selected subject documents;
+- same-subject citations;
+- subject context in MVC session/history navigation;
+- required EF migration, if `ChatSession.SubjectId` or related persistence changes are introduced.
 
-## Flow 2 - remaining work
+## Documentation ownership
 
-### Member 4 - RAG backend
-
-Owns question embedding, pgvector retrieval, grounded/no-evidence behavior, chat completion, authenticated session ownership, and message/citation persistence.
-
-Any new global role/policy requirement must be coordinated with Member 1 rather than introduced as feature-local role strings.
-
-### Member 5 - MVC presentation/evaluation
-
-Owns Chat MVC actions/views, Conversation History, citation rendering, and evaluation tooling.
-
-Member 5 consumes the role model but does not implement user/role administration and does not edit repository documentation.
-
-## Documentation process
-
-**Only Member 1 edits repository documentation.** This includes:
+Member 1 exclusively edits:
 
 ```text
 README.md
@@ -155,35 +121,4 @@ src/PRN222.RagAssistant/Application/AGENTS.md
 docs/*
 ```
 
-Members 2-5 put status changes, integration notes, and documentation requests in their PR description/handoff. Member 1 synchronizes docs against actual merged code.
-
-This rule reduces conflicting status files and stale ownership claims across parallel branches.
-
-## Validation requirements for the RBAC change
-
-Automated coverage must verify:
-
-- role catalogue contains Admin, SubjectLeader, Student;
-- `ManageDocuments` allows Admin and Subject Leader, denies Student/anonymous;
-- `ManageUsers` allows Admin only;
-- Admin user-management controller is protected by `ManageUsers`;
-- Admin user-management POST actions validate anti-forgery tokens;
-- existing Flow 1 MVC authorization tests remain green;
-- EF pending-model check remains clean;
-- Docker Compose configuration remains valid with Admin seed variables.
-
-## Required reading
-
-```text
-AGENTS.md
-src/PRN222.RagAssistant/Application/AGENTS.md
-docs/project-status.md
-docs/team-workflow.md
-docs/infrastructure.md
-docs/role-access-control.md
-docs/flow-1-mvc-migration.md
-docs/member-1-core-data-handoff.md
-docs/member-2-document-management-handoff.md
-docs/member-3-document-indexing-handoff.md
-docs/flow-3-report-statistics-handoff.md
-```
+Members 2-5 report changes to Member 1 instead of modifying coordination docs in parallel.
