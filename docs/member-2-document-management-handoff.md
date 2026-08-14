@@ -2,86 +2,79 @@
 
 ## Status
 
-Member 2 owns two completed responsibilities:
+Member 2 owns two completed workflow responsibilities:
 
 1. **Flow 1 request/presentation side - COMPLETE - MVC Controllers + Views**
 2. **Flow 3 Report & Statistics - COMPLETE / merged through PR #12 - Razor Pages**
 
-Member 3's PR #9 completed the downstream indexing side of Flow 1. The later Flow 1 presentation migration changes Razor Page handlers to MVC controllers/views without changing the indexing handoff or persistence model.
+Member 3's PR #9 completed the downstream indexing side of Flow 1. Member 1 owns the global Admin/SubjectLeader/Student role model, authorization policies, role-aware shared UI, and all repository documentation.
 
-For the canonical whole-project snapshot, see `docs/project-status.md`.
+For the canonical snapshot, see `docs/project-status.md` and `docs/role-access-control.md`.
 
-## Completed Flow 1 request/presentation scope
-
-### Current MVC structure
+## Completed Flow 1 scope
 
 ```text
-Controllers/
-├── DocumentsController.cs
-└── ChaptersController.cs
-
-Models/
-├── Documents/DocumentViewModels.cs
-└── Chapters/ChapterViewModels.cs
-
-Views/
-├── Documents/
-└── Chapters/
+Controllers/DocumentsController.cs
+Controllers/ChaptersController.cs
+Models/Documents/
+Models/Chapters/
+Views/Documents/
+Views/Chapters/
 ```
 
-The old `Pages/Documents/` and `Pages/Chapters/` implementations are removed. Flow 1 has one presentation implementation only.
+The old `Pages/Documents/` and `Pages/Chapters/` implementations are removed.
 
 ### Chapter Management
 
-`ChaptersController` + `Views/Chapters/` provide:
+Current behavior:
 
-- list
-- create
-- edit
-- delete confirmation and delete
-
-Important behavior:
-
-- authenticated list access
-- create/edit/delete require `AppPolicies.ManageDocuments`
-- POST actions use anti-forgery validation
-- chapter number/title validation
-- duplicate chapter-number checks within PRN222
-- runtime-managed chapters rather than seed-only chapters
-- documents are preserved when a chapter is removed
-- referenced `Document.ChapterId` values are cleared in the delete transaction before the chapter is removed
+- authenticated list access;
+- create/edit/delete protected by `AppPolicies.ManageDocuments`;
+- anti-forgery validation on POST;
+- chapter number/title validation;
+- duplicate number protection within PRN222;
+- runtime-managed chapters;
+- safe delete that preserves linked documents by clearing `ChapterId` first.
 
 ### Document Management
 
-`DocumentsController` + `Views/Documents/` provide:
+Current behavior:
 
-- list/filter
-- upload
-- details
-- metadata/chapter edit
-- delete
-- re-index request
+- authenticated list/details;
+- list/filter/upload/edit/delete/re-index;
+- PDF/DOCX/PPTX validation;
+- 50 MB limit;
+- configured source storage;
+- metadata persistence with initial `Uploaded` status;
+- PRN222 `ChapterId` validation;
+- enqueue persisted `Document.Id` through `IDocumentIndexingQueue`;
+- orphan-file cleanup when database persistence fails;
+- DB-first metadata deletion plus best-effort file cleanup.
 
-Upload behavior includes:
+## Authorization contract consumed by Member 2
 
-- Subject Leader authorization
-- PDF/DOCX/PPTX validation
-- 50 MB limit
-- configured source-file storage
-- `Document` metadata persistence with initial `Uploaded` status
-- server-side validation that optional `ChapterId` belongs to PRN222
-- enqueueing persisted `Document.Id` through `IDocumentIndexingQueue`
-- cleanup of a newly written source file when database persistence fails
+Member 2 must continue protecting Flow 1 write actions and Flow 3 access with:
 
-Document list/details remain available to authenticated users; management actions remain Subject-Leader-only.
+```text
+AppPolicies.ManageDocuments
+```
 
-Delete behavior remains DB-first: the metadata row is committed first, then physical file cleanup is best-effort and only logs a warning on cleanup failure.
+Member 1 owns the global definition. Current policy mapping is:
 
-See `docs/flow-1-mvc-migration.md` for route mapping.
+```text
+ManageDocuments -> Admin OR SubjectLeader
+```
 
-## Member 2 -> Member 3 indexing handoff - fulfilled
+Therefore:
 
-The active Flow 1 path is:
+- Subject Leader is the normal academic-content manager;
+- Admin may perform the same management actions as an operational override;
+- Student cannot perform writes or access Reports;
+- Member 2 must not replace the policy with hard-coded `SubjectLeader` checks.
+
+Member 2 does not implement Admin user/role management.
+
+## Flow 1 indexing handoff - fulfilled
 
 ```text
 DocumentsController upload / re-index
@@ -108,87 +101,56 @@ DocumentIndexingService
         \--> Indexed / Failed
 ```
 
-The MVC migration does not move parsing/chunking/embedding into the controller. Those responsibilities remain behind the existing indexing services.
+Member 2 must not move parsing/chunking/embedding into controllers.
 
-The queue remains process-local. Startup recovery re-enqueues persisted documents marked `Uploaded` or `Processing`.
+## Flow 3 - Report & Statistics
 
-## Flow 3 - Report & Statistics - complete
-
-Flow 3 remains a separate Razor Pages workflow under:
+Flow 3 remains under:
 
 ```text
-src/PRN222.RagAssistant/Pages/Reports/Index.cshtml
-src/PRN222.RagAssistant/Pages/Reports/Index.cshtml.cs
+Pages/Reports/Index.cshtml
+Pages/Reports/Index.cshtml.cs
 ```
 
-It is protected server-side by:
+Metrics include:
 
-```text
-AppPolicies.ManageDocuments
-```
+- PRN222 chapter/document totals;
+- documents by index state;
+- documents by chapter/unassigned;
+- persisted chunk total;
+- indexing completion percentage;
+- recent failures and recently indexed documents;
+- chat session/message/citation totals;
+- graceful zero/empty states before Flow 2 data exists.
 
-Current metrics include:
+Flow 3 is read-only. Access is Admin or Subject Leader through `ManageDocuments`.
 
-- total PRN222 chapters/documents
-- documents grouped by `DocumentIndexStatus`
-- documents grouped by chapter and unassigned documents
-- total persisted `DocumentChunk` count
-- indexing completion percentage
-- recent indexing failures with `IndexError`
-- recently indexed documents with chunk counts/timestamps
-- total chat sessions/messages/citations
-- graceful zero/empty states while Flow 2 has no data
+It must not mutate workflow state, enqueue documents, perform similarity retrieval, call Ollama, or create speculative analytics persistence.
 
-Flow 3 remains read-only and must not mutate workflow state, enqueue/re-index documents, perform pgvector retrieval, call Ollama, or create speculative analytics persistence.
-
-## Handoff to Members 4 and 5
-
-The remaining product implementation is Flow 2.
+## Remaining handoff
 
 ### Member 4
 
-Builds presentation-agnostic RAG retrieval/generation on successfully indexed chunks and the shared application contracts.
+Build presentation-agnostic RAG retrieval/generation on successfully indexed chunks. Any new global policy must be coordinated with Member 1.
 
 ### Member 5
 
-Owns MVC Flow 2 presentation:
+Build Flow 2 MVC chat/session/history/citation presentation and evaluation. Do not create `Pages/Chat` or `Pages/Conversation` and do not add role-management UI.
 
-- chat/session controller actions
-- MVC views
-- session navigation
-- Conversation History
-- citation rendering
-- evaluation deliverable
+## Documentation rule
 
-Because Flow 1 now also uses MVC, Member 5 must add focused Flow 2 controller/views without reusing or overloading `DocumentsController`/`ChaptersController` for chat responsibilities.
+Member 2 should **not** edit `README.md`, `AGENTS.md`, or files under `docs/` in future feature PRs.
 
-Expected Flow 2 presentation area:
+When Member 2 work changes status, routes, behavior, configuration, or handoff details:
 
-```text
-src/PRN222.RagAssistant/Controllers/ChatController.cs
-src/PRN222.RagAssistant/Views/Chat/
-```
+1. describe the documentation impact in the PR/handoff;
+2. tell Member 1 what changed;
+3. Member 1 updates repository documentation after reviewing actual code.
 
-Do not create `Pages/Chat` or `Pages/Conversation`.
+This file itself is maintained by Member 1.
 
 ## Tests
 
-Flow 1 tests now validate MVC input models/controllers instead of Razor `PageModel` classes. Regression coverage includes validation rules, queue behavior, chapter-delete safety, authorization attributes on write actions, and anti-forgery attributes on POST actions.
+Flow 1 regression coverage includes validation, queue behavior, chapter-delete safety, policy attributes, and anti-forgery attributes. The RBAC suite additionally verifies Admin and Subject Leader satisfy `ManageDocuments` while Student/anonymous do not.
 
-No EF Core migration is required for the MVC conversion.
-
-## Read before continuing
-
-```text
-AGENTS.md
-src/PRN222.RagAssistant/Application/AGENTS.md
-docs/project-status.md
-docs/team-workflow.md
-docs/infrastructure.md
-docs/flow-1-mvc-migration.md
-docs/member-1-core-data-handoff.md
-docs/member-3-document-indexing-handoff.md
-docs/flow-3-report-statistics-handoff.md
-```
-
-Member 2 should be treated as complete for Flow 1 request-side and Flow 3 reporting work unless a new requirement explicitly reopens those scopes.
+No EF migration is required for the Flow 1 MVC presentation or the Admin/SubjectLeader role-policy update.

@@ -1,20 +1,45 @@
 # Application-layer instructions
 
-This subtree contains stable contracts shared by document management, indexing, RAG, and presentation workflows.
+This subtree contains stable contracts shared by document management, indexing, RAG, authorization consumers, and presentation workflows.
 
 The project defines:
 
-1. **Flow 1 - Document Management & Indexing** - complete - **MVC Controllers + Views presentation**
-2. **Flow 2 - RAG Question & Answer & Conversation Management** - pending - **MVC Controllers + Views presentation**
-3. **Flow 3 - Report & Statistics** - complete - Razor Pages presentation
+1. **Flow 1 - Document Management & Indexing** - complete - MVC Controllers + Views
+2. **Flow 2 - RAG Question & Answer & Conversation Management** - pending - MVC Controllers + Views
+3. **Flow 3 - Report & Statistics** - complete - Razor Pages
 
-Conversation History belongs to Flow 2. Flow 3 is a separate read-only workflow and completed without requiring a reporting-specific shared contract.
+Conversation History belongs to Flow 2.
+
+## Current role model
+
+Global identity/RBAC is owned by **Member 1**.
+
+Roles:
+
+```text
+Admin
+SubjectLeader
+Student
+```
+
+Policies:
+
+```text
+ManageUsers     -> Admin
+ManageDocuments -> Admin OR SubjectLeader
+```
+
+Canonical details live in `docs/role-access-control.md`.
+
+Members 2-5 may consume established policies but must coordinate any new global role/policy requirement with Member 1. Do not duplicate role strings or create feature-local role-management abstractions.
 
 ## Current integration status
 
-Member 1 established the shared contracts. Member 2 consumes `IDocumentIndexingQueue` from the Flow 1 MVC document upload/re-index actions. Member 3 completed the indexing implementation through PR #9. Member 2 completed Flow 3 reporting through PR #12.
+Member 1 established the shared contracts and now also owns Identity/RBAC, Admin user management, role-aware shared UI, and all repository documentation edits.
 
-The active Flow 1 handoff is:
+Member 2 consumes `IDocumentIndexingQueue` from Flow 1 MVC document upload/re-index actions and owns the completed Flow 3 reporting behavior. Member 3 completed the indexing implementation through PR #9. Member 4 owns the pending presentation-agnostic Flow 2 backend. Member 5 owns pending Flow 2 MVC presentation/evaluation.
+
+Flow 1 handoff:
 
 ```text
 DocumentsController persists/updates Document
@@ -32,30 +57,21 @@ DocumentIndexingWorker
 IDocumentIndexingService.IndexAsync(documentId)
 ```
 
-`InMemoryDocumentIndexingQueue` is an in-process transport, not a durable broker. The worker recovers persisted `Uploaded`/`Processing` documents at startup by re-enqueueing them.
-
-Member 4 is the next main consumer of the completed indexing boundary. Member 5 will consume `IRagQueryService` from MVC presentation. Flow 3 is a read-only downstream consumer of existing persistence.
-
-See:
-
-- `docs/project-status.md`
-- `docs/team-workflow.md`
-- `docs/flow-1-mvc-migration.md`
-- `docs/member-3-document-indexing-handoff.md`
-- `docs/flow-3-report-statistics-handoff.md`
+`InMemoryDocumentIndexingQueue` is an in-process transport, not a durable broker. Startup recovery re-enqueues persisted `Uploaded`/`Processing` documents.
 
 ## Dependency boundaries
 
 - Presentation code may depend on `Application/Abstractions` and `Application/Models`.
 - Application abstractions must not depend on Razor Pages, MVC controllers, `HttpContext`, Ollama-specific DTOs, or PostgreSQL-specific query types.
-- Infrastructure implementations may depend on these abstractions.
+- Infrastructure implementations may depend on Application abstractions.
 - Do not duplicate a shared contract inside a feature folder when an abstraction already exists here.
 - Flow 1 MVC controllers must not parse/chunk/embed documents or call Ollama/pgvector directly.
-- Member 4 must not parse raw uploaded files or duplicate the indexing pipeline.
-- Member 4 Flow 2 backend must remain presentation-agnostic.
-- Member 5 Flow 2 presentation must use MVC Controllers + Views rather than Razor Pages.
+- Member 4 must not parse raw uploaded files or duplicate indexing.
+- Member 4 Flow 2 backend remains presentation-agnostic.
+- Member 5 Flow 2 presentation uses MVC Controllers + Views, not Razor Pages.
 - Member 5 MVC presentation must not call Ollama or query pgvector directly.
 - Flow 3 must not call Ollama, run similarity retrieval, mutate indexing state, or change a shared contract solely for dashboard convenience.
+- Global authorization changes belong to Member 1 even when the consuming workflow belongs to another member.
 
 ## MVC presentation boundaries
 
@@ -63,9 +79,21 @@ See:
 
 Flow 1 request/presentation code lives in `DocumentsController`, `ChaptersController`, Flow 1 MVC view models, and `Views/Documents` / `Views/Chapters`.
 
-The MVC layer owns HTTP concerns plus the already-existing request-side persistence/orchestration. Background indexing remains behind `IDocumentIndexingQueue` / `IDocumentIndexingService`.
+Write actions are protected by `AppPolicies.ManageDocuments`. Member 1 owns the global policy definition; Member 2 owns the document/chapter behavior behind it.
 
-Do not recreate `Pages/Documents` or `Pages/Chapters` as a parallel implementation.
+Do not recreate `Pages/Documents` or `Pages/Chapters`.
+
+### Admin user management
+
+Member 1 owns:
+
+```text
+Controllers/AdminUsersController.cs
+Models/Admin/AdminUserViewModels.cs
+Views/AdminUsers/
+```
+
+This surface consumes ASP.NET Core Identity directly because account/role administration is identity infrastructure behavior. It must remain protected by `AppPolicies.ManageUsers` and anti-forgery on POST actions.
 
 ### Flow 2
 
@@ -81,7 +109,7 @@ ChatController / MVC action
 IRagQueryService
     |
     v
-Flow 2 application/backend services
+Flow 2 backend services
     |
     v
 RagAnswer + RagCitation[]
@@ -90,94 +118,64 @@ RagAnswer + RagCitation[]
 MVC View
 ```
 
-The MVC layer may handle model binding, validation, authorization, redirects, and view selection. It must not implement question embeddings, pgvector retrieval, grounded prompt construction, Ollama generation, or indexing behavior.
+The MVC layer may handle model binding, validation, authorization, redirects, and view selection. It must not implement embeddings, pgvector retrieval, prompt construction, Ollama generation, or indexing.
 
-Do not introduce `Pages/Chat`, `Pages/Conversation`, or another Razor Pages Flow 2 implementation.
+Do not introduce `Pages/Chat` or `Pages/Conversation`.
 
 ## Current shared contracts
 
 ### `IDocumentIndexingQueue`
-
-Handoff from Flow 1 document upload/re-index actions to the background indexing worker.
+Request-to-background handoff from Flow 1 upload/re-index actions.
 
 ### `IDocumentIndexingService`
-
-One-document indexing pipeline executed by `DocumentIndexingWorker`. Member 3 provides the merged implementation.
+One-document indexing pipeline executed by `DocumentIndexingWorker`.
 
 ### `ITextEmbeddingService`
-
-Provider-neutral embedding boundary shared by indexing and retrieval. It supports single-text embedding for question retrieval and ordered batch embedding for document indexing.
-
-The same configured embedding model must be used for indexing and retrieval.
+Provider-neutral embedding boundary shared by indexing and retrieval. Supports single-text and ordered-batch embedding.
 
 ### `IChatCompletionService`
-
-Provider-neutral chat-generation boundary for Member 4's RAG implementation.
+Provider-neutral generation boundary for Member 4.
 
 ### `IRagQueryService`
-
-Presentation-facing boundary for grounded questions in an existing chat session. Member 4 owns the implementation; Member 5 owns the MVC consumer.
-
-MVC chat controllers should call this boundary rather than implementing retrieval/generation themselves.
+Presentation-facing grounded Q&A boundary. Member 4 implements it; Member 5 consumes it from MVC.
 
 ### `RagAnswer` / `RagCitation`
-
 Presentation-safe Flow 2 result models.
 
 There is intentionally no reporting-specific shared contract.
 
 ## Ownership expectations
 
-### Flow 1 request/presentation - Member 2 - COMPLETE / MVC
+### Member 1 - Core/Data/RBAC/docs
 
-Member 2:
+Owns shared contracts, schema/migration coordination, Identity/RBAC, Admin user management, role-aware shared UI, policy tests, and **all edits to README/AGENTS/docs**.
 
-- validates/stores uploads
-- persists `Document`
-- manages Chapters
-- enqueues persisted document IDs
-- exposes the behavior through MVC controllers/views
+### Member 2 - Flow 1 + Flow 3
 
-Do not move background indexing into request actions.
+Owns Flow 1 document/chapter business actions and Flow 3 read-only reporting behavior. Role-policy changes around those screens are coordinated through Member 1.
 
-### Flow 1 indexing - Member 3 - COMPLETE
+### Member 3 - Indexing
 
-Provides parsers, chunking, embedding batching, `OllamaTextEmbeddingService`, `DocumentIndexingService`, `DocumentIndexingWorker`, chunk replacement/persistence, indexing state transitions, and startup recovery.
+Owns parsers, chunking, embedding batching, indexing service/worker, chunk persistence, state transitions, and startup recovery.
 
-Member 3's downstream output is successfully indexed `DocumentChunk` rows plus document index state.
+### Member 4 - Flow 2 backend
 
-### Flow 3 Report & Statistics - Member 2 - COMPLETE
+Owns retrieval, grounding, chat completion, session ownership validation, and message/citation persistence.
 
-The read-only Razor Pages workflow aggregates chapters, documents/indexing state, chunks, recent indexed/failed state, and chat session/message/citation totals.
+### Member 5 - Flow 2 MVC presentation/evaluation
 
-It must not enqueue/process indexing, mutate workflow data, perform similarity retrieval, call Ollama, duplicate Conversation History, create speculative analytics schema, or force shared-contract changes.
+Owns chat/session views/controllers, Conversation History, citations, and evaluation-facing tooling.
 
-### Flow 2 RAG backend - Member 4 - PENDING
+## Contract and documentation changes
 
-Use the existing boundaries to embed questions, retrieve indexed PRN222 chunks, construct grounded context, implement chat completion/RAG services, validate session ownership, persist messages/citations, and handle insufficient evidence explicitly.
-
-### Flow 2 MVC presentation - Member 5 - PENDING
-
-Owns focused chat/session controllers/views, Conversation History, citations, and evaluation-facing presentation/tooling.
-
-Expected directories:
-
-```text
-src/PRN222.RagAssistant/Controllers/ChatController.cs
-src/PRN222.RagAssistant/Views/Chat/
-```
-
-Do not leak provider/pgvector details to controller/browser code.
-
-## Contract changes
-
-These interfaces are cross-member integration points. Prefer additive changes.
+Cross-member interfaces are stable integration points. Prefer additive changes.
 
 If a signature must change:
 
 1. explain why the current contract cannot represent the requirement;
-2. coordinate with producers/consumers;
-3. update all affected implementations/consumers together;
-4. update project status, team workflow, and relevant handoff docs.
+2. coordinate with affected producers/consumers;
+3. update implementations/consumers together;
+4. report the change to Member 1;
+5. Member 1 updates project status, team workflow, README, and handoff documentation.
 
-Do not change a shared contract merely to make one controller/action convenient.
+Members 2-5 should not independently edit repository documentation.

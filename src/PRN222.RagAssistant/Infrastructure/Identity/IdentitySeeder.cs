@@ -30,6 +30,12 @@ public static class IdentitySeeder
         await SeedUserAsync(
             userManager,
             configuration,
+            "Admin",
+            AppRoles.Admin);
+
+        await SeedUserAsync(
+            userManager,
+            configuration,
             "SubjectLeader",
             AppRoles.SubjectLeader);
 

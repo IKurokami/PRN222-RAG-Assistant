@@ -2,9 +2,11 @@
 
 ## Decision
 
-Flow 1 - Document Management & Indexing now uses **ASP.NET Core MVC Controllers + Views** for its request/presentation layer instead of Razor Pages.
+Flow 1 - Document Management & Indexing uses **ASP.NET Core MVC Controllers + Views** for its request/presentation layer instead of Razor Pages.
 
-This is a presentation-layer migration only. The existing domain model, EF Core schema, document storage rules, indexing queue, parsers, chunker, embedding service, background worker, and indexing state machine remain unchanged.
+This was a presentation-layer migration. The domain model, EF Core schema, document storage rules, indexing queue, parsers, chunker, embedding service, background worker, and indexing state machine remain unchanged.
+
+The later RBAC extension changes who satisfies the existing management policy without changing Flow 1 business behavior.
 
 ## MVC structure
 
@@ -18,31 +20,12 @@ src/PRN222.RagAssistant/
 │   └── Chapters/ChapterViewModels.cs
 └── Views/
     ├── Documents/
-    │   ├── Index.cshtml
-    │   ├── Upload.cshtml
-    │   ├── Details.cshtml
-    │   └── Edit.cshtml
-    ├── Chapters/
-    │   ├── Index.cshtml
-    │   ├── Create.cshtml
-    │   ├── Edit.cshtml
-    │   └── Delete.cshtml
-    ├── Shared/_ValidationScriptsPartial.cshtml
-    ├── _ViewImports.cshtml
-    └── _ViewStart.cshtml
+    └── Chapters/
 ```
 
-The previous `Pages/Documents/` and `Pages/Chapters/` implementations are removed so Flow 1 has a single HTTP/presentation implementation.
+The previous `Pages/Documents/` and `Pages/Chapters/` implementations are removed so Flow 1 has one HTTP/presentation implementation.
 
-## Route mapping
-
-The existing conventional MVC route is used:
-
-```text
-{controller=Home}/{action=Index}/{id?}
-```
-
-Primary Flow 1 routes are therefore:
+## Primary routes
 
 ```text
 GET  /Documents/Index
@@ -63,66 +46,91 @@ GET  /Chapters/Delete/{id}
 POST /Chapters/Delete/{id}
 ```
 
-`/Documents` and `/Chapters` also resolve to each controller's `Index` action through the conventional default action.
-
 ## Preserved behavior
 
 ### Document Management
 
-The MVC implementation preserves:
-
-- authenticated document list/details access
-- Subject-Leader-only write operations through `AppPolicies.ManageDocuments`
-- chapter filtering
-- PDF/DOCX/PPTX upload validation
-- 50 MB upload limit
-- PRN222 server-side `ChapterId` validation
-- configured source-file persistence
-- cleanup of a newly written file when metadata persistence fails
-- `Document` persistence with initial `Uploaded` status
-- queue handoff only after document persistence
-- edit, delete, and re-index behavior
-- DB-first delete consistency followed by best-effort physical-file cleanup
+- authenticated document list/details access;
+- management writes through `AppPolicies.ManageDocuments`;
+- chapter filtering;
+- PDF/DOCX/PPTX validation;
+- 50 MB limit;
+- PRN222 `ChapterId` server-side validation;
+- configured source-file persistence;
+- cleanup of a new file when metadata persistence fails;
+- initial `Uploaded` persistence;
+- queue handoff only after persistence;
+- edit/delete/re-index behavior;
+- DB-first metadata delete followed by best-effort file cleanup.
 
 ### Chapter Management
 
-The MVC implementation preserves:
+- authenticated chapter list access;
+- create/edit/delete through `AppPolicies.ManageDocuments`;
+- chapter number/title validation;
+- unique chapter number within PRN222;
+- runtime chapter management;
+- safe chapter deletion in a transaction;
+- linked documents are preserved and have `ChapterId = null` before chapter deletion.
 
-- authenticated chapter list access
-- Subject-Leader-only create/edit/delete
-- chapter number/title validation
-- unique chapter number within PRN222
-- runtime chapter management
-- safe chapter deletion in a transaction
-- linked documents are preserved and have `ChapterId` set to `null` before chapter deletion
+## Authorization after RBAC extension
 
-## Authorization and CSRF protection
+`AppPolicies.ManageDocuments` is defined globally by Member 1 and is satisfied by:
 
-Flow 1 MVC controllers use `[Authorize]` for authenticated read access and `[Authorize(Policy = AppPolicies.ManageDocuments)]` for all write actions.
+```text
+Admin OR SubjectLeader
+```
 
-All Flow 1 POST actions use `[ValidateAntiForgeryToken]`. Hiding management buttons in a View is not treated as the authorization boundary.
+Student and anonymous users do not satisfy the policy.
 
-## Mixed host after migration
+This means Admin and Subject Leader can perform Flow 1 write actions. Subject Leader remains the normal academic-content owner; Admin access is an operational override.
 
-The application still intentionally enables both presentation models:
+All Flow 1 POST actions use `[ValidateAntiForgeryToken]`. Hiding management controls in a view is never the authorization boundary.
+
+Canonical RBAC design: `docs/role-access-control.md`.
+
+## Mixed host
 
 ```text
 Flow 1 -> MVC Controllers + Views
 Flow 2 -> MVC Controllers + Views (pending)
 Flow 3 -> Razor Pages
-Auth / shell pages -> Razor Pages
+Auth/shell -> Razor Pages
+Admin user management -> MVC
 ```
 
-`Program.cs` therefore continues to register/map both MVC and Razor Pages.
+## Indexing handoff
+
+Flow 1 controllers remain request/presentation adapters and must not absorb parser, chunker, embedding, pgvector retrieval, Ollama generation, or background-worker responsibilities.
+
+```text
+DocumentsController upload / re-index
+        |
+        v
+IDocumentIndexingQueue.EnqueueAsync(documentId)
+        |
+        v
+DocumentIndexingWorker
+        |
+        v
+IDocumentIndexingService.IndexAsync(documentId)
+```
 
 ## Tests
 
-Flow 1 tests now reference MVC input/view models rather than Razor `PageModel` classes. Authorization tests reflect on `DocumentsController` and `ChaptersController`, verify the `ManageDocuments` policy on write actions, and verify anti-forgery protection on POST actions.
+Flow 1 tests target MVC input/view models and controllers. Authorization regression now verifies:
 
-No EF Core migration is required for this change because the persistence model is unchanged.
+- `ManageDocuments` allows Admin and Subject Leader;
+- Student/anonymous are denied;
+- write actions carry `ManageDocuments`;
+- POST actions carry anti-forgery protection.
 
-## Ownership boundary
+No EF Core migration is required for the MVC migration or the role-policy extension because neither changes the application persistence model.
 
-The MVC controllers remain request/presentation adapters for the already-completed Flow 1 behavior. They must not absorb parser, chunker, embedding, pgvector retrieval, Ollama generation, or background-worker responsibilities.
+## Ownership
 
-Document upload/re-index still hands off to the existing indexing pipeline through `IDocumentIndexingQueue`.
+- Member 2 owns Flow 1 document/chapter business behavior and MVC workflow code.
+- Member 3 owns background indexing.
+- Member 1 owns global roles/policies, role-aware shared UI, authorization tests, and all documentation changes.
+
+Members 2/3 report status or documentation needs to Member 1 rather than editing repository docs in parallel.

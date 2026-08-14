@@ -1,3 +1,8 @@
+@{
+    var isAdmin = User.IsInRole(AppRoles.Admin);
+    var isSubjectLeader = User.IsInRole(AppRoles.SubjectLeader);
+    var canManageAcademicContent = isAdmin || isSubjectLeader;
+}
 <!DOCTYPE html>
 <html lang="vi">
 <head>
@@ -53,13 +58,19 @@
                         <li class="nav-item">
                             <a class="nav-link nav-link-custom" asp-area="" asp-controller="Documents" asp-action="Index">Documents</a>
                         </li>
-                        @if (User.IsInRole("SubjectLeader"))
+                        @if (canManageAcademicContent)
                         {
                             <li class="nav-item">
                                 <a class="nav-link nav-link-custom" asp-area="" asp-controller="Chapters" asp-action="Index">Chapters</a>
                             </li>
                             <li class="nav-item">
                                 <a class="nav-link nav-link-custom" asp-area="" asp-page="/Reports/Index">Reports</a>
+                            </li>
+                        }
+                        @if (isAdmin)
+                        {
+                            <li class="nav-item">
+                                <a class="nav-link nav-link-custom" asp-area="" asp-controller="AdminUsers" asp-action="Index">Users</a>
                             </li>
                         }
                         <li class="nav-item">
@@ -72,9 +83,13 @@
                             <li class="nav-item">
                                 <div class="user-pill d-flex align-items-center gap-2 small">
                                     <span class="fw-bold text-dark">@User.Identity.Name</span>
-                                    @if (User.IsInRole("SubjectLeader"))
+                                    @if (isAdmin)
                                     {
-                                        <span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 px-2">Leader</span>
+                                        <span class="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25 px-2">Admin</span>
+                                    }
+                                    else if (isSubjectLeader)
+                                    {
+                                        <span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 px-2">Subject Leader</span>
                                     }
                                     else
                                     {
