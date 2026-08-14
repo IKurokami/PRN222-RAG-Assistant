@@ -9,7 +9,7 @@ Member 2 owns two separate responsibilities and **both are now complete/merged**
 
 Member 3's PR #9 completed the downstream indexing side of Flow 1, so the Member 2 -> Member 3 handoff is fulfilled and Flow 1 is end-to-end implemented.
 
-PR #12 completed Member 2's independent Flow 3 reporting assignment. Conversation History remains part of Flow 2 and belongs to Member 5 on the presentation side. The remaining Flow 2 presentation has now been fixed to **ASP.NET Core MVC Controllers + Views**, not Razor Pages.
+PR #12 completed Member 2's independent Flow 3 reporting assignment. Conversation History remains part of Flow 2 and belongs to Member 5 on the presentation side. The remaining Flow 2 presentation is fixed to **ASP.NET Core MVC Controllers + Views**, not Razor Pages.
 
 For the canonical whole-project snapshot, see `docs/project-status.md`.
 
@@ -170,7 +170,7 @@ Future Member 2/reporting changes must not:
 - mutate document/chapter/index status
 - perform pgvector similarity retrieval
 - call Ollama
-- duplicate Member 5 chat/history pages
+- duplicate Member 5 MVC chat/history pages
 - mutate chat sessions/messages/citations
 - introduce analytics entities, denormalized counters, event tracking, a reporting warehouse, or scheduled aggregation solely to show the dashboard
 - change shared `Application/` contracts only for convenience
