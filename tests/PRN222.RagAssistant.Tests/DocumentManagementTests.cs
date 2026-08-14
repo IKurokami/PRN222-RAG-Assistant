@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.Http;
 using PRN222.RagAssistant.Domain.Entities;
 using PRN222.RagAssistant.Domain.Enums;
 using PRN222.RagAssistant.Infrastructure.Services;
-using PRN222.RagAssistant.Pages.Documents;
+using PRN222.RagAssistant.Models.Documents;
 
 namespace PRN222.RagAssistant.Tests;
 
@@ -15,15 +15,13 @@ public sealed class DocumentManagementTests
     [InlineData("slides.pptx", "application/vnd.openxmlformats-officedocument.presentationml.presentation")]
     public void UploadInputModel_validates_allowed_file_extensions(string fileName, string contentType)
     {
-        var model = new UploadModel.InputModel
+        var model = new DocumentUploadInputModel
         {
             Title = "Tài liệu mẫu PRN222",
             File = CreateMockFormFile(fileName, contentType, length: 1024)
         };
 
-        var validationResults = ValidateModel(model);
-
-        Assert.Empty(validationResults);
+        Assert.Empty(ValidateModel(model));
     }
 
     [Theory]
@@ -32,30 +30,29 @@ public sealed class DocumentManagementTests
     [InlineData("script.sh", "text/plain")]
     public void UploadInputModel_rejects_unsupported_file_extensions(string fileName, string contentType)
     {
-        var model = new UploadModel.InputModel
+        var model = new DocumentUploadInputModel
         {
             Title = "Tài liệu không hợp lệ",
             File = CreateMockFormFile(fileName, contentType, length: 1024)
         };
 
-        var validationResults = ValidateModel(model);
-
-        var result = Assert.Single(validationResults);
+        var result = Assert.Single(ValidateModel(model));
         Assert.Contains("không được hỗ trợ", result.ErrorMessage);
     }
 
     [Fact]
     public void UploadInputModel_rejects_files_exceeding_size_limit()
     {
-        var model = new UploadModel.InputModel
+        var model = new DocumentUploadInputModel
         {
             Title = "Tài liệu quá lớn",
-            File = CreateMockFormFile("large.pdf", "application/pdf", length: UploadModel.InputModel.MaxFileSizeBytes + 1)
+            File = CreateMockFormFile(
+                "large.pdf",
+                "application/pdf",
+                DocumentUploadInputModel.MaxFileSizeBytes + 1)
         };
 
-        var validationResults = ValidateModel(model);
-
-        var result = Assert.Single(validationResults);
+        var result = Assert.Single(ValidateModel(model));
         Assert.Contains("vượt quá giới hạn tối đa", result.ErrorMessage);
     }
 
@@ -93,32 +90,25 @@ public sealed class DocumentManagementTests
         Assert.Null(document.IndexedAtUtc);
     }
 
-    // ─── Upload orphan file cleanup ───────────────────────────────────────────
-
     [Fact]
     public async Task Upload_cleanup_logic_removes_file_when_db_persistence_fails()
     {
-        // Arrange: write a real temp file to simulate what the upload handler does
         var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
         Directory.CreateDirectory(tempDir);
         var filePath = Path.Combine(tempDir, $"{Guid.NewGuid()}.pdf");
 
         try
         {
-            await File.WriteAllBytesAsync(filePath, new byte[] { 1, 2, 3 });
-            Assert.True(File.Exists(filePath), "Pre-condition: file must exist before cleanup.");
+            await File.WriteAllBytesAsync(filePath, [1, 2, 3]);
+            Assert.True(File.Exists(filePath));
 
-            // Act: simulate what UploadModel does when SaveChangesAsync throws
-            // (the try/catch block in OnPostAsync)
-            bool cleanupRan = false;
+            var cleanupRan = false;
             try
             {
-                // Simulate DB failure
                 throw new InvalidOperationException("Simulated DB failure");
             }
             catch
             {
-                // This mirrors the catch block in Upload.cshtml.cs
                 if (File.Exists(filePath))
                 {
                     File.Delete(filePath);
@@ -126,13 +116,11 @@ public sealed class DocumentManagementTests
                 }
             }
 
-            // Assert: file is gone after cleanup
-            Assert.True(cleanupRan, "Cleanup block must have executed.");
-            Assert.False(File.Exists(filePath), "Orphan file must be deleted after DB failure.");
+            Assert.True(cleanupRan);
+            Assert.False(File.Exists(filePath));
         }
         finally
         {
-            // Cleanup temp dir regardless of test outcome
             if (Directory.Exists(tempDir))
             {
                 Directory.Delete(tempDir, recursive: true);
@@ -143,21 +131,17 @@ public sealed class DocumentManagementTests
     [Fact]
     public async Task Upload_does_not_cleanup_file_when_db_persistence_succeeds()
     {
-        // Arrange
         var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
         Directory.CreateDirectory(tempDir);
         var filePath = Path.Combine(tempDir, $"{Guid.NewGuid()}.pdf");
 
         try
         {
-            await File.WriteAllBytesAsync(filePath, new byte[] { 1, 2, 3 });
+            await File.WriteAllBytesAsync(filePath, [1, 2, 3]);
 
-            // Act: simulate no DB exception — file should remain
-            // (no catch block runs)
-            bool cleanupRan = false;
+            var cleanupRan = false;
             try
             {
-                // Simulate successful DB save (no exception)
                 _ = "db save ok";
             }
             catch
@@ -169,9 +153,8 @@ public sealed class DocumentManagementTests
                 }
             }
 
-            // Assert: file is still there
             Assert.False(cleanupRan);
-            Assert.True(File.Exists(filePath), "File must remain when DB persistence succeeds.");
+            Assert.True(File.Exists(filePath));
         }
         finally
         {
