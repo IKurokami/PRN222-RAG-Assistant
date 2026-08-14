@@ -4,24 +4,24 @@ This document is the coordination contract for the five-member PRN222 RAG Assist
 
 ## Current milestone
 
-As of the latest `master` after PR #10 and PR #9 were merged:
+As of `master` after PR #12 was merged:
 
 - Member 1 Core/Data baseline: **complete**.
 - Member 2 Flow 1 Document/Chapter Management request side: **complete / merged**.
-- Member 3 Flow 1 Document Indexing/Ingestion: **complete / merged**.
+- Member 3 Flow 1 Document Indexing/Ingestion: **complete / merged through PR #9**.
+- Member 2 Flow 3 Report & Statistics: **complete / merged through PR #12**.
 - Member 4 Flow 2 RAG backend: **pending**.
 - Member 5 Flow 2 chat/conversation-history presentation + evaluation: **pending**.
-- Member 2 Flow 3 Report & Statistics: **defined / pending implementation**.
 
-PR #9 completed the Member 2 -> Member 3 handoff. Flow 1 is now end-to-end implemented in the merged baseline.
+Flow 1 is end-to-end complete. Flow 3 is complete. The remaining product implementation is Flow 2.
 
 ## Product workflows
 
 The project defines three independent functional workflows for the course requirement:
 
-1. **Flow 1 - Document Management & Indexing** - Subject Leader manages PRN222 chapters/documents; the system stores, parses, chunks, embeds, indexes, and exposes indexing state.
-2. **Flow 2 - RAG Question & Answer & Conversation Management** - Student creates/opens a chat session, asks grounded questions, receives citations, and can reopen persisted Conversation History.
-3. **Flow 3 - Report & Statistics** - Subject Leader reviews read-only aggregate document/indexing and chat-usage statistics.
+1. **Flow 1 - Document Management & Indexing** - COMPLETE. Subject Leader manages PRN222 chapters/documents; the system stores, parses, chunks, embeds, indexes, and exposes indexing state.
+2. **Flow 2 - RAG Question & Answer & Conversation Management** - PENDING. Student creates/opens a chat session, asks grounded questions, receives citations, and can reopen persisted Conversation History.
+3. **Flow 3 - Report & Statistics** - COMPLETE. Subject Leader reviews read-only aggregate document/indexing and chat-usage statistics.
 
 **Conversation History is part of Flow 2, not the independent third workflow.**
 
@@ -40,11 +40,11 @@ Owns:
 - core architecture/convention tests
 - coordination for genuine EF Core schema changes
 
-The current persistence already supports all three initial workflows. Do not add speculative schema fields, duplicate analytics records, or parallel migrations.
+The current persistence supports all three workflows. Flow 1 and Flow 3 both completed without speculative schema additions. Do not add duplicate analytics records or parallel migrations merely because Flow 2 remains pending.
 
-### Member 2 - Document Management + Report & Statistics
+### Member 2 - Document Management + Report & Statistics - COMPLETE CURRENT ASSIGNMENT
 
-Member 2 owns two separate responsibilities.
+Member 2 owns two separate completed responsibilities.
 
 #### Flow 1 request/presentation side - COMPLETE / MERGED
 
@@ -62,22 +62,24 @@ Merged scope:
 
 Member 2 request handlers must not parse, chunk, embed, run pgvector retrieval, or call Ollama.
 
-#### Flow 3 Report & Statistics - PENDING
+#### Flow 3 Report & Statistics - COMPLETE / MERGED THROUGH PR #12
 
-Member 2 owns the independent read-only reporting workflow.
+PR #12 added the Subject-Leader reporting dashboard using read-only EF Core aggregate queries.
 
-Initial scope:
+Implemented scope:
 
 - Subject-Leader Reports/Statistics page
 - total PRN222 chapters/documents
 - documents grouped by indexing status
 - documents grouped by chapter, including unassigned documents
+- total PRN222 chunk count
+- indexing completion percentage
+- recent indexing failures with `IndexError`
+- recently indexed documents with chunk counts/timestamps
 - total chat sessions/messages/citations
-- graceful zero/empty states
+- graceful zero/empty states before Flow 2 data exists
 
-Because Member 3 is now merged, indexing statistics can query real persisted `Uploaded`/`Processing`/`Indexed`/`Failed` state immediately.
-
-Flow 3 must not:
+Flow 3 must remain read-only. Future reporting changes must not:
 
 - mutate documents/chapters/indexing/chat data
 - alter the indexing worker or parsers
@@ -87,7 +89,7 @@ Flow 3 must not:
 - create speculative analytics persistence or migrations
 - force shared-contract changes merely for dashboard convenience
 
-Use a focused branch such as `feature/report-statistics`.
+See `docs/flow-3-report-statistics-handoff.md`.
 
 ### Member 3 - Document Indexing / Ingestion - COMPLETE / MERGED
 
@@ -116,13 +118,15 @@ Uploaded -> Processing -> Indexed
 
 Re-indexing replaces stale chunks coherently rather than appending duplicates.
 
-The active `InMemoryDocumentIndexingQueue` is now consumed by `DocumentIndexingWorker`. It is an in-process transport, not a durable broker. Recovery is driven by persisted document state during worker startup.
+The active `InMemoryDocumentIndexingQueue` is consumed by `DocumentIndexingWorker`. It is an in-process transport, not a durable broker. Recovery is driven by persisted document state during worker startup.
 
 Member 3 does not own Flow 2 retrieval, Flow 2 chat UI, or Flow 3 reporting.
 
-See `docs/member-3-document-indexing-handoff.md` for the handoff to Member 4.
+See `docs/member-3-document-indexing-handoff.md`.
 
 ### Member 4 - RAG / Chat Backend - PENDING
+
+Member 4 is now the primary remaining backend owner.
 
 Owns Flow 2 backend:
 
@@ -137,7 +141,7 @@ Owns Flow 2 backend:
 - persistence of user/assistant `ChatMessage` rows
 - persistence of ordered `MessageCitation` rows
 
-Member 4 must not parse raw uploaded files or duplicate the indexing pipeline.
+Member 4 must not parse raw uploaded files, duplicate the indexing pipeline, or implement a second reporting workflow.
 
 ### Member 5 - Chat UI / Conversation Management / Evaluation - PENDING
 
@@ -152,6 +156,8 @@ Owns Flow 2 presentation and evaluation:
 - evaluation-facing tooling/tests
 
 Browser/UI code must not call Ollama or query pgvector directly.
+
+Member 5 should not duplicate the completed Flow 3 Reports page; chat/history presentation remains Flow 2.
 
 ## Shared integration contracts
 
@@ -173,7 +179,7 @@ Current contracts/models:
 
 Treat these signatures as cross-member integration points. Prefer additive changes. If a signature genuinely must change, update affected producers/consumers together and synchronize the docs.
 
-Flow 3 should not introduce a cross-member contract unless a concrete implementation need justifies it.
+Flow 3 completed without introducing a reporting-specific cross-member contract.
 
 ## Flow 1 - complete integration
 
@@ -204,18 +210,18 @@ IDocumentIndexingService.IndexAsync(documentId)
         \--> Indexed / Failed state
 ```
 
-Flow 1 is now end-to-end complete in the merged baseline.
+Flow 1 is end-to-end complete in the merged baseline.
 
-## Flow 2 handoff
+## Flow 2 handoff - remaining implementation
 
 ```text
-Member 5 UI / Conversation History
+Member 5 UI / Conversation History       [PENDING]
         |
         v
 IRagQueryService.AskAsync(userId, sessionId, question)
         |
         v
-Member 4 RAG backend
+Member 4 RAG backend                      [PENDING]
         |
         +--> ITextEmbeddingService.EmbedAsync(question)
         +--> pgvector retrieval over indexed chunks
@@ -228,30 +234,34 @@ RagAnswer + RagCitation[]
 
 Member 4 may assume indexed chunks already exist through the completed Flow 1 pipeline.
 
-## Flow 3 boundary
+## Flow 3 - complete integration
 
 ```text
-Member 2 Reports/Statistics UI
+Subject Leader
         |
         v
-Read-only aggregate queries
+Member 2 Reports/Statistics UI           [MERGED PR #12]
+        |
+        v
+Read-only aggregate EF Core queries
         |
         +--> Chapter / Document
         +--> Document indexing state
+        +--> DocumentChunk
         +--> ChatSession / ChatMessage
         \--> MessageCitation
         |
         v
-Subject Leader dashboard / tables
+Dashboard / tables
 ```
 
-Document/indexing metrics are available now. Chat metrics must handle zero rows until Flow 2 persists chat data.
+Document/indexing metrics use real persisted Flow 1 data. Chat metrics currently handle zero rows and will automatically become meaningful as Flow 2 begins persisting chat data.
 
 ## Database coordination
 
-The baseline already includes persistence for the planned workflows. Runtime Chapter CRUD and initial reporting do not require schema changes.
+The baseline already includes persistence for all planned workflows. Runtime Chapter CRUD and completed reporting did not require schema changes.
 
-If a later workflow genuinely requires a schema change:
+If Flow 2 genuinely requires a schema change:
 
 1. Explain the missing persistence requirement.
 2. Coordinate through Member 1.
@@ -269,10 +279,28 @@ Recommended focused branches for unfinished work:
 ```text
 feature/rag-chat
 feature/chat-ui-history
+```
+
+Do not recreate already merged branches/implementations for:
+
+```text
+feature/document-indexing
 feature/report-statistics
 ```
 
-`feature/document-indexing` has already been merged through PR #9 and must not be recreated as a competing implementation.
+## Validation snapshot
+
+PR #12 reported `75/75` automated tests passing. Post-merge local smoke testing also reported:
+
+- PostgreSQL + pgvector healthy
+- Ollama embedding runtime healthy
+- ASP.NET Core app healthy
+- anonymous/Student Reports access blocked
+- Subject Leader Reports access successful
+- Chapter creation and PDF upload/indexing successful
+- Flow 3 aggregate values updated from real persisted Flow 1 data
+
+Treat these as validation of the current merged baseline; future branches must rerun relevant checks for their own changes.
 
 ## Required reading before coding
 
