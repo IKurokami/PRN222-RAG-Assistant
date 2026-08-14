@@ -32,6 +32,8 @@ Flow 2 -> MVC           [PENDING]
 Flow 3 -> Razor Pages   [COMPLETE]
 ```
 
+Flow 2 is the workflow selected by the team to satisfy the MVC implementation requirement.
+
 `Program.cs` already registers both `AddControllersWithViews()` and `AddRazorPages()` and maps both controller routes and Razor Pages.
 
 For Flow 2, new presentation code should be created under MVC areas such as:
