@@ -5,7 +5,6 @@ using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using PRN222.RagAssistant.Application.Abstractions;
 using PRN222.RagAssistant.Data;
-using PRN222.RagAssistant.Data.Seed;
 using PRN222.RagAssistant.Domain.Entities;
 using PRN222.RagAssistant.Domain.Enums;
 using PRN222.RagAssistant.Models.Documents;
@@ -18,7 +17,7 @@ public sealed class DocumentsController : Controller
 {
     private readonly ApplicationDbContext _dbContext;
     private readonly IDocumentIndexingQueue _indexingQueue;
-    private readonly IAuthorizationService _authorizationService;
+    private readonly ISubjectAccessService _subjectAccessService;
     private readonly IConfiguration _configuration;
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly ILogger<DocumentsController> _logger;
@@ -26,73 +25,101 @@ public sealed class DocumentsController : Controller
     public DocumentsController(
         ApplicationDbContext dbContext,
         IDocumentIndexingQueue indexingQueue,
-        IAuthorizationService authorizationService,
+        ISubjectAccessService subjectAccessService,
         IConfiguration configuration,
         UserManager<ApplicationUser> userManager,
         ILogger<DocumentsController> logger)
     {
         _dbContext = dbContext;
         _indexingQueue = indexingQueue;
-        _authorizationService = authorizationService;
+        _subjectAccessService = subjectAccessService;
         _configuration = configuration;
         _userManager = userManager;
         _logger = logger;
     }
 
     [HttpGet]
-    public async Task<IActionResult> Index(Guid? selectedChapterId, CancellationToken cancellationToken)
+    public async Task<IActionResult> Index(
+        Guid subjectId,
+        Guid? selectedChapterId,
+        CancellationToken cancellationToken)
     {
-        var authResult = await _authorizationService.AuthorizeAsync(User, AppPolicies.ManageDocuments);
+        if (subjectId == Guid.Empty)
+        {
+            return RedirectToAction(nameof(SubjectsController.Index), "Subjects");
+        }
+
+        if (!await _subjectAccessService.CanViewSubjectAsync(User, subjectId, cancellationToken))
+        {
+            return Forbid();
+        }
+
+        var subject = await _dbContext.Subjects
+            .AsNoTracking()
+            .FirstOrDefaultAsync(candidate => candidate.Id == subjectId, cancellationToken);
+
+        if (subject is null)
+        {
+            return NotFound();
+        }
 
         var chapters = await _dbContext.Chapters
             .AsNoTracking()
-            .Where(c => c.SubjectId == SeedData.Prn222SubjectId)
-            .OrderBy(c => c.Number)
+            .Where(chapter => chapter.SubjectId == subjectId)
+            .OrderBy(chapter => chapter.Number)
             .ToListAsync(cancellationToken);
+
+        if (selectedChapterId.HasValue && chapters.All(chapter => chapter.Id != selectedChapterId.Value))
+        {
+            return BadRequest("The selected chapter does not belong to this subject.");
+        }
 
         var query = _dbContext.Documents
             .AsNoTracking()
-            .Where(d => d.SubjectId == SeedData.Prn222SubjectId);
+            .Where(document => document.SubjectId == subjectId);
 
         if (selectedChapterId.HasValue)
         {
-            query = query.Where(d => d.ChapterId == selectedChapterId.Value);
+            query = query.Where(document => document.ChapterId == selectedChapterId.Value);
         }
 
         var documentEntities = await query
-            .OrderByDescending(d => d.UploadedAtUtc)
+            .OrderByDescending(document => document.UploadedAtUtc)
             .ToListAsync(cancellationToken);
 
-        var chapterMap = chapters.ToDictionary(c => c.Id);
+        var chapterMap = chapters.ToDictionary(chapter => chapter.Id);
 
         var viewModel = new DocumentIndexViewModel
         {
+            SubjectId = subject.Id,
+            SubjectCode = subject.Code,
+            SubjectName = subject.Name,
             SelectedChapterId = selectedChapterId,
-            CanManageDocuments = authResult.Succeeded,
+            CanManageDocuments = await _subjectAccessService.CanManageSubjectAsync(User, subjectId, cancellationToken),
             StatusMessage = TempData["StatusMessage"] as string,
             ChapterOptions = chapters
-                .Select(c => new SelectListItem
+                .Select(chapter => new SelectListItem
                 {
-                    Value = c.Id.ToString(),
-                    Text = $"Chương {c.Number}: {c.Title}",
-                    Selected = c.Id == selectedChapterId
+                    Value = chapter.Id.ToString(),
+                    Text = $"Chương {chapter.Number}: {chapter.Title}",
+                    Selected = chapter.Id == selectedChapterId
                 })
                 .ToList(),
-            Documents = documentEntities.Select(d =>
+            Documents = documentEntities.Select(document =>
             {
-                chapterMap.TryGetValue(d.ChapterId ?? Guid.Empty, out var chapter);
+                chapterMap.TryGetValue(document.ChapterId ?? Guid.Empty, out var chapter);
                 return new DocumentItemViewModel
                 {
-                    Id = d.Id,
-                    Title = d.Title,
-                    OriginalFileName = d.OriginalFileName,
+                    Id = document.Id,
+                    Title = document.Title,
+                    OriginalFileName = document.OriginalFileName,
                     ChapterNumber = chapter?.Number,
                     ChapterTitle = chapter?.Title,
-                    FileSizeBytes = d.FileSizeBytes,
-                    IndexStatus = d.IndexStatus,
-                    IndexError = d.IndexError,
-                    UploadedAtUtc = d.UploadedAtUtc,
-                    IndexedAtUtc = d.IndexedAtUtc
+                    FileSizeBytes = document.FileSizeBytes,
+                    IndexStatus = document.IndexStatus,
+                    IndexError = document.IndexError,
+                    UploadedAtUtc = document.UploadedAtUtc,
+                    IndexedAtUtc = document.IndexedAtUtc
                 };
             }).ToList()
         };
@@ -102,35 +129,54 @@ public sealed class DocumentsController : Controller
 
     [HttpGet]
     [Authorize(Policy = AppPolicies.ManageDocuments)]
-    public async Task<IActionResult> Upload(CancellationToken cancellationToken)
+    public async Task<IActionResult> Upload(Guid subjectId, CancellationToken cancellationToken)
     {
-        var viewModel = new DocumentUploadViewModel();
-        await LoadChapterOptionsAsync(viewModel.ChapterOptions, cancellationToken);
+        if (!await _subjectAccessService.CanManageSubjectAsync(User, subjectId, cancellationToken))
+        {
+            return Forbid();
+        }
+
+        var viewModel = new DocumentUploadViewModel { SubjectId = subjectId };
+        if (!await PopulateUploadMetadataAsync(viewModel, cancellationToken))
+        {
+            return NotFound();
+        }
+
         return View(viewModel);
     }
 
     [HttpPost]
     [ValidateAntiForgeryToken]
     [Authorize(Policy = AppPolicies.ManageDocuments)]
-    public async Task<IActionResult> Upload(DocumentUploadViewModel viewModel, CancellationToken cancellationToken)
+    public async Task<IActionResult> Upload(
+        DocumentUploadViewModel viewModel,
+        CancellationToken cancellationToken)
     {
+        if (!await _subjectAccessService.CanManageSubjectAsync(User, viewModel.SubjectId, cancellationToken))
+        {
+            return Forbid();
+        }
+
+        if (!await PopulateUploadMetadataAsync(viewModel, cancellationToken))
+        {
+            return NotFound();
+        }
+
         if (!ModelState.IsValid)
         {
-            await LoadChapterOptionsAsync(viewModel.ChapterOptions, cancellationToken);
             return View(viewModel);
         }
 
         if (viewModel.Input.ChapterId.HasValue)
         {
-            var chapterValid = await _dbContext.Chapters
-                .AnyAsync(
-                    c => c.Id == viewModel.Input.ChapterId.Value && c.SubjectId == SeedData.Prn222SubjectId,
-                    cancellationToken);
+            var chapterValid = await _dbContext.Chapters.AnyAsync(
+                chapter => chapter.Id == viewModel.Input.ChapterId.Value
+                           && chapter.SubjectId == viewModel.SubjectId,
+                cancellationToken);
 
             if (!chapterValid)
             {
-                ModelState.AddModelError("Input.ChapterId", "Chương được chọn không hợp lệ hoặc không thuộc môn PRN222.");
-                await LoadChapterOptionsAsync(viewModel.ChapterOptions, cancellationToken);
+                ModelState.AddModelError("Input.ChapterId", "Chương được chọn không hợp lệ hoặc không thuộc môn học này.");
                 return View(viewModel);
             }
         }
@@ -145,7 +191,6 @@ public sealed class DocumentsController : Controller
         if (file is null || file.Length == 0)
         {
             ModelState.AddModelError("Input.File", "File tải lên không hợp lệ.");
-            await LoadChapterOptionsAsync(viewModel.ChapterOptions, cancellationToken);
             return View(viewModel);
         }
 
@@ -168,7 +213,7 @@ public sealed class DocumentsController : Controller
         var document = new Document
         {
             Id = documentId,
-            SubjectId = SeedData.Prn222SubjectId,
+            SubjectId = viewModel.SubjectId,
             ChapterId = viewModel.Input.ChapterId,
             UploadedByUserId = user.Id,
             Title = viewModel.Input.Title.Trim(),
@@ -207,60 +252,69 @@ public sealed class DocumentsController : Controller
             }
 
             ModelState.AddModelError(string.Empty, "Lưu thông tin tài liệu thất bại. Vui lòng thử lại.");
-            await LoadChapterOptionsAsync(viewModel.ChapterOptions, cancellationToken);
             return View(viewModel);
         }
 
         await _indexingQueue.EnqueueAsync(document.Id, cancellationToken);
 
         TempData["StatusMessage"] = $"Đã tải thành công tài liệu '{document.Title}'. File đã được thêm vào hàng chờ index.";
-        return RedirectToAction(nameof(Index));
+        return RedirectToAction(nameof(Index), new { subjectId = document.SubjectId });
     }
 
     [HttpGet]
     public async Task<IActionResult> Details(Guid id, CancellationToken cancellationToken)
     {
-        var authResult = await _authorizationService.AuthorizeAsync(User, AppPolicies.ManageDocuments);
-
         var entity = await _dbContext.Documents
             .AsNoTracking()
-            .FirstOrDefaultAsync(d => d.Id == id, cancellationToken);
+            .FirstOrDefaultAsync(document => document.Id == id, cancellationToken);
 
         if (entity is null)
         {
             return NotFound();
         }
 
+        if (!await _subjectAccessService.CanViewSubjectAsync(User, entity.SubjectId, cancellationToken))
+        {
+            return Forbid();
+        }
+
         var subject = await _dbContext.Subjects
             .AsNoTracking()
-            .FirstOrDefaultAsync(s => s.Id == entity.SubjectId, cancellationToken);
+            .FirstOrDefaultAsync(candidate => candidate.Id == entity.SubjectId, cancellationToken);
+
+        if (subject is null)
+        {
+            return NotFound();
+        }
 
         var chapter = entity.ChapterId.HasValue
             ? await _dbContext.Chapters
                 .AsNoTracking()
-                .FirstOrDefaultAsync(c => c.Id == entity.ChapterId.Value, cancellationToken)
+                .FirstOrDefaultAsync(
+                    candidate => candidate.Id == entity.ChapterId.Value && candidate.SubjectId == entity.SubjectId,
+                    cancellationToken)
             : null;
 
         var uploader = await _userManager.FindByIdAsync(entity.UploadedByUserId.ToString());
-
         var chunkCount = await _dbContext.DocumentChunks
             .AsNoTracking()
-            .CountAsync(c => c.DocumentId == id, cancellationToken);
+            .CountAsync(chunk => chunk.DocumentId == id, cancellationToken);
 
-        var viewModel = new DocumentDetailsViewModel
+        return View(new DocumentDetailsViewModel
         {
-            CanManageDocuments = authResult.Succeeded,
+            CanManageDocuments = await _subjectAccessService.CanManageSubjectAsync(User, entity.SubjectId, cancellationToken),
             Document = new DocumentDetailViewModel
             {
                 Id = entity.Id,
+                SubjectId = entity.SubjectId,
                 Title = entity.Title,
                 OriginalFileName = entity.OriginalFileName,
                 StoragePath = entity.StoragePath,
                 ContentType = entity.ContentType,
                 FileExtension = entity.FileExtension,
                 FileSizeBytes = entity.FileSizeBytes,
-                SubjectCode = subject?.Code ?? "PRN222",
-                SubjectName = subject?.Name ?? "C# & .NET Application Development",
+                SubjectCode = subject.Code,
+                SubjectName = subject.Name,
                 ChapterNumber = chapter?.Number,
                 ChapterTitle = chapter?.Title,
                 UploadedByEmail = uploader?.Email ?? "Hệ thống",
@@ -270,9 +324,7 @@ public sealed class DocumentsController : Controller
                 IndexedAtUtc = entity.IndexedAtUtc,
                 ChunkCount = chunkCount
             }
-        };
-
-        return View(viewModel);
+        });
     }
 
     [HttpGet]
@@ -281,16 +333,22 @@ public sealed class DocumentsController : Controller
     {
         var document = await _dbContext.Documents
             .AsNoTracking()
-            .FirstOrDefaultAsync(d => d.Id == id, cancellationToken);
+            .FirstOrDefaultAsync(candidate => candidate.Id == id, cancellationToken);
 
         if (document is null)
         {
             return NotFound();
         }
 
+        if (!await _subjectAccessService.CanManageSubjectAsync(User, document.SubjectId, cancellationToken))
+        {
+            return Forbid();
+        }
+
         var viewModel = new DocumentEditViewModel
         {
             Id = document.Id,
+            SubjectId = document.SubjectId,
             DocumentTitle = document.Title,
             Input = new DocumentEditInputModel
             {
@@ -299,48 +357,62 @@ public sealed class DocumentsController : Controller
             }
         };
 
-        await LoadChapterOptionsAsync(viewModel.ChapterOptions, cancellationToken);
+        if (!await PopulateEditMetadataAsync(viewModel, cancellationToken))
+        {
+            return NotFound();
+        }
+
         return View(viewModel);
     }
 
     [HttpPost]
     [ValidateAntiForgeryToken]
     [Authorize(Policy = AppPolicies.ManageDocuments)]
-    public async Task<IActionResult> Edit(Guid id, DocumentEditViewModel viewModel, CancellationToken cancellationToken)
+    public async Task<IActionResult> Edit(
+        Guid id,
+        DocumentEditViewModel viewModel,
+        CancellationToken cancellationToken)
     {
-        var document = await _dbContext.Documents.FirstOrDefaultAsync(d => d.Id == id, cancellationToken);
+        var document = await _dbContext.Documents.FirstOrDefaultAsync(candidate => candidate.Id == id, cancellationToken);
         if (document is null)
         {
             return NotFound();
         }
 
+        if (!await _subjectAccessService.CanManageSubjectAsync(User, document.SubjectId, cancellationToken))
+        {
+            return Forbid();
+        }
+
         viewModel.Id = id;
+        viewModel.SubjectId = document.SubjectId;
         viewModel.DocumentTitle = document.Title;
+        if (!await PopulateEditMetadataAsync(viewModel, cancellationToken))
+        {
+            return NotFound();
+        }
 
         if (!ModelState.IsValid)
         {
-            await LoadChapterOptionsAsync(viewModel.ChapterOptions, cancellationToken);
             return View(viewModel);
         }
 
         if (viewModel.Input.ChapterId.HasValue)
         {
-            var chapterValid = await _dbContext.Chapters
-                .AnyAsync(
-                    c => c.Id == viewModel.Input.ChapterId.Value && c.SubjectId == SeedData.Prn222SubjectId,
-                    cancellationToken);
+            var chapterValid = await _dbContext.Chapters.AnyAsync(
+                chapter => chapter.Id == viewModel.Input.ChapterId.Value
+                           && chapter.SubjectId == document.SubjectId,
+                cancellationToken);
 
             if (!chapterValid)
             {
-                ModelState.AddModelError("Input.ChapterId", "Chương được chọn không hợp lệ hoặc không thuộc môn PRN222.");
-                await LoadChapterOptionsAsync(viewModel.ChapterOptions, cancellationToken);
+                ModelState.AddModelError("Input.ChapterId", "Chương được chọn không hợp lệ hoặc không thuộc môn học này.");
                 return View(viewModel);
             }
         }
 
         document.Title = viewModel.Input.Title.Trim();
         document.ChapterId = viewModel.Input.ChapterId;
-
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         TempData["StatusMessage"] = $"Đã cập nhật thông tin tài liệu '{document.Title}' thành công.";
@@ -350,7 +422,10 @@ public sealed class DocumentsController : Controller
     [HttpPost]
     [ValidateAntiForgeryToken]
     [Authorize(Policy = AppPolicies.ManageDocuments)]
-    public async Task<IActionResult> Delete(Guid id, Guid? selectedChapterId, CancellationToken cancellationToken)
+    public async Task<IActionResult> Delete(
+        Guid id,
+        Guid? selectedChapterId,
+        CancellationToken cancellationToken)
     {
         var document = await _dbContext.Documents.FindAsync([id], cancellationToken);
         if (document is null)
@@ -358,6 +433,12 @@ public sealed class DocumentsController : Controller
             return NotFound();
         }
 
+        if (!await _subjectAccessService.CanManageSubjectAsync(User, document.SubjectId, cancellationToken))
+        {
+            return Forbid();
+        }
+
+        var subjectId = document.SubjectId;
         var storagePathToDelete = document.StoragePath;
 
         _dbContext.Documents.Remove(document);
@@ -380,18 +461,26 @@ public sealed class DocumentsController : Controller
         }
 
         TempData["StatusMessage"] = $"Đã xóa tài liệu '{document.Title}' thành công.";
-        return RedirectToAction(nameof(Index), new { selectedChapterId });
+        return RedirectToAction(nameof(Index), new { subjectId, selectedChapterId });
     }
 
     [HttpPost]
     [ValidateAntiForgeryToken]
     [Authorize(Policy = AppPolicies.ManageDocuments)]
-    public async Task<IActionResult> Reindex(Guid id, Guid? selectedChapterId, CancellationToken cancellationToken)
+    public async Task<IActionResult> Reindex(
+        Guid id,
+        Guid? selectedChapterId,
+        CancellationToken cancellationToken)
     {
         var document = await _dbContext.Documents.FindAsync([id], cancellationToken);
         if (document is null)
         {
             return NotFound();
+        }
+
+        if (!await _subjectAccessService.CanManageSubjectAsync(User, document.SubjectId, cancellationToken))
+        {
+            return Forbid();
         }
 
         document.IndexStatus = DocumentIndexStatus.Uploaded;
@@ -402,22 +491,63 @@ public sealed class DocumentsController : Controller
         await _indexingQueue.EnqueueAsync(document.Id, cancellationToken);
 
         TempData["StatusMessage"] = $"Đã đưa tài liệu '{document.Title}' vào hàng chờ index lại.";
-        return RedirectToAction(nameof(Index), new { selectedChapterId });
+        return RedirectToAction(nameof(Index), new { subjectId = document.SubjectId, selectedChapterId });
     }
 
-    private async Task LoadChapterOptionsAsync(List<SelectListItem> target, CancellationToken cancellationToken)
+    private async Task<bool> PopulateUploadMetadataAsync(
+        DocumentUploadViewModel viewModel,
+        CancellationToken cancellationToken)
+    {
+        var subject = await _dbContext.Subjects
+            .AsNoTracking()
+            .FirstOrDefaultAsync(candidate => candidate.Id == viewModel.SubjectId, cancellationToken);
+
+        if (subject is null)
+        {
+            return false;
+        }
+
+        viewModel.SubjectCode = subject.Code;
+        viewModel.SubjectName = subject.Name;
+        await LoadChapterOptionsAsync(viewModel.SubjectId, viewModel.ChapterOptions, cancellationToken);
+        return true;
+    }
+
+    private async Task<bool> PopulateEditMetadataAsync(
+        DocumentEditViewModel viewModel,
+        CancellationToken cancellationToken)
+    {
+        var subject = await _dbContext.Subjects
+            .AsNoTracking()
+            .FirstOrDefaultAsync(candidate => candidate.Id == viewModel.SubjectId, cancellationToken);
+
+        if (subject is null)
+        {
+            return false;
+        }
+
+        viewModel.SubjectCode = subject.Code;
+        viewModel.SubjectName = subject.Name;
+        await LoadChapterOptionsAsync(viewModel.SubjectId, viewModel.ChapterOptions, cancellationToken);
+        return true;
+    }
+
+    private async Task LoadChapterOptionsAsync(
+        Guid subjectId,
+        List<SelectListItem> target,
+        CancellationToken cancellationToken)
     {
         var chapters = await _dbContext.Chapters
             .AsNoTracking()
-            .Where(c => c.SubjectId == SeedData.Prn222SubjectId)
-            .OrderBy(c => c.Number)
+            .Where(chapter => chapter.SubjectId == subjectId)
+            .OrderBy(chapter => chapter.Number)
             .ToListAsync(cancellationToken);
 
         target.Clear();
-        target.AddRange(chapters.Select(c => new SelectListItem
+        target.AddRange(chapters.Select(chapter => new SelectListItem
         {
-            Value = c.Id.ToString(),
-            Text = $"Chương {c.Number}: {c.Title}"
+            Value = chapter.Id.ToString(),
+            Text = $"Chương {chapter.Number}: {chapter.Title}"
         }));
     }
 }

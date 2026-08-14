@@ -1,135 +1,57 @@
-# Flow 3 - Report & Statistics handoff
+# Flow 3 handoff - Report & Statistics
 
-## Purpose and status
+## Status
 
-Flow 3 - Report & Statistics is the completed independent third workflow merged through PR #12.
+Flow 3 is complete and remains a read-only Razor Pages workflow under `Pages/Reports/`.
 
-Presentation allocation:
+Member 2 owns report behavior. Member 1 owns the cross-cutting subject/RBAC integration.
 
-1. **Flow 1 - Document Management & Indexing** - complete - MVC
-2. **Flow 2 - RAG Question & Answer & Conversation Management** - pending - MVC
-3. **Flow 3 - Report & Statistics** - complete - Razor Pages
+## Subject-scoped access
 
-Conversation History belongs to Flow 2.
+Reports are opened with a concrete `subjectId`.
 
-## Ownership
-
-- Member 2 owns Flow 3 reporting behavior and its Razor Pages implementation.
-- Member 1 owns global roles/policies, role-aware shared UI, authorization regression tests, and all repository documentation including this handoff.
-
-Member 2 should report future Flow 3 status/doc changes to Member 1 instead of editing repository docs directly.
-
-## Implementation
-
-```text
-src/PRN222.RagAssistant/Pages/Reports/Index.cshtml
-src/PRN222.RagAssistant/Pages/Reports/Index.cshtml.cs
-tests/PRN222.RagAssistant.Tests/ReportStatisticsTests.cs
-```
-
-The page is protected by:
-
-```text
-[Authorize(Policy = AppPolicies.ManageDocuments)]
-```
-
-Current policy mapping:
+Authorization:
 
 ```text
 ManageDocuments -> Admin OR SubjectLeader
+AND
+ISubjectAccessService.CanManageSubjectAsync(user, subjectId)
 ```
 
-Admin access is an operational override. Subject Leader remains the normal academic actor. Student cannot access Reports.
+Admin can report on any Subject. Subject Leader can report only on assigned Subjects.
 
-Canonical role design: `docs/role-access-control.md`.
+## Subject-scoped metrics
 
-## Available metrics
+- total Chapters;
+- total Documents;
+- unassigned Documents;
+- Documents by Chapter;
+- Uploaded/Processing/Indexed/Failed counts;
+- total DocumentChunks;
+- recent indexing failures;
+- recently indexed Documents and chunk counts.
 
-- chapter/document totals;
-- document counts by indexing state;
-- documents by chapter/unassigned;
-- `IndexedAtUtc` and `IndexError`;
-- `DocumentChunk` totals;
-- recently indexed documents with chunk counts;
-- indexing completion percentage;
-- chat session/message/citation totals.
+## Transitional chat metrics
 
-Chat usage remains zero/empty until Flow 2 begins persisting rows.
+Chat session/message/citation totals remain **global** because Flow 2 is pending and `ChatSession` currently has no `SubjectId`.
 
-## Flow definition
+Do not mislabel these values as subject-scoped. Once Flow 2 introduces subject-owned sessions, Flow 3 should filter chat metrics by Subject as a follow-up integration.
 
-Primary academic actor: **Subject Leader**. Administrative override actor: **Admin**.
+## Boundaries
 
-```text
-Admin or Subject Leader
-      |
-      v
-Open Reports / Statistics
-      |
-      +--> Document overview
-      +--> Indexing overview
-      +--> Chat usage overview
-      |
-      v
-Read-only dashboard / tables
-```
+Reports must not:
 
-## Data sources
-
-Flow 3 reads existing persistence from:
-
-- `Chapter`;
-- `Document`;
-- `DocumentChunk`;
-- `ChatSession`;
-- `ChatMessage`;
-- `MessageCitation`.
-
-No reporting-specific entity or migration is required. Queries use focused EF Core aggregates and `AsNoTracking()` where appropriate. PostgreSQL is the source of truth.
-
-## Non-interference rules
-
-Future Flow 3 maintenance must not:
-
+- mutate workflow state;
 - enqueue/re-index documents;
-- modify indexing worker/parser/chunker/embedding behavior;
-- mutate document index state or workflow rows;
-- perform pgvector similarity retrieval;
 - call Ollama;
-- duplicate Flow 2 chat/session/history UI;
-- create speculative analytics schema;
-- change shared contracts solely for reporting convenience;
-- redefine global roles/policies inside the reporting feature.
+- run similarity retrieval;
+- duplicate Conversation History;
+- add speculative analytics schema.
 
-If a persistence or authorization gap is genuine, coordinate through Member 1.
+## PRN222 status
 
-## Relationship to Flow 1
+PRN222 is a seeded demo Subject, not the report's hard-coded scope.
 
-```text
-Flow 1 MVC request side
-Document -> queue -> worker -> parse/chunk/embed -> persisted index state
-                                                    |
-                                                    v
-Flow 3 reads persisted aggregate state -------------+
-```
+## Documentation
 
-## Relationship to Flow 2
-
-Flow 3 may read `ChatSession`, `ChatMessage`, and `MessageCitation` after Flow 2 populates them, but it does not own question retrieval, answer generation, Conversation History, citations, or MVC chat presentation.
-
-## Acceptance criteria
-
-1. Admin or Subject Leader can navigate to Reports/Statistics - complete after RBAC policy extension.
-2. Student is denied server-side - required regression behavior.
-3. The page reads aggregate PRN222 data from the database - complete.
-4. It shows document/indexing/chat usage statistics - complete.
-5. Empty/zero states render correctly - complete.
-6. It remains read-only - complete.
-7. No speculative reporting schema/migration exists - complete.
-8. Relevant tests cover aggregates and policy access - required baseline.
-
-## Maintenance guidance
-
-Do not recreate `feature/report-statistics` as a competing implementation. New product work should focus on pending Flow 2 unless a requirement explicitly reopens reporting.
-
-Documentation updates for Flow 3 are performed by Member 1.
+Member 2 reports future report changes to Member 1; Member 1 keeps repository docs synchronized.

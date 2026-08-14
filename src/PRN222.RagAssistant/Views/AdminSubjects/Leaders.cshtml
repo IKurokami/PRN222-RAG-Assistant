@@ -1,0 +1,61 @@
+@model AdminSubjectLeadersViewModel
+@{
+    ViewData["Title"] = $"Phân Subject Leader - {Model.SubjectCode}";
+}
+
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="d-flex justify-content-between align-items-start mb-4">
+            <div>
+                <h2 class="mb-1">Phân Subject Leader</h2>
+                <p class="text-muted mb-0"><strong>@Model.SubjectCode</strong> - @Model.SubjectName</p>
+            </div>
+            <a asp-controller="AdminSubjects" asp-action="Index" class="btn btn-outline-secondary">Quay lại</a>
+        </div>
+
+        <div class="alert alert-info">
+            Một Subject Leader có thể được phân công nhiều môn. Chỉ các môn được chọn mới cấp quyền quản lý Chapter, Document, re-index và Report.
+        </div>
+
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <form method="post" asp-controller="AdminSubjects" asp-action="Leaders" asp-route-id="@Model.SubjectId">
+                    <input asp-for="SubjectId" type="hidden" />
+                    <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+
+                    @if (Model.Leaders.Count == 0)
+                    {
+                        <div class="text-muted mb-3">Chưa có tài khoản mang role Subject Leader. Hãy tạo hoặc đổi role trong User Management trước.</div>
+                    }
+                    else
+                    {
+                        <div class="list-group mb-4">
+                            @foreach (var leader in Model.Leaders)
+                            {
+                                <label class="list-group-item d-flex gap-3 align-items-center">
+                                    @if (leader.IsSelected)
+                                    {
+                                        <input class="form-check-input flex-shrink-0" type="checkbox" name="SelectedLeaderIds" value="@leader.UserId" checked />
+                                    }
+                                    else
+                                    {
+                                        <input class="form-check-input flex-shrink-0" type="checkbox" name="SelectedLeaderIds" value="@leader.UserId" />
+                                    }
+                                    <span>
+                                        <span class="fw-bold d-block">@leader.DisplayName</span>
+                                        <span class="small text-muted">@leader.Email</span>
+                                    </span>
+                                </label>
+                            }
+                        </div>
+                    }
+
+                    <div class="d-flex justify-content-between">
+                        <a asp-controller="AdminUsers" asp-action="Index" class="btn btn-outline-secondary">User Management</a>
+                        <button type="submit" class="btn btn-primary">Lưu phân công</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>

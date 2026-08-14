@@ -1,181 +1,96 @@
 # Application-layer instructions
 
-This subtree contains stable contracts shared by document management, indexing, RAG, authorization consumers, and presentation workflows.
+This subtree contains stable cross-workflow contracts/models. Keep it independent from MVC/Razor/Ollama/PostgreSQL-specific presentation details.
 
-The project defines:
+## Current workflow state
 
-1. **Flow 1 - Document Management & Indexing** - complete - MVC Controllers + Views
-2. **Flow 2 - RAG Question & Answer & Conversation Management** - pending - MVC Controllers + Views
-3. **Flow 3 - Report & Statistics** - complete - Razor Pages
+1. Flow 1 - Document Management & Indexing - complete - MVC.
+2. Flow 2 - RAG Q&A + Conversation Management - pending - MVC.
+3. Flow 3 - Report & Statistics - complete - Razor Pages.
 
-Conversation History belongs to Flow 2.
+## Subject boundary
 
-## Current role model
+The application is multi-subject. PRN222 is only the seeded demo subject.
 
-Global identity/RBAC is owned by **Member 1**.
+`Document` and `Chapter` already persist `SubjectId`. Flow 1 and Flow 3 now carry a concrete subject context and authorize via `ISubjectAccessService` in the Security layer.
 
-Roles:
+Do not add a contract that allows retrieval or persistence to silently omit subject context once Flow 2 implementation begins.
 
-```text
-Admin
-SubjectLeader
-Student
-```
+Current Flow 2 persistence limitation: `ChatSession` has no `SubjectId`. Before Member 4 implements retrieval/chat persistence, coordinate with Member 1 to add the minimal subject-scoped contract/schema required so sessions, retrieval and citations cannot cross subjects.
 
-Policies:
+## Roles/policies
+
+Global RBAC is Member 1-owned:
 
 ```text
 ManageUsers     -> Admin
+ManageSubjects  -> Admin
 ManageDocuments -> Admin OR SubjectLeader
 ```
 
-Canonical details live in `docs/role-access-control.md`.
+`ManageDocuments` is a coarse role gate. Resource/subject permission is separate and cannot be represented by role membership alone.
 
-Members 2-5 may consume established policies but must coordinate any new global role/policy requirement with Member 1. Do not duplicate role strings or create feature-local role-management abstractions.
+Do not duplicate role strings, managed-subject claim types, or authorization rules inside application services.
 
-## Current integration status
-
-Member 1 established the shared contracts and now also owns Identity/RBAC, Admin user management, role-aware shared UI, and all repository documentation edits.
-
-Member 2 consumes `IDocumentIndexingQueue` from Flow 1 MVC document upload/re-index actions and owns the completed Flow 3 reporting behavior. Member 3 completed the indexing implementation through PR #9. Member 4 owns the pending presentation-agnostic Flow 2 backend. Member 5 owns pending Flow 2 MVC presentation/evaluation.
-
-Flow 1 handoff:
-
-```text
-DocumentsController persists/updates Document
-    |
-    v
-IDocumentIndexingQueue.EnqueueAsync(documentId)
-    |
-    v
-InMemoryDocumentIndexingQueue
-    |
-    v
-DocumentIndexingWorker
-    |
-    v
-IDocumentIndexingService.IndexAsync(documentId)
-```
-
-`InMemoryDocumentIndexingQueue` is an in-process transport, not a durable broker. Startup recovery re-enqueues persisted `Uploaded`/`Processing` documents.
-
-## Dependency boundaries
-
-- Presentation code may depend on `Application/Abstractions` and `Application/Models`.
-- Application abstractions must not depend on Razor Pages, MVC controllers, `HttpContext`, Ollama-specific DTOs, or PostgreSQL-specific query types.
-- Infrastructure implementations may depend on Application abstractions.
-- Do not duplicate a shared contract inside a feature folder when an abstraction already exists here.
-- Flow 1 MVC controllers must not parse/chunk/embed documents or call Ollama/pgvector directly.
-- Member 4 must not parse raw uploaded files or duplicate indexing.
-- Member 4 Flow 2 backend remains presentation-agnostic.
-- Member 5 Flow 2 presentation uses MVC Controllers + Views, not Razor Pages.
-- Member 5 MVC presentation must not call Ollama or query pgvector directly.
-- Flow 3 must not call Ollama, run similarity retrieval, mutate indexing state, or change a shared contract solely for dashboard convenience.
-- Global authorization changes belong to Member 1 even when the consuming workflow belongs to another member.
-
-## MVC presentation boundaries
+## Current integration boundaries
 
 ### Flow 1
 
-Flow 1 request/presentation code lives in `DocumentsController`, `ChaptersController`, Flow 1 MVC view models, and `Views/Documents` / `Views/Chapters`.
-
-Write actions are protected by `AppPolicies.ManageDocuments`. Member 1 owns the global policy definition; Member 2 owns the document/chapter behavior behind it.
-
-Do not recreate `Pages/Documents` or `Pages/Chapters`.
-
-### Admin user management
-
-Member 1 owns:
-
 ```text
-Controllers/AdminUsersController.cs
-Models/Admin/AdminUserViewModels.cs
-Views/AdminUsers/
+subject-aware MVC action
+   -> persist Document/Chapter
+   -> IDocumentIndexingQueue.EnqueueAsync(documentId)
+   -> DocumentIndexingWorker
+   -> IDocumentIndexingService.IndexAsync(documentId)
 ```
 
-This surface consumes ASP.NET Core Identity directly because account/role administration is identity infrastructure behavior. It must remain protected by `AppPolicies.ManageUsers` and anti-forgery on POST actions.
+Indexing remains subject-agnostic at service invocation because the persisted `Document` supplies `SubjectId`.
 
 ### Flow 2
 
-Expected path:
+Required direction:
 
 ```text
-Student browser
-    |
-    v
-ChatController / MVC action
-    |
-    v
-IRagQueryService
-    |
-    v
-Flow 2 backend services
-    |
-    v
-RagAnswer + RagCitation[]
-    |
-    v
-MVC View
+MVC subject/session context
+   -> subject-scoped RAG application boundary
+   -> question embedding
+   -> pgvector retrieval restricted to Documents of selected Subject
+   -> grounded generation
+   -> message/citation persistence bound to the same Subject/session
 ```
 
-The MVC layer may handle model binding, validation, authorization, redirects, and view selection. It must not implement embeddings, pgvector retrieval, prompt construction, Ollama generation, or indexing.
+Member 4 owns the backend implementation. Member 5 owns MVC presentation. Member 1 coordinates shared contract/entity/migration changes needed to establish subject ownership.
 
-Do not introduce `Pages/Chat` or `Pages/Conversation`.
+### Flow 3
 
-## Current shared contracts
+No reporting-specific shared contract is required. Flow 3 reads persistence directly with aggregate EF queries and is subject-scoped for document/index metrics.
 
-### `IDocumentIndexingQueue`
-Request-to-background handoff from Flow 1 upload/re-index actions.
+## Shared contracts
 
-### `IDocumentIndexingService`
-One-document indexing pipeline executed by `DocumentIndexingWorker`.
+- `IDocumentIndexingQueue`: request-to-background handoff.
+- `IDocumentIndexingService`: one-document indexing pipeline.
+- `ITextEmbeddingService`: provider-neutral single/batch embedding.
+- `IChatCompletionService`: provider-neutral generation boundary.
+- `IRagQueryService`: presentation-facing grounded Q&A boundary; update before implementation if its current signature cannot enforce subject context.
+- `RagAnswer` / `RagCitation`: presentation-safe RAG result models.
 
-### `ITextEmbeddingService`
-Provider-neutral embedding boundary shared by indexing and retrieval. Supports single-text and ordered-batch embedding.
+Prefer additive changes. If a signature must change, update all affected producers/consumers in the same integration window and report the change to Member 1 for documentation synchronization.
 
-### `IChatCompletionService`
-Provider-neutral generation boundary for Member 4.
+## Ownership
 
-### `IRagQueryService`
-Presentation-facing grounded Q&A boundary. Member 4 implements it; Member 5 consumes it from MVC.
+- Member 1: shared contracts, Core/Data/Identity/RBAC/multi-subject, schema coordination, all docs.
+- Member 2: Flow 1 request/business behavior + Flow 3 reporting behavior.
+- Member 3: indexing implementation.
+- Member 4: Flow 2 backend.
+- Member 5: Flow 2 MVC/history/citations/evaluation.
 
-### `RagAnswer` / `RagCitation`
-Presentation-safe Flow 2 result models.
+Members 2-5 do not independently edit README/AGENTS/docs.
 
-There is intentionally no reporting-specific shared contract.
+## Dependency rules
 
-## Ownership expectations
-
-### Member 1 - Core/Data/RBAC/docs
-
-Owns shared contracts, schema/migration coordination, Identity/RBAC, Admin user management, role-aware shared UI, policy tests, and **all edits to README/AGENTS/docs**.
-
-### Member 2 - Flow 1 + Flow 3
-
-Owns Flow 1 document/chapter business actions and Flow 3 read-only reporting behavior. Role-policy changes around those screens are coordinated through Member 1.
-
-### Member 3 - Indexing
-
-Owns parsers, chunking, embedding batching, indexing service/worker, chunk persistence, state transitions, and startup recovery.
-
-### Member 4 - Flow 2 backend
-
-Owns retrieval, grounding, chat completion, session ownership validation, and message/citation persistence.
-
-### Member 5 - Flow 2 MVC presentation/evaluation
-
-Owns chat/session views/controllers, Conversation History, citations, and evaluation-facing tooling.
-
-## Contract and documentation changes
-
-Cross-member interfaces are stable integration points. Prefer additive changes.
-
-If a signature must change:
-
-1. explain why the current contract cannot represent the requirement;
-2. coordinate with affected producers/consumers;
-3. update implementations/consumers together;
-4. report the change to Member 1;
-5. Member 1 updates project status, team workflow, README, and handoff documentation.
-
-Members 2-5 should not independently edit repository documentation.
+- Application abstractions do not depend on MVC Controller, Razor PageModel, HttpContext, Ollama DTOs, or Npgsql query types.
+- Infrastructure may implement Application abstractions.
+- Flow 1 controllers do not parse/chunk/embed/call providers.
+- Flow 2 MVC does not call Ollama or pgvector directly.
+- Flow 3 does not mutate workflow state or call provider/retrieval code.
+- Do not create duplicate contracts inside feature folders.

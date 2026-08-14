@@ -1,270 +1,53 @@
 @page
-@using PRN222.RagAssistant.Domain.Enums
 @model PRN222.RagAssistant.Pages.Reports.IndexModel
 @{
-    ViewData["Title"] = "Báo cáo & Thống kê - PRN222";
+    ViewData["Title"] = $"Báo cáo - {Model.SubjectCode}";
     var totalIndexed = Model.UploadedCount + Model.ProcessingCount + Model.IndexedCount + Model.FailedCount;
     var indexedPercent = totalIndexed > 0 ? (int)Math.Round(Model.IndexedCount * 100.0 / totalIndexed) : 0;
 }
 
-<div class="d-flex justify-content-between align-items-center mb-4 pb-2 border-bottom">
+<div class="d-flex justify-content-between align-items-start mb-4 pb-2 border-bottom gap-3 flex-wrap">
     <div>
-        <h3 class="fw-bold mb-1 text-dark">Báo cáo &amp; Thống kê PRN222</h3>
-        <p class="text-muted small mb-0">Tổng quan dữ liệu môn học, tiến trình indexing tài liệu và chỉ số hoạt động hệ thống.</p>
+        <div class="small text-muted">@Model.SubjectCode</div>
+        <h3 class="fw-bold mb-1">Báo cáo &amp; Thống kê</h3>
+        <p class="text-muted small mb-0">@Model.SubjectName</p>
     </div>
     <div class="d-flex gap-2">
-        <a asp-page="/Documents/Index" class="btn btn-sm btn-outline-primary fw-medium px-3" style="border-radius: 8px;">Quản lý tài liệu</a>
-        <a asp-page="/Chapters/Index" class="btn btn-sm btn-outline-secondary fw-medium px-3" style="border-radius: 8px;">Quản lý chương</a>
+        <a asp-controller="Documents" asp-action="Index" asp-route-subjectId="@Model.SubjectId" class="btn btn-sm btn-outline-primary">Tài liệu</a>
+        <a asp-controller="Chapters" asp-action="Index" asp-route-subjectId="@Model.SubjectId" class="btn btn-sm btn-outline-secondary">Chương</a>
+        <a asp-controller="Subjects" asp-action="Index" class="btn btn-sm btn-outline-secondary">Môn học</a>
     </div>
 </div>
 
-@* ── 1. Thống kê tổng quan ────────────────────────────────────── *@
 <div class="row g-3 mb-4">
-    <div class="col-sm-6 col-lg-3">
-        <div class="card shadow-sm border-0 bg-white rounded-3 h-100 border-start border-4 border-primary">
-            <div class="card-body">
-                <div class="text-uppercase text-muted fw-bold small mb-1">Tổng số Chương</div>
-                <div class="fs-2 fw-bold text-dark">@Model.TotalChapters</div>
-                <div class="small text-muted mt-1">Chương học thuộc môn PRN222</div>
-            </div>
-        </div>
-    </div>
-    <div class="col-sm-6 col-lg-3">
-        <div class="card shadow-sm border-0 bg-white rounded-3 h-100 border-start border-4 border-info">
-            <div class="card-body">
-                <div class="text-uppercase text-muted fw-bold small mb-1">Tổng số Tài liệu</div>
-                <div class="fs-2 fw-bold text-dark">@Model.TotalDocuments</div>
-                <div class="small text-muted mt-1">
-                    @if (Model.UnassignedDocuments > 0)
-                    {
-                        <span class="text-warning fw-medium">@Model.UnassignedDocuments tài liệu chưa gán chương</span>
-                    }
-                    else
-                    {
-                        <span>Đã gán đầy đủ vào các chương</span>
-                    }
-                </div>
-            </div>
-        </div>
-    </div>
-    <div class="col-sm-6 col-lg-3">
-        <div class="card shadow-sm border-0 bg-white rounded-3 h-100 border-start border-4 border-success">
-            <div class="card-body">
-                <div class="text-uppercase text-muted fw-bold small mb-1">Tổng số Chunks</div>
-                <div class="fs-2 fw-bold text-dark">@Model.TotalChunks</div>
-                <div class="small text-muted mt-1">Đoạn văn bản đã tạo embedding</div>
-            </div>
-        </div>
-    </div>
-    <div class="col-sm-6 col-lg-3">
-        <div class="card shadow-sm border-0 bg-white rounded-3 h-100 border-start border-4 border-secondary">
-            <div class="card-body">
-                <div class="text-uppercase text-muted fw-bold small mb-1">Hoạt động Chat</div>
-                <div class="fs-2 fw-bold text-dark">@Model.TotalChatSessions <span class="fs-6 fw-normal text-muted">phiên</span></div>
-                <div class="small text-muted mt-1">@Model.TotalChatMessages tin nhắn • @Model.TotalMessageCitations trích dẫn</div>
-            </div>
-        </div>
-    </div>
+    <div class="col-sm-6 col-lg-3"><div class="card shadow-sm h-100"><div class="card-body"><div class="text-muted small fw-bold">TỔNG CHƯƠNG</div><div class="fs-2 fw-bold">@Model.TotalChapters</div></div></div></div>
+    <div class="col-sm-6 col-lg-3"><div class="card shadow-sm h-100"><div class="card-body"><div class="text-muted small fw-bold">TỔNG TÀI LIỆU</div><div class="fs-2 fw-bold">@Model.TotalDocuments</div><div class="small text-muted">@Model.UnassignedDocuments chưa gán chương</div></div></div></div>
+    <div class="col-sm-6 col-lg-3"><div class="card shadow-sm h-100"><div class="card-body"><div class="text-muted small fw-bold">TỔNG CHUNKS</div><div class="fs-2 fw-bold">@Model.TotalChunks</div></div></div></div>
+    <div class="col-sm-6 col-lg-3"><div class="card shadow-sm h-100"><div class="card-body"><div class="text-muted small fw-bold">CHAT TOÀN HỆ THỐNG</div><div class="fs-2 fw-bold">@Model.TotalChatSessions</div><div class="small text-muted">Flow 2 chưa có SubjectId; @Model.TotalChatMessages messages • @Model.TotalMessageCitations citations</div></div></div></div>
 </div>
 
-@* ── 2. Tình trạng Indexing & Phân bố Chương ────────────────── *@
 <div class="row g-4 mb-4">
-    <div class="col-lg-6">
-        <div class="card shadow-sm border rounded-3 bg-white h-100">
-            <div class="card-header bg-light border-bottom fw-bold py-3">
-                Trạng thái Tiến trình Indexing
-            </div>
-            <div class="card-body">
-                @if (totalIndexed == 0)
-                {
-                    <div class="text-center py-4 text-muted">
-                        Chưa có tài liệu nào được tải lên hệ thống.
-                    </div>
-                }
-                else
-                {
-                    <div class="mb-4">
-                        <div class="d-flex justify-content-between align-items-center mb-1">
-                            <span class="fw-bold small text-dark">Tỷ lệ hoàn thành Indexing</span>
-                            <span class="badge bg-success">@indexedPercent% (@Model.IndexedCount / @totalIndexed tài liệu)</span>
-                        </div>
-                        <div class="progress" style="height: 10px;">
-                            <div class="progress-bar bg-success" role="progressbar" style="width: @indexedPercent%" aria-valuenow="@indexedPercent" aria-valuemin="0" aria-valuemax="100"></div>
-                        </div>
-                    </div>
-
-                    <div class="row text-center g-2">
-                        <div class="col-6 col-sm-3">
-                            <div class="p-3 border rounded bg-light">
-                                <div class="small text-muted mb-1">Vừa tải lên</div>
-                                <div class="fs-4 fw-bold text-secondary">@Model.UploadedCount</div>
-                            </div>
-                        </div>
-                        <div class="col-6 col-sm-3">
-                            <div class="p-3 border rounded bg-light">
-                                <div class="small text-muted mb-1">Đang xử lý</div>
-                                <div class="fs-4 fw-bold text-primary">@Model.ProcessingCount</div>
-                            </div>
-                        </div>
-                        <div class="col-6 col-sm-3">
-                            <div class="p-3 border rounded bg-light">
-                                <div class="small text-muted mb-1">Đã Index</div>
-                                <div class="fs-4 fw-bold text-success">@Model.IndexedCount</div>
-                            </div>
-                        </div>
-                        <div class="col-6 col-sm-3">
-                            <div class="p-3 border rounded bg-light">
-                                <div class="small text-muted mb-1">Thất bại</div>
-                                <div class="fs-4 fw-bold text-danger">@Model.FailedCount</div>
-                            </div>
-                        </div>
-                    </div>
-                }
-            </div>
-        </div>
-    </div>
-
-    <div class="col-lg-6">
-        <div class="card shadow-sm border rounded-3 bg-white h-100">
-            <div class="card-header bg-light border-bottom fw-bold py-3">
-                Phân bố Tài liệu theo Chương
-            </div>
-            <div class="card-body p-0">
-                @if (Model.DocumentsByChapter.Count == 0)
-                {
-                    <div class="text-center py-4 text-muted">
-                        Chưa có chương môn học nào được tạo.
-                    </div>
-                }
-                else
-                {
-                    <div class="table-responsive">
-                        <table class="table table-hover align-middle mb-0">
-                            <thead class="table-light">
-                                <tr>
-                                    <th scope="col" class="ps-3" style="width: 110px;">Chương</th>
-                                    <th scope="col">Tên chương</th>
-                                    <th scope="col" class="text-end pe-3" style="width: 130px;">Số tài liệu</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach (var item in Model.DocumentsByChapter)
-                                {
-                                    <tr>
-                                        <td class="ps-3 fw-bold">Chương @item.Number</td>
-                                        <td>@item.Title</td>
-                                        <td class="text-end pe-3">
-                                            <span class="badge bg-info text-dark">
-                                                @item.DocumentCount tài liệu
-                                            </span>
-                                        </td>
-                                    </tr>
-                                }
-                                @if (Model.UnassignedDocuments > 0)
-                                {
-                                    <tr class="table-warning">
-                                        <td class="ps-3 fw-bold text-muted">—</td>
-                                        <td class="text-muted fst-italic">Chưa phân vào chương nào</td>
-                                        <td class="text-end pe-3">
-                                            <span class="badge bg-warning text-dark">@Model.UnassignedDocuments tài liệu</span>
-                                        </td>
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
-                    </div>
-                }
-            </div>
-        </div>
-    </div>
+    <div class="col-lg-6"><div class="card shadow-sm h-100"><div class="card-header fw-bold">Trạng thái Indexing</div><div class="card-body">
+        <div class="d-flex justify-content-between mb-1"><span>Tỷ lệ hoàn thành</span><strong>@indexedPercent%</strong></div>
+        <div class="progress mb-3" style="height:10px"><div class="progress-bar bg-success" style="width:@indexedPercent%"></div></div>
+        <div class="row text-center g-2"><div class="col-3"><div class="border rounded p-2"><div class="small text-muted">Uploaded</div><strong>@Model.UploadedCount</strong></div></div><div class="col-3"><div class="border rounded p-2"><div class="small text-muted">Processing</div><strong>@Model.ProcessingCount</strong></div></div><div class="col-3"><div class="border rounded p-2"><div class="small text-muted">Indexed</div><strong>@Model.IndexedCount</strong></div></div><div class="col-3"><div class="border rounded p-2"><div class="small text-muted">Failed</div><strong>@Model.FailedCount</strong></div></div></div>
+    </div></div></div>
+    <div class="col-lg-6"><div class="card shadow-sm h-100"><div class="card-header fw-bold">Tài liệu theo chương</div><div class="card-body p-0"><div class="table-responsive"><table class="table mb-0"><tbody>
+        @foreach (var item in Model.DocumentsByChapter) { <tr><td>Chương @item.Number</td><td>@item.Title</td><td class="text-end">@item.DocumentCount</td></tr> }
+        @if (Model.UnassignedDocuments > 0) { <tr class="table-warning"><td>—</td><td>Chưa gán chương</td><td class="text-end">@Model.UnassignedDocuments</td></tr> }
+    </tbody></table></div></div></div></div>
 </div>
 
-@* ── 3. Nhật ký lỗi gần đây ──────────────────────────────────── *@
 @if (Model.RecentFailures.Count > 0)
 {
-    <div class="card shadow-sm border rounded-3 bg-white mb-4">
-        <div class="card-header bg-danger bg-opacity-10 border-bottom border-danger border-opacity-25 fw-bold py-3 text-danger d-flex justify-content-between align-items-center">
-            <span>Danh sách tài liệu gặp lỗi khi Index gần đây</span>
-            <span class="badge bg-danger">@Model.FailedCount lỗi tổng cộng</span>
-        </div>
-        <div class="card-body p-0">
-            <div class="table-responsive">
-                <table class="table table-hover align-middle mb-0">
-                    <thead class="table-light">
-                        <tr>
-                            <th scope="col" class="ps-3">Tên tài liệu</th>
-                            <th scope="col">Chi tiết lỗi (IndexError)</th>
-                            <th scope="col" class="pe-3 text-end">Thời gian tải lên</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var fail in Model.RecentFailures)
-                        {
-                            <tr>
-                                <td class="ps-3">
-                                    <a asp-page="/Documents/Details" asp-route-id="@fail.DocumentId" class="fw-bold text-dark text-decoration-none">
-                                        @fail.Title
-                                    </a>
-                                    <div class="small text-muted">@fail.OriginalFileName</div>
-                                </td>
-                                <td>
-                                    <code class="text-danger small bg-light p-1 rounded d-inline-block text-break">
-                                        @(string.IsNullOrWhiteSpace(fail.IndexError) ? "Không có thông tin lỗi chi tiết" : fail.IndexError)
-                                    </code>
-                                </td>
-                                <td class="pe-3 text-end small text-muted">
-                                    @fail.UploadedAtUtc.ToLocalTime().ToString("dd/MM/yyyy HH:mm")
-                                </td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
+    <div class="card shadow-sm mb-4"><div class="card-header fw-bold text-danger">Indexing failures gần đây</div><div class="table-responsive"><table class="table mb-0"><tbody>
+    @foreach (var fail in Model.RecentFailures) { <tr><td><a asp-controller="Documents" asp-action="Details" asp-route-id="@fail.DocumentId">@fail.Title</a><div class="small text-muted">@fail.OriginalFileName</div></td><td class="text-danger small">@fail.IndexError</td><td class="text-end small">@fail.UploadedAtUtc.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td></tr> }
+    </tbody></table></div></div>
 }
 
-@* ── 4. Tài liệu đã index gần đây ────────────────────────────── *@
 @if (Model.RecentlyIndexed.Count > 0)
 {
-    <div class="card shadow-sm border rounded-3 bg-white mb-4">
-        <div class="card-header bg-light border-bottom fw-bold py-3 d-flex justify-content-between align-items-center">
-            <span>Tài liệu đã Index thành công gần đây</span>
-            <span class="badge bg-success">@Model.IndexedCount đã xong</span>
-        </div>
-        <div class="card-body p-0">
-            <div class="table-responsive">
-                <table class="table table-hover align-middle mb-0">
-                    <thead class="table-light">
-                        <tr>
-                            <th scope="col" class="ps-3">Tên tài liệu</th>
-                            <th scope="col" class="text-center">Số Chunks</th>
-                            <th scope="col" class="pe-3 text-end">Thời điểm Index</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var doc in Model.RecentlyIndexed)
-                        {
-                            <tr>
-                                <td class="ps-3">
-                                    <a asp-page="/Documents/Details" asp-route-id="@doc.DocumentId" class="fw-bold text-dark text-decoration-none">
-                                        @doc.Title
-                                    </a>
-                                    <div class="small text-muted">@doc.OriginalFileName</div>
-                                </td>
-                                <td class="text-center">
-                                    <span class="badge bg-success bg-opacity-10 text-success fw-bold border border-success border-opacity-25 px-2 py-1">
-                                        @doc.ChunkCount chunks
-                                    </span>
-                                </td>
-                                <td class="pe-3 text-end small text-muted">
-                                    @doc.IndexedAtUtc.ToLocalTime().ToString("dd/MM/yyyy HH:mm")
-                                </td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
+    <div class="card shadow-sm mb-4"><div class="card-header fw-bold">Đã Index gần đây</div><div class="table-responsive"><table class="table mb-0"><tbody>
+    @foreach (var doc in Model.RecentlyIndexed) { <tr><td><a asp-controller="Documents" asp-action="Details" asp-route-id="@doc.DocumentId">@doc.Title</a><div class="small text-muted">@doc.OriginalFileName</div></td><td>@doc.ChunkCount chunks</td><td class="text-end small">@doc.IndexedAtUtc.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td></tr> }
+    </tbody></table></div></div>
 }

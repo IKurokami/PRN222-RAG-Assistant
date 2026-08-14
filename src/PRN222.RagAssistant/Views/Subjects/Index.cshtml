@@ -1,0 +1,68 @@
+@model SubjectIndexViewModel
+@{
+    ViewData["Title"] = "Môn học";
+    var isAdmin = User.IsInRole(AppRoles.Admin);
+}
+
+<div class="d-flex justify-content-between align-items-start mb-4">
+    <div>
+        <h2 class="mb-1">Môn học</h2>
+        <p class="text-muted mb-0">Chọn môn học để xem tài liệu. Subject Leader chỉ quản lý các môn được Admin phân công.</p>
+    </div>
+    @if (isAdmin)
+    {
+        <a asp-controller="AdminSubjects" asp-action="Index" class="btn btn-primary">Quản lý môn học</a>
+    }
+</div>
+
+@if (Model.Subjects.Count == 0)
+{
+    <div class="alert alert-info">Hiện chưa có môn học nào bạn có thể truy cập.</div>
+}
+else
+{
+    <div class="row g-4">
+        @foreach (var subject in Model.Subjects)
+        {
+            <div class="col-md-6 col-xl-4">
+                <div class="card shadow-sm h-100 @(subject.IsActive ? string.Empty : "border-warning")">
+                    <div class="card-body d-flex flex-column">
+                        <div class="d-flex justify-content-between align-items-start gap-3 mb-2">
+                            <div>
+                                <h4 class="mb-1">@subject.Code</h4>
+                                <div class="text-muted">@subject.Name</div>
+                            </div>
+                            @if (subject.IsActive)
+                            {
+                                <span class="badge bg-success">Active</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-warning text-dark">Inactive</span>
+                            }
+                        </div>
+
+                        <div class="small text-muted mb-4">
+                            @subject.ChapterCount chương • @subject.DocumentCount tài liệu
+                        </div>
+
+                        <div class="mt-auto d-flex flex-wrap gap-2">
+                            <a asp-controller="Documents" asp-action="Index" asp-route-subjectId="@subject.Id" class="btn btn-outline-primary btn-sm">
+                                Tài liệu
+                            </a>
+                            @if (subject.CanManage)
+                            {
+                                <a asp-controller="Chapters" asp-action="Index" asp-route-subjectId="@subject.Id" class="btn btn-outline-secondary btn-sm">
+                                    Chương
+                                </a>
+                                <a asp-page="/Reports/Index" asp-route-subjectId="@subject.Id" class="btn btn-outline-secondary btn-sm">
+                                    Báo cáo
+                                </a>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}

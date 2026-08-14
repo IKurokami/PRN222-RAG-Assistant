@@ -203,6 +203,25 @@ public sealed class AdminUsersController : Controller
             }
         }
 
+        if (!string.Equals(viewModel.Role, AppRoles.SubjectLeader, StringComparison.Ordinal))
+        {
+            var claims = await _userManager.GetClaimsAsync(user);
+            var subjectAssignments = claims
+                .Where(claim => claim.Type == AppClaimTypes.ManagedSubject)
+                .ToList();
+
+            if (subjectAssignments.Count > 0)
+            {
+                var removeClaimsResult = await _userManager.RemoveClaimsAsync(user, subjectAssignments);
+                if (!removeClaimsResult.Succeeded)
+                {
+                    AddIdentityErrors(removeClaimsResult);
+                    PopulateEditMetadata(viewModel, user, isCurrentUser);
+                    return View(viewModel);
+                }
+            }
+        }
+
         TempData["StatusMessage"] = $"Updated {user.DisplayName} to role {AppRoles.GetDisplayName(viewModel.Role)}.";
         return RedirectToAction(nameof(Index));
     }
