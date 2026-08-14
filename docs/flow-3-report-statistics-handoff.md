@@ -1,42 +1,73 @@
 # Flow 3 - Report & Statistics handoff
 
-## Status
+## Purpose and status
 
-**Flow 3 - Report & Statistics is COMPLETE and merged through PR #12.**
+This document records the completed independent third workflow after PR #12 merged **Flow 3 - Report & Statistics**.
 
-Merged baseline:
+The project now uses:
 
-- PR #12: `feat(flow3): implement Report & Statistics dashboard page for Subject Leader`
-- Flow 3 owner: Member 2
-- merged into `master` at `00903a38693956f59090f71649ca8a99e053e604`
-- PR verification reported `75/75` automated tests passing
-- post-merge local smoke testing confirmed Subject Leader access, Student/anonymous denial, real indexing aggregates, chapter/document counts, chunk totals, and recently indexed document rendering
+1. **Flow 1 - Document Management & Indexing** - complete - Razor Pages presentation
+2. **Flow 2 - RAG Question & Answer & Conversation Management** - pending Members 4/5 - **ASP.NET Core MVC Controllers + Views presentation**
+3. **Flow 3 - Report & Statistics** - complete through PR #12 - Razor Pages presentation
 
-The project now has:
+Conversation History belongs to Flow 2.
 
-1. **Flow 1 - Document Management & Indexing** - complete
-2. **Flow 2 - RAG Question & Answer & Conversation Management** - pending Members 4/5
-3. **Flow 3 - Report & Statistics** - complete
+## Owner
 
-Conversation History belongs to Flow 2 and is not counted as Flow 3.
+**Member 2 owns Flow 3 - Report & Statistics, and the assigned implementation is complete.**
 
-## Owner and boundaries
-
-**Member 2 owns the completed Flow 3 implementation.**
-
-Ownership remains:
+Ownership boundaries remain:
 
 - Member 1: Core/Data and migration coordination
-- Member 2: completed Flow 1 request side + completed Flow 3 reporting
+- Member 2: completed Flow 1 request side + completed Flow 3
 - Member 3: completed Flow 1 indexing side
 - Member 4: pending Flow 2 RAG backend
-- Member 5: pending Flow 2 presentation/evaluation
+- Member 5: pending **MVC** Flow 2 presentation/evaluation
 
-Flow 3 is now a downstream read-only consumer of persisted Flow 1/Flow 2 data. Later members must not move reporting logic into the indexing or RAG pipelines.
+Flow 3 should now be treated as merged baseline behavior rather than a pending feature branch.
 
-## Implemented flow
+## Merged implementation
+
+PR #12 added:
+
+```text
+src/PRN222.RagAssistant/Pages/Reports/Index.cshtml
+src/PRN222.RagAssistant/Pages/Reports/Index.cshtml.cs
+tests/PRN222.RagAssistant.Tests/ReportStatisticsTests.cs
+```
+
+The shared layout also exposes the Reports navigation entry to Subject Leaders.
+
+The Reports page is a Razor Pages implementation and is protected by:
+
+```text
+[Authorize(Policy = AppPolicies.ManageDocuments)]
+```
+
+`AppPolicies.ManageDocuments` requires the `SubjectLeader` role.
+
+## Current dependency state
+
+Flow 1 is complete through Member 2 + Member 3, so Flow 3 reports real indexing data from persisted `Document` / `DocumentChunk` state.
+
+Available and implemented:
+
+- chapter/document totals
+- document counts by indexing state
+- indexed/failed/processing/uploaded counts
+- document grouping by chapter/unassigned
+- `IndexedAtUtc` and `IndexError`
+- `DocumentChunk` totals
+- recently indexed documents with per-document chunk count
+- indexing completion percentage
+
+Chat usage data still depends on Flow 2. Until Members 4/5 persist chat records, the reporting UI correctly shows zero/empty chat metrics.
+
+## Flow definition
 
 Primary actor: **Subject Leader**.
+
+Goal: inspect current PRN222 content/indexing/usage state through read-only aggregate information.
 
 ```text
 Subject Leader
@@ -51,8 +82,8 @@ Open Reports / Statistics
       |
       +--> Indexing overview
       |      +--> Uploaded / Processing / Indexed / Failed
-      |      +--> total DocumentChunk count
-      |      +--> recently indexed documents
+      |      +--> completion percentage
+      |      +--> recent indexed items + chunk counts
       |      \--> recent failures / IndexError
       |
       +--> Chat usage overview
@@ -64,70 +95,46 @@ Open Reports / Statistics
 Read-only dashboard / tables
 ```
 
-## Merged implementation
+## Implemented data sources
 
-Primary files:
+The merged page reads existing persistence from:
 
-```text
-src/PRN222.RagAssistant/Pages/Reports/Index.cshtml
-src/PRN222.RagAssistant/Pages/Reports/Index.cshtml.cs
-src/PRN222.RagAssistant/Pages/Shared/_Layout.cshtml
-tests/PRN222.RagAssistant.Tests/ReportStatisticsTests.cs
-```
+- `Chapter`
+- `Document`
+- `DocumentChunk`
+- `ChatSession`
+- `ChatMessage`
+- `MessageCitation`
 
-The page model is protected by:
+No reporting-specific entity or migration was added.
 
-```text
-[Authorize(Policy = AppPolicies.ManageDocuments)]
-```
+## Query behavior
 
-`AppPolicies.ManageDocuments` requires the `SubjectLeader` role. Hiding the Reports navigation link is only presentation behavior; server-side policy enforcement remains the security boundary.
+The implementation uses focused EF Core aggregate queries with `AsNoTracking()` where appropriate.
 
-## Implemented report data
-
-Flow 3 reads existing persistence through EF Core aggregate queries and `AsNoTracking()` where appropriate.
-
-Current dashboard includes:
-
-- total PRN222 chapters
-- total PRN222 documents
-- unassigned document count
-- documents grouped by chapter
-- document counts for `Uploaded`, `Processing`, `Indexed`, and `Failed`
-- indexing completion percentage
-- total persisted `DocumentChunk` count for PRN222 documents
-- up to 10 recent indexing failures with `IndexError`
-- up to 10 recently indexed documents with chunk count and index timestamp
-- total `ChatSession` count
-- total `ChatMessage` count
-- total `MessageCitation` count
-- graceful zero/empty states while Flow 2 has no chat data
-
-PostgreSQL remains the source of truth. Flow 3 does not scan `storage/uploads/` to compute counts.
+PostgreSQL remains the source of truth for report metadata. Reports do not scan `storage/uploads/` to calculate counts.
 
 ## Non-interference rules
 
-The completed Flow 3 implementation preserves these boundaries and future changes must continue to do so.
+Future Flow 3 maintenance must not:
 
-Flow 3 must not:
-
-- enqueue/re-index documents as part of reporting
+- enqueue/re-index documents
 - modify `DocumentIndexingWorker`
 - change parser/chunker/embedding behavior
 - change document index state
 - perform pgvector similarity retrieval
 - call Ollama
-- duplicate Member 5 chat/session/history pages
+- duplicate Member 5 MVC chat/session/history pages
 - mutate chapters/documents/chunks/chat sessions/messages/citations
 - redesign shared entities for dashboard convenience
 - create speculative analytics entities/migrations
 - change shared `Application/` contracts solely for reporting convenience
 
-If a genuine persistence gap appears later, document it first and coordinate schema/migration work through Member 1.
+If a genuine persistence gap is discovered, document it first and coordinate the schema through Member 1.
 
 ## Relationship to completed Flow 1
 
-Flow 3 reads the output of Flow 1 but does not participate in indexing.
+Flow 3 reads the output of Flow 1 but does not participate in the indexing pipeline.
 
 ```text
 Flow 1
@@ -137,16 +144,17 @@ Document -> queue -> worker -> parse/chunk/embed -> persisted index state
 Flow 3 reads persisted aggregate state --------+
 ```
 
-The local smoke test after PR #12 confirmed this integration with a real uploaded PDF: indexing reached `Indexed`, persisted chunks were created, and the report updated chapter/document/chunk/indexing metrics without additional report-side writes.
+See `docs/member-3-document-indexing-handoff.md` for indexing implementation details.
 
-See `docs/member-3-document-indexing-handoff.md` for the indexing implementation details.
+Post-merge local smoke testing confirmed this consumer boundary by uploading/indexing a PDF through Flow 1 and then observing the corresponding chapter/document/chunk/indexing values in Flow 3.
 
-## Relationship to pending Flow 2
+## Relationship to pending Flow 2 - MVC
 
-Flow 3 already reads `ChatSession`, `ChatMessage`, and `MessageCitation`. Until Members 4/5 populate those tables through Flow 2, chat usage metrics correctly remain zero.
+Flow 2 is now explicitly assigned to **ASP.NET Core MVC Controllers + Views** for presentation.
 
-Flow 3 does not own:
+Flow 3 may read `ChatSession`, `ChatMessage`, and `MessageCitation` after Flow 2 begins populating them, but it does not own:
 
+- MVC chat controllers/views
 - question retrieval
 - answer generation
 - conversation management
@@ -154,46 +162,42 @@ Flow 3 does not own:
 
 Those remain Flow 2 responsibilities.
 
+Expected Flow 2 presentation areas include:
+
+```text
+src/PRN222.RagAssistant/Controllers/
+src/PRN222.RagAssistant/Views/Chat/
+```
+
+Do not create a Razor Pages duplicate of Flow 2 under `Pages/Chat` or `Pages/Conversation`.
+
 ## Tests and validation
 
-The merged PR added focused Report & Statistics tests covering:
+PR #12 reported `75/75` tests passing, including focused Flow 3 tests covering authorization attributes, empty/zero states, PRN222 scope filtering, index-state grouping, chapter counts, recent failure limits, and read-only behavior.
 
-- required authorization attribute/policy usage
-- Student exclusion intent
-- empty/zero states
-- PRN222 subject scoping
-- chapter/document aggregation
-- index-state grouping
-- chunk totals
-- recent failure behavior and limits
-- chat usage counts
-- read-only calculation expectations
+Post-merge local smoke testing additionally reported:
 
-The PR reported `75/75` tests passing.
-
-A post-merge local smoke test additionally verified:
-
-- anonymous `/Reports/Index` access redirects to login
+- anonymous access to `/Reports/Index` redirects to login
 - Student access is denied
-- Subject Leader access returns the report successfully
-- Flow 1 upload/indexing completes through the background worker and Ollama embedding runtime
-- Flow 3 reflects the resulting chapter, document, chunk, progress, grouping, and recently indexed data
+- Subject Leader access succeeds
+- a real PDF can pass through `Uploaded -> Processing -> Indexed`
+- resulting chunk/indexing data appears on the dashboard
 
-## Completion criteria
+## Acceptance criteria status
 
-Flow 3 is considered complete because:
+Flow 3 meets the original acceptance criteria:
 
-1. A Subject Leader can navigate to Reports/Statistics.
-2. Server-side authorization blocks anonymous/Student access.
-3. The page reads aggregate PRN222 data from the existing application database.
-4. It shows document/indexing statistics and chat/session usage statistics.
-5. Empty/zero-data states render correctly.
-6. It remains read-only.
-7. No speculative schema/migration was introduced solely for reporting.
-8. Relevant automated tests and local smoke verification cover the merged behavior.
+1. Subject Leader can navigate to Reports/Statistics - **complete**.
+2. The page reads aggregate PRN222 data from the application database - **complete**.
+3. It shows document/indexing statistics and chat/session usage statistics - **complete**.
+4. Empty/zero-data states render correctly - **complete**.
+5. It remains read-only - **complete**.
+6. No speculative schema/migration was introduced solely for reporting - **complete**.
+7. Relevant tests cover aggregate correctness and access restriction - **implemented in PR #12**.
+8. Repository documentation is synchronized by the team-lead documentation follow-up after merge.
 
-## Future maintenance
+## Maintenance guidance
 
-Flow 3 should now be treated as a completed workflow, not as pending feature work. Future changes should be small reporting improvements or fixes unless requirements explicitly expand the workflow.
+Do not recreate `feature/report-statistics` as a competing implementation.
 
-When Flow 2 lands, no Flow 3 redesign should be required: the existing chat counters should begin reflecting persisted chat/session/citation data automatically.
+New work should focus on pending Flow 2 unless a new requirement explicitly reopens reporting.
