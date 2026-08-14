@@ -27,6 +27,7 @@ Repository: PRN222 course RAG assistant.
 - Test project: `tests/PRN222.RagAssistant.Tests`
 - Target: `net10.0`
 - Web: ASP.NET Core MVC + Razor Pages
+- Presentation allocation: **Flow 1 + Flow 3 use Razor Pages; Flow 2 must use MVC Controllers + Views**
 - Auth: ASP.NET Core Identity + EF Core/PostgreSQL
 - Roles: `SubjectLeader`, `Student`
 - Database/vector store: PostgreSQL + pgvector
@@ -38,9 +39,9 @@ The demo is scoped to PRN222. Subject Leaders curate/upload course documents. Ch
 
 ## Product workflows
 
-1. **Flow 1 - Document Management & Indexing** - COMPLETE
-2. **Flow 2 - RAG Question & Answer & Conversation Management** - PENDING
-3. **Flow 3 - Report & Statistics** - COMPLETE
+1. **Flow 1 - Document Management & Indexing** - COMPLETE - Razor Pages
+2. **Flow 2 - RAG Question & Answer & Conversation Management** - PENDING - **ASP.NET Core MVC**
+3. **Flow 3 - Report & Statistics** - COMPLETE - Razor Pages
 
 Conversation History belongs to Flow 2 and is not counted as Flow 3.
 
@@ -53,9 +54,9 @@ Latest synchronized baseline after PR #12:
 - Member 3 Flow 1 Document Indexing/Ingestion: **complete / merged through PR #9**
 - Member 2 Flow 3 Report & Statistics: **complete / merged through PR #12**
 - Member 4 Flow 2 RAG backend: **pending**
-- Member 5 Flow 2 chat/history/citation presentation + evaluation: **pending**
+- Member 5 Flow 2 MVC chat/history/citation presentation + evaluation: **pending**
 
-PR #9 completed the Member 2 -> Member 3 Flow 1 handoff. PR #12 completed Member 2's independent Flow 3 reporting assignment. The main unfinished product work is now Flow 2.
+PR #9 completed the Member 2 -> Member 3 Flow 1 handoff. PR #12 completed Member 2's independent Flow 3 reporting assignment. The main unfinished product work is now Flow 2, and its presentation model is fixed to ASP.NET Core MVC rather than Razor Pages.
 
 When status is unclear, latest merged code on `master` is the source of truth; synchronize docs afterward.
 
@@ -175,23 +176,58 @@ Owns Flow 2 backend:
 - user/assistant message persistence
 - ordered `MessageCitation` persistence
 
-Member 4 must not parse raw source files, chunk documents, generate document embeddings, mutate indexing state as part of normal Q&A, or recreate Flow 3 reporting.
+Member 4's backend must remain presentation-agnostic. It must not depend on MVC `Controller`, Razor Pages `PageModel`, `HttpContext`, or browser-specific DTOs.
 
-### Member 5 - Chat UI / Conversation Management / Evaluation - PENDING
+Member 4 must not parse raw source files, chunk documents, generate document embeddings, mutate indexing state as part of normal Q&A, recreate Flow 3 reporting, or place pgvector/Ollama logic directly in an MVC controller.
 
-Owns Flow 2 presentation and evaluation:
+### Member 5 - Flow 2 MVC Presentation / Conversation Management / Evaluation - PENDING
 
-- chat UI
-- chat-session creation/opening/navigation
-- Conversation History
+Flow 2 presentation is explicitly assigned to **ASP.NET Core MVC Controllers + Views**, not Razor Pages.
+
+Member 5 owns:
+
+- MVC chat controller/actions
+- MVC chat/session views
+- chat-session creation/opening/navigation presentation
+- Conversation History presentation
 - citation/source rendering
 - consumption of `IRagQueryService`
 - human-authored 50-question evaluation set
 - evaluation-facing tooling/tests
 
-Browser/UI code must not call Ollama or query pgvector directly.
+Expected presentation areas include:
+
+```text
+src/PRN222.RagAssistant/Controllers/
+src/PRN222.RagAssistant/Views/Chat/
+```
+
+Additional MVC view-support files such as `Views/_ViewImports.cshtml`, `Views/_ViewStart.cshtml`, or `Views/Shared/` may be added when needed.
+
+**Do not implement Flow 2 under `Pages/Chat`, `Pages/Conversation`, or other new Razor Page folders.** Existing Flow 1/Flow 3 Razor Pages remain unchanged.
+
+MVC controllers must stay thin: they handle HTTP/model binding/authorization/navigation and delegate grounded Q&A to `IRagQueryService`. Browser/controller code must not call Ollama or query pgvector directly.
 
 Member 5 must not count Conversation History as a separate workflow or duplicate the completed Reports page.
+
+## Presentation model rules
+
+The mixed ASP.NET Core host is intentional:
+
+- **Flow 1:** Razor Pages - already complete; do not migrate it merely for consistency.
+- **Flow 2:** **MVC Controllers + Views - mandatory for new implementation.**
+- **Flow 3:** Razor Pages - already complete; do not migrate it merely for consistency.
+- Authentication pages may remain Razor Pages.
+
+`Program.cs` already registers both `AddControllersWithViews()` and `AddRazorPages()` and maps both MVC controller routes and Razor Pages. Flow 2 therefore does not require replacing the existing host architecture.
+
+For Flow 2:
+
+- use MVC controllers/actions as the HTTP entry points;
+- render MVC views under `Views/`;
+- do not create a parallel Razor Pages implementation;
+- keep retrieval, embedding, generation, and persistence business logic behind application/service boundaries rather than inside controllers;
+- reuse shared styling/layout conventions where practical without rewriting completed Flow 1/Flow 3 pages.
 
 ## Shared-contract rules
 
@@ -222,10 +258,12 @@ Flow 3 completed without a reporting-specific shared contract. Do not add one un
 - `src/PRN222.RagAssistant/Security/`: role/policy constants
 - `src/PRN222.RagAssistant/Infrastructure/Parsing/`: merged document parsers/chunker
 - `src/PRN222.RagAssistant/Infrastructure/Services/`: queue, indexing, Ollama embedding services
-- `src/PRN222.RagAssistant/Pages/Account/`: auth UI
-- `src/PRN222.RagAssistant/Pages/Chapters/`: Chapter Management
-- `src/PRN222.RagAssistant/Pages/Documents/`: Document Management
-- `src/PRN222.RagAssistant/Pages/Reports/`: completed Flow 3 Reports/Statistics
+- `src/PRN222.RagAssistant/Pages/Account/`: auth Razor Pages
+- `src/PRN222.RagAssistant/Pages/Chapters/`: completed Flow 1 Chapter Management Razor Pages
+- `src/PRN222.RagAssistant/Pages/Documents/`: completed Flow 1 Document Management Razor Pages
+- `src/PRN222.RagAssistant/Pages/Reports/`: completed Flow 3 Reports/Statistics Razor Pages
+- `src/PRN222.RagAssistant/Controllers/`: reserved for pending Flow 2 MVC presentation
+- `src/PRN222.RagAssistant/Views/`: reserved for pending Flow 2 MVC presentation
 - `tests/PRN222.RagAssistant.Tests/`: unit/architecture/convention tests
 - `docs/`: project status/architecture/ownership/handoffs
 - `evaluation/`: version-controlled evaluation set
@@ -286,7 +324,7 @@ builder.HasOne<Subject>()
 - Policy names live in `Security/AppPolicies.cs`.
 - Document/Chapter writes require `AppPolicies.ManageDocuments` and `SubjectLeader`.
 - Flow 3 Reports also require `AppPolicies.ManageDocuments` and are read-only.
-- Hiding UI is not authorization; enforce server-side.
+- Flow 2 MVC actions must enforce authenticated-user/session ownership server-side; hiding links is not authorization.
 - Users must never self-select `SubjectLeader` through public registration.
 - Demo-user seeding is config-driven and disabled by default.
 - Never commit real credentials.
@@ -380,6 +418,7 @@ Do not run `docker compose down -v` or remove named volumes unless explicitly re
 - Use focused feature branches/PRs.
 - Do not have multiple members independently modify the same shared schema/contract without coordination.
 - Do not recreate already merged document-indexing or report-statistics implementations.
+- Do not create a Razor Pages implementation of Flow 2 in parallel with the required MVC implementation.
 - Never commit `.env`, credentials, keys, DB dumps, logs, uploaded documents, build output, downloaded Ollama models, or runtime data.
 - Keep source/tests/docs/migrations/config examples version-controlled.
 - `storage/uploads/` is runtime data except `.gitkeep`; temp/processed/chunks paths remain ignored.

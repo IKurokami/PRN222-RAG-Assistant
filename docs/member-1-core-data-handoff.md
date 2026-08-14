@@ -11,7 +11,7 @@ Latest merged milestone:
 - Member 3 Flow 1 indexing: complete through PR #9
 - Member 2 Flow 3 Report & Statistics: complete through PR #12
 - Member 4 Flow 2 backend: pending
-- Member 5 Flow 2 presentation/evaluation: pending
+- Member 5 Flow 2 **MVC presentation/evaluation**: pending
 
 For the canonical snapshot, read `docs/project-status.md`.
 
@@ -19,9 +19,9 @@ For the canonical snapshot, read `docs/project-status.md`.
 
 The shared model supports:
 
-1. **Flow 1 - Document Management & Indexing** - end-to-end complete
-2. **Flow 2 - RAG Question & Answer & Conversation Management** - pending Members 4/5
-3. **Flow 3 - Report & Statistics** - complete through PR #12
+1. **Flow 1 - Document Management & Indexing** - end-to-end complete with Razor Pages presentation
+2. **Flow 2 - RAG Question & Answer & Conversation Management** - pending Members 4/5 with **ASP.NET Core MVC Controllers + Views presentation**
+3. **Flow 3 - Report & Statistics** - complete through PR #12 with Razor Pages presentation
 
 Conversation History remains part of Flow 2.
 
@@ -51,6 +51,8 @@ Validated persistence covers:
 - message citations
 
 The existing persistence was sufficient for the completed Flow 3 dashboard. PR #12 aggregated existing rows and did not introduce a reporting entity or migration.
+
+The same persistence is intended to support Flow 2 regardless of presentation model; using MVC for Flow 2 does not itself justify a schema change.
 
 ## Core domain invariants
 
@@ -97,12 +99,14 @@ Provider-neutral chat-generation boundary owned for implementation by Member 4.
 
 `IRagQueryService`
 
-Presentation-facing grounded-question boundary to be implemented by Member 4 and consumed by Member 5.
+Presentation-facing grounded-question boundary to be implemented by Member 4 and consumed by Member 5 from the **MVC presentation layer**.
 
 Result models:
 
 - `RagAnswer`
 - `RagCitation`
+
+MVC controllers must not replace these boundaries with direct pgvector/Ollama calls.
 
 ### Reporting
 
@@ -176,18 +180,28 @@ Expected behavior:
 8. return `RagAnswer` / `RagCitation`;
 9. handle insufficient evidence explicitly.
 
-Member 4 should not request schema changes unless the current persistence genuinely cannot represent the requirement.
+Member 4 should remain presentation-agnostic and should not request schema changes unless the current persistence genuinely cannot represent the requirement.
 
-## Current handoff to Member 5
+## Current handoff to Member 5 - MVC presentation
 
-Member 5 owns Flow 2 presentation and evaluation:
+Member 5 owns **ASP.NET Core MVC** Flow 2 presentation and evaluation:
 
-- chat/session UI
+- MVC Controllers/actions for chat/session workflows
+- MVC Views for chat/session UI
 - Conversation History
 - citation rendering
 - evaluation set/tooling
 
+Expected presentation areas:
+
+```text
+src/PRN222.RagAssistant/Controllers/
+src/PRN222.RagAssistant/Views/Chat/
+```
+
 Presentation should consume `IRagQueryService` and not leak provider or pgvector details.
+
+Do not create a Razor Pages duplicate of Flow 2 under `Pages/Chat` or `Pages/Conversation`.
 
 ## Flow 3 maintenance boundary
 
@@ -224,4 +238,4 @@ docs/flow-3-report-statistics-handoff.md
 
 ## Validation note
 
-The original no-speculative-migration decision remains valid after Member 2 Flow 1, Member 3 indexing, and Member 2 Flow 3 merges. Continue using the existing migration chain and coordinate genuine model changes through Member 1.
+The original no-speculative-migration decision remains valid after Member 2 Flow 1, Member 3 indexing, and Member 2 Flow 3 merges. The Flow 2 MVC presentation choice does not by itself require any EF Core model change. Continue using the existing migration chain and coordinate genuine model changes through Member 1.
