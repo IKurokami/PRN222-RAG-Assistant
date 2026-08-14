@@ -2,30 +2,17 @@
 
 ## Current status
 
-Member 1's shared Core/Data baseline is **complete** and is now consumed by completed Flow 1, completed Flow 3, and pending Flow 2 work.
+Member 1's shared Core/Data baseline is **complete** and is consumed by completed Flow 1, completed Flow 3, and pending Flow 2 work.
 
-Latest merged milestone:
+Current workflow presentation allocation:
 
-- Member 1 Core/Data: complete
-- Member 2 Flow 1 request/presentation: complete
-- Member 3 Flow 1 indexing: complete through PR #9
-- Member 2 Flow 3 Report & Statistics: complete through PR #12
-- Member 4 Flow 2 backend: pending
-- Member 5 Flow 2 **MVC presentation/evaluation**: pending
+1. **Flow 1 - Document Management & Indexing** - complete - **MVC Controllers + Views**
+2. **Flow 2 - RAG Question & Answer & Conversation Management** - pending - **MVC Controllers + Views**
+3. **Flow 3 - Report & Statistics** - complete - Razor Pages
+
+The Flow 1 Razor Pages -> MVC conversion is presentation-only and does not alter the Core/Data model.
 
 For the canonical snapshot, read `docs/project-status.md`.
-
-## Relationship to the three workflows
-
-The shared model supports:
-
-1. **Flow 1 - Document Management & Indexing** - end-to-end complete with Razor Pages presentation
-2. **Flow 2 - RAG Question & Answer & Conversation Management** - pending Members 4/5 with **ASP.NET Core MVC Controllers + Views presentation**
-3. **Flow 3 - Report & Statistics** - complete through PR #12 with Razor Pages presentation
-
-Conversation History remains part of Flow 2.
-
-Member 1 continues to own schema/migration coordination across all workflows but should not absorb later members' business logic.
 
 ## Scope completed by Member 1
 
@@ -46,17 +33,13 @@ Validated persistence covers:
 
 - PRN222 subject and runtime-managed chapters
 - document metadata/storage/indexing state
-- document chunks with page/slide metadata and embeddings
+- document chunks with source metadata and embeddings
 - chat sessions/messages
 - message citations
 
-The existing persistence was sufficient for the completed Flow 3 dashboard. PR #12 aggregated existing rows and did not introduce a reporting entity or migration.
-
-The same persistence is intended to support Flow 2 regardless of presentation model; using MVC for Flow 2 does not itself justify a schema change.
+Flow 1 MVC and Flow 3 reporting both use this existing persistence without adding presentation-specific schema.
 
 ## Core domain invariants
-
-Important rules remain:
 
 - entities use scalar foreign keys and no navigation properties
 - EF mapping belongs in dedicated `IEntityTypeConfiguration<TEntity>` classes
@@ -65,8 +48,10 @@ Important rules remain:
 - `(SubjectId, Number)` is unique for chapters
 - `Document.ChapterId` is nullable
 - removing a chapter must not cascade-delete documents
-- timestamps are persisted as UTC
-- domain enums are persisted according to established configuration conventions
+- timestamps are UTC
+- persisted enum conventions remain consistent
+
+The Flow 1 MVC migration preserves all of these rules.
 
 ## Shared contracts
 
@@ -74,7 +59,7 @@ Important rules remain:
 
 `IDocumentIndexingQueue`
 
-Member 2 persists the document first, then enqueues only the persisted `Document.Id`.
+`DocumentsController` persists the document first and then enqueues only the persisted `Document.Id`.
 
 ### Indexing pipeline
 
@@ -84,48 +69,47 @@ Member 3 provides the merged indexing implementation.
 
 `ITextEmbeddingService`
 
-The provider-neutral embedding boundary supports:
-
-- single-text embedding for retrieval
-- ordered batch embedding for indexing
-
-The same configured embedding model must be used for indexing and retrieval.
+Supports single-text embedding for retrieval and ordered batch embedding for indexing. Indexing and retrieval must use the same configured embedding model.
 
 ### RAG backend
 
 `IChatCompletionService`
 
-Provider-neutral chat-generation boundary owned for implementation by Member 4.
+Provider-neutral generation boundary owned for implementation by Member 4.
 
 `IRagQueryService`
 
-Presentation-facing grounded-question boundary to be implemented by Member 4 and consumed by Member 5 from the **MVC presentation layer**.
+Presentation-facing grounded Q&A boundary to be implemented by Member 4 and consumed by Member 5 from MVC.
 
 Result models:
 
 - `RagAnswer`
 - `RagCitation`
 
-MVC controllers must not replace these boundaries with direct pgvector/Ollama calls.
+MVC controllers must not replace these service boundaries with direct provider/pgvector calls.
 
 ### Reporting
 
-Flow 3 completed without a new shared reporting contract. The merged page uses focused read-only EF Core aggregate queries over existing persistence.
+Flow 3 remains read-only Razor Pages and does not require a reporting-specific shared contract or schema.
 
-Do not add a reporting-specific abstraction/schema unless a concrete new requirement justifies it.
+## Flow 1 validates the baseline
 
-## Flow 1 completion validates the baseline
+### Request/presentation side
 
-### Member 2 merged behavior
+Current implementation:
 
-- runtime Chapter CRUD
-- document upload/list/details/edit/delete/re-index request
-- authorization/validation
-- configured source storage
-- `Uploaded` metadata persistence
-- queue handoff
+```text
+Controllers/DocumentsController.cs
+Controllers/ChaptersController.cs
+Models/Documents/
+Models/Chapters/
+Views/Documents/
+Views/Chapters/
+```
 
-### Member 3 merged behavior
+Behavior includes runtime Chapter CRUD, document management, authorization/validation, source storage, `Uploaded` persistence, and queue handoff.
+
+### Indexing side
 
 PR #9 completed:
 
@@ -135,93 +119,53 @@ PR #9 completed:
 - `DocumentIndexingWorker`
 - `DocumentIndexingService`
 - `DocumentChunk` replacement/persistence
-- index-state transitions
-- startup rehydration of `Uploaded`/`Processing` documents
-
-Implemented state flow:
+- indexing state transitions
+- startup recovery
 
 ```text
 Uploaded -> Processing -> Indexed
                      \-> Failed
 ```
 
-No new domain entity or migration was required for this indexing implementation, confirming that the original persistence baseline was sufficient.
+No schema change was required for either the indexing implementation or the later MVC presentation migration.
 
-## Flow 3 completion validates the baseline
+## Flow 3 validates the baseline
 
-PR #12 completed the Subject-Leader-only Reports/Statistics page using existing tables:
+Flow 3 aggregates existing `Chapter`, `Document`, `DocumentChunk`, `ChatSession`, `ChatMessage`, and `MessageCitation` rows. It does not introduce analytics tables, denormalized counters, or a reporting migration.
 
-- `Chapter`
-- `Document`
-- `DocumentChunk`
-- `ChatSession`
-- `ChatMessage`
-- `MessageCitation`
+## Handoff to Member 4
 
-Implemented aggregates include chapter/document totals, chapter grouping/unassigned counts, index-state counts, chunk totals, recent indexed/failed documents, and chat usage totals.
+Member 4 should build retrieval on the existing model and indexed chunks:
 
-No analytics entity, denormalized counter, warehouse, scheduled aggregation, or migration was required.
-
-This confirms the original Core/Data model also supports the initial Flow 3 requirement as designed.
-
-## Current handoff to Member 4
-
-Member 4 should build RAG retrieval on the existing model and completed indexing output.
-
-Expected behavior:
-
-1. validate `chatSessionId` ownership for `userId`;
+1. validate session ownership;
 2. persist the user message;
-3. embed the question with `ITextEmbeddingService.EmbedAsync`;
-4. retrieve successfully indexed PRN222 chunks with pgvector;
+3. embed the question;
+4. retrieve indexed PRN222 chunks with pgvector;
 5. construct grounded context;
 6. call `IChatCompletionService`;
-7. persist the assistant message and ordered `MessageCitation` rows;
+7. persist assistant message/citations;
 8. return `RagAnswer` / `RagCitation`;
 9. handle insufficient evidence explicitly.
 
-Member 4 should remain presentation-agnostic and should not request schema changes unless the current persistence genuinely cannot represent the requirement.
+Member 4 remains presentation-agnostic.
 
-## Current handoff to Member 5 - MVC presentation
+## Handoff to Member 5
 
-Member 5 owns **ASP.NET Core MVC** Flow 2 presentation and evaluation:
+Member 5 owns Flow 2 MVC presentation/evaluation:
 
-- MVC Controllers/actions for chat/session workflows
-- MVC Views for chat/session UI
+- `ChatController` or equivalent focused MVC actions
+- `Views/Chat/`
 - Conversation History
-- citation rendering
+- citations
 - evaluation set/tooling
 
-Expected presentation areas:
+Flow 1 already occupies `DocumentsController`, `ChaptersController`, `Views/Documents`, and `Views/Chapters`; do not mix Flow 2 responsibilities into those controllers.
 
-```text
-src/PRN222.RagAssistant/Controllers/
-src/PRN222.RagAssistant/Views/Chat/
-```
-
-Presentation should consume `IRagQueryService` and not leak provider or pgvector details.
-
-Do not create a Razor Pages duplicate of Flow 2 under `Pages/Chat` or `Pages/Conversation`.
-
-## Flow 3 maintenance boundary
-
-Member 2's current Flow 3 assignment is complete.
-
-Future report changes must remain read-only and must not:
-
-- mutate workflow data
-- enqueue indexing work
-- perform RAG retrieval
-- call Ollama
-- create speculative analytics persistence
-
-If a genuine persistence gap appears later, document it and coordinate the change with Member 1.
+Do not create a Razor Pages duplicate of Flow 2.
 
 ## Core tests
 
-`CoreDataArchitectureTests` and `EntityModelConventionsTests` remain regression protection for the shared baseline.
-
-Later workflow tests must not weaken these invariants.
+`CoreDataArchitectureTests` and `EntityModelConventionsTests` remain regression protection for the shared baseline. Flow 1 presentation tests now target MVC controllers/models but must not weaken Core/Data invariants.
 
 ## Files to read before continuing
 
@@ -231,11 +175,10 @@ src/PRN222.RagAssistant/Application/AGENTS.md
 docs/project-status.md
 docs/team-workflow.md
 docs/infrastructure.md
+docs/flow-1-mvc-migration.md
 docs/member-2-document-management-handoff.md
 docs/member-3-document-indexing-handoff.md
 docs/flow-3-report-statistics-handoff.md
 ```
 
-## Validation note
-
-The original no-speculative-migration decision remains valid after Member 2 Flow 1, Member 3 indexing, and Member 2 Flow 3 merges. The Flow 2 MVC presentation choice does not by itself require any EF Core model change. Continue using the existing migration chain and coordinate genuine model changes through Member 1.
+The no-speculative-migration decision remains valid. A presentation-layer MVC conversion is not a reason to generate an EF Core migration.
