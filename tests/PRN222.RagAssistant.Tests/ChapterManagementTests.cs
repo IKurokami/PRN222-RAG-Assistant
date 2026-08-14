@@ -122,7 +122,7 @@ public sealed class ChapterManagementTests
             new() { Id = Guid.NewGuid(), SubjectId = SeedData.Prn222SubjectId, Number = 3, Title = "Chương 3" }
         };
 
-        Assert.True(chapters.Any(c => c.SubjectId == SeedData.Prn222SubjectId && c.Number == 3));
+        Assert.Contains(chapters, c => c.SubjectId == SeedData.Prn222SubjectId && c.Number == 3);
     }
 
     [Fact]
@@ -133,7 +133,7 @@ public sealed class ChapterManagementTests
             new() { Id = Guid.NewGuid(), SubjectId = Guid.NewGuid(), Number = 3, Title = "Chương 3 khác môn" }
         };
 
-        Assert.False(chapters.Any(c => c.SubjectId == SeedData.Prn222SubjectId && c.Number == 3));
+        Assert.DoesNotContain(chapters, c => c.SubjectId == SeedData.Prn222SubjectId && c.Number == 3);
     }
 
     [Fact]
@@ -147,8 +147,8 @@ public sealed class ChapterManagementTests
             new() { Id = chapter2Id, SubjectId = SeedData.Prn222SubjectId, Number = 5, Title = "Chương 5" }
         };
 
-        Assert.False(chapters.Any(c => c.SubjectId == SeedData.Prn222SubjectId && c.Number == 4 && c.Id != chapter1Id));
-        Assert.True(chapters.Any(c => c.SubjectId == SeedData.Prn222SubjectId && c.Number == 5 && c.Id != chapter1Id));
+        Assert.DoesNotContain(chapters, c => c.SubjectId == SeedData.Prn222SubjectId && c.Number == 4 && c.Id != chapter1Id);
+        Assert.Contains(chapters, c => c.SubjectId == SeedData.Prn222SubjectId && c.Number == 5 && c.Id != chapter1Id);
     }
 
     [Fact]
@@ -160,7 +160,7 @@ public sealed class ChapterManagementTests
             new() { Id = foreignChapterId, SubjectId = Guid.NewGuid(), Number = 1, Title = "Chương khác môn" }
         };
 
-        Assert.False(chapters.Any(c => c.Id == foreignChapterId && c.SubjectId == SeedData.Prn222SubjectId));
+        Assert.DoesNotContain(chapters, c => c.Id == foreignChapterId && c.SubjectId == SeedData.Prn222SubjectId);
     }
 
     [Fact]
@@ -172,7 +172,7 @@ public sealed class ChapterManagementTests
             new() { Id = validChapterId, SubjectId = SeedData.Prn222SubjectId, Number = 6, Title = "Chương PRN222" }
         };
 
-        Assert.True(chapters.Any(c => c.Id == validChapterId && c.SubjectId == SeedData.Prn222SubjectId));
+        Assert.Contains(chapters, c => c.Id == validChapterId && c.SubjectId == SeedData.Prn222SubjectId);
     }
 
     [Fact]
@@ -181,7 +181,7 @@ public sealed class ChapterManagementTests
         var nonexistentId = Guid.NewGuid();
         var chapters = new List<Chapter>();
 
-        Assert.False(chapters.Any(c => c.Id == nonexistentId && c.SubjectId == SeedData.Prn222SubjectId));
+        Assert.DoesNotContain(chapters, c => c.Id == nonexistentId && c.SubjectId == SeedData.Prn222SubjectId);
     }
 
     private static List<ValidationResult> ValidateModel(object model)
