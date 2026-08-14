@@ -1,6 +1,9 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Metadata;
 using PRN222.RagAssistant.Data;
 using PRN222.RagAssistant.Domain.Entities;
 using PRN222.RagAssistant.Security;
@@ -124,6 +127,10 @@ public sealed class SubjectAccessServiceTests
     {
         var options = new DbContextOptionsBuilder<ApplicationDbContext>()
             .UseInMemoryDatabase($"subject-access-{Guid.NewGuid():N}")
+            // The production model contains Pgvector.Vector, while these tests only touch
+            // Subjects and Identity claims. The InMemory provider cannot validate that
+            // provider-specific CLR type, so replace validation in this test-only context.
+            .ReplaceService<IModelValidator, InMemoryPgvectorModelValidator>()
             .Options;
 
         return new ApplicationDbContext(options);
@@ -149,5 +156,17 @@ public sealed class SubjectAccessServiceTests
                 new Claim(ClaimTypes.Role, role)
             ],
             authenticationType: "TestAuth"));
+    }
+
+    private sealed class InMemoryPgvectorModelValidator : IModelValidator
+    {
+        public void Validate(
+            IModel model,
+            IDiagnosticsLogger<DbLoggerCategory.Model.Validation> logger)
+        {
+            // Intentionally empty for the narrow InMemory authorization test harness.
+            // Production/Npgsql model validation remains covered by the normal build,
+            // pending-model check, migrations, and PostgreSQL CI validation.
+        }
     }
 }
