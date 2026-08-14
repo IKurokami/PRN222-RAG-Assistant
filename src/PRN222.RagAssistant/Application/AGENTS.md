@@ -58,7 +58,7 @@ See:
 
 ## Flow 2 MVC boundary
 
-Flow 2 is the workflow selected for the MVC requirement.
+Flow 2 is the workflow selected by the team for the MVC requirement.
 
 Expected presentation path:
 
