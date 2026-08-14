@@ -9,7 +9,7 @@ Member 2 owns two separate responsibilities and **both are now complete/merged**
 
 Member 3's PR #9 completed the downstream indexing side of Flow 1, so the Member 2 -> Member 3 handoff is fulfilled and Flow 1 is end-to-end implemented.
 
-PR #12 completed Member 2's independent Flow 3 reporting assignment. Conversation History remains part of Flow 2 and belongs to Member 5 on the presentation side.
+PR #12 completed Member 2's independent Flow 3 reporting assignment. Conversation History remains part of Flow 2 and belongs to Member 5 on the presentation side. The remaining Flow 2 presentation has now been fixed to **ASP.NET Core MVC Controllers + Views**, not Razor Pages.
 
 For the canonical whole-project snapshot, see `docs/project-status.md`.
 
@@ -181,17 +181,27 @@ If a genuine persistence gap is found, document it and coordinate schema/migrati
 
 With Member 2's assigned work complete, the remaining product implementation is Flow 2.
 
-Member 4 builds RAG retrieval on successfully indexed chunks and the merged `ITextEmbeddingService`.
+Member 4 builds presentation-agnostic RAG retrieval on successfully indexed chunks and the merged `ITextEmbeddingService`.
 
-Member 5 owns Flow 2 presentation:
+Member 5 owns **ASP.NET Core MVC** Flow 2 presentation:
 
-- chat UI
-- session creation/opening/navigation
+- MVC controller/actions for chat/session workflows
+- MVC Views for chat/session UI
+- session creation/opening/navigation presentation
 - Conversation History
 - citation rendering
 - evaluation deliverable
 
-Neither Member 4 nor Member 5 should put provider/retrieval logic into Member 2 pages, and Flow 2 should not recreate Flow 3 reporting pages.
+Expected presentation areas:
+
+```text
+src/PRN222.RagAssistant/Controllers/
+src/PRN222.RagAssistant/Views/Chat/
+```
+
+Do not create `Pages/Chat`, `Pages/Conversation`, or another Razor Pages implementation for Flow 2.
+
+Neither Member 4 nor Member 5 should put provider/retrieval logic into Member 2 pages, and Flow 2 should not recreate Flow 3 reporting pages. MVC controllers should consume `IRagQueryService` rather than call Ollama/pgvector directly.
 
 ## Validation
 
