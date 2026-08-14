@@ -76,7 +76,7 @@ Do not split indexing/reporting/RAG into extra services without a concrete requi
 
 ### Flow 2 MVC presentation boundary
 
-Flow 2 is the selected MVC workflow.
+Flow 2 is the workflow selected by the team for the MVC requirement.
 
 Expected presentation locations:
 
