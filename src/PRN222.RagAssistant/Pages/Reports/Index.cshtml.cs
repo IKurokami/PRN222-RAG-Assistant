@@ -80,6 +80,7 @@ public sealed class IndexModel : PageModel
 
         DocumentsByChapter = chapters.Select(c => new ChapterDocumentCountViewModel
         {
+            Id = c.Id,
             Number = c.Number,
             Title = c.Title,
             DocumentCount = countMap.TryGetValue(c.Id, out var cnt) ? cnt : 0
@@ -169,6 +170,7 @@ public sealed class IndexModel : PageModel
 
     public sealed class ChapterDocumentCountViewModel
     {
+        public Guid Id { get; set; }
         public int Number { get; set; }
         public string Title { get; set; } = string.Empty;
         public int DocumentCount { get; set; }

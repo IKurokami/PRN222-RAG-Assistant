@@ -1,91 +1,122 @@
 @model ChapterIndexViewModel
 @{
-    ViewData["Title"] = "Quản lý Chương - PRN222";
+    ViewData["Title"] = "Quản Lý Chương Học - PRN222";
 }
 
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <div>
-        <h2 class="mb-1">Danh sách Chương - PRN222</h2>
-        <p class="text-muted mb-0">Các chương môn học dùng để phân loại tài liệu.</p>
+<div class="container py-4">
+    <!-- Breadcrumb -->
+    <div class="academic-breadcrumb">
+        <a asp-page="/Index"><i class="bi bi-house-door"></i> Trang chủ</a>
+        <span class="academic-breadcrumb-separator">/</span>
+        <span class="text-slate-800 fw-semibold">Quản lý chương học</span>
     </div>
-    @if (Model.CanManageDocuments)
-    {
-        <a asp-controller="Chapters" asp-action="Create" class="btn btn-primary">
-            <i class="bi bi-plus-circle"></i> Thêm chương mới
-        </a>
-    }
-</div>
 
-@if (!string.IsNullOrEmpty(Model.StatusMessage))
-{
-    <div class="alert alert-success alert-dismissible fade show" role="alert">
-        @Model.StatusMessage
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-    </div>
-}
-
-@if (Model.Chapters.Count == 0)
-{
-    <div class="text-center py-5 border rounded bg-light">
-        <h5 class="text-muted">Chưa có chương nào</h5>
-        <p class="text-muted">Các chương môn học sẽ hiển thị tại đây.</p>
+    <!-- Header Section -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+        <div>
+            <h1 class="fw-bold fs-3 text-slate-900 mb-1">
+                <i class="bi bi-list-nested text-primary me-2"></i>Lộ Trình &amp; Quản Lý Chương Học PRN222
+            </h1>
+            <p class="text-slate-500 mb-0">Khung chương trình môn học đồng bộ theo Syllabus FLM.</p>
+        </div>
         @if (Model.CanManageDocuments)
         {
-            <a asp-controller="Chapters" asp-action="Create" class="btn btn-primary mt-2">Thêm chương đầu tiên</a>
+            <a asp-controller="Chapters" asp-action="Create" class="btn-academic-accent text-decoration-none">
+                <i class="bi bi-plus-circle-fill"></i> Thêm chương mới
+            </a>
         }
     </div>
-}
-else
-{
-    <div class="table-responsive shadow-sm rounded">
-        <table class="table table-hover align-middle mb-0 bg-white border">
-            <thead class="table-light">
-                <tr>
-                    <th scope="col" style="width:80px">Số TT</th>
-                    <th scope="col">Tên chương</th>
-                    <th scope="col" style="width:140px" class="text-center">Số tài liệu</th>
-                    @if (Model.CanManageDocuments)
-                    {
-                        <th scope="col" class="text-end" style="width:160px">Thao tác</th>
-                    }
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var chapter in Model.Chapters)
-                {
-                    <tr>
-                        <td class="fw-bold text-center">@chapter.Number</td>
-                        <td>@chapter.Title</td>
-                        <td class="text-center">
-                            <a asp-controller="Documents" asp-action="Index" asp-route-selectedChapterId="@chapter.Id"
-                               class="badge bg-info text-dark text-decoration-none">
-                                @chapter.DocumentCount tài liệu
-                            </a>
-                        </td>
-                        @if (Model.CanManageDocuments)
-                        {
-                            <td class="text-end pe-3">
-                                <div class="d-flex gap-2 justify-content-end">
-                                    <a asp-controller="Chapters" asp-action="Edit" asp-route-id="@chapter.Id"
-                                       class="btn btn-sm px-3 fw-medium"
-                                       style="background:#e8f4fd;color:#0d6efd;border:none;border-radius:8px;">
-                                        Sửa
-                                    </a>
-                                    <a asp-controller="Chapters" asp-action="Delete" asp-route-id="@chapter.Id"
-                                       class="btn btn-sm px-3 fw-medium"
-                                       style="background:#fde8e8;color:#dc3545;border:none;border-radius:8px;">
-                                        Xóa
-                                    </a>
-                                </div>
-                            </td>
-                        }
-                    </tr>
-                }
-            </tbody>
-        </table>
-    </div>
-}
 
-<div class="mt-3">
-    <a asp-controller="Documents" asp-action="Index" class="btn btn-outline-secondary btn-sm">← Quay lại danh sách tài liệu</a>
+    @if (!string.IsNullOrEmpty(Model.StatusMessage))
+    {
+        <div class="alert alert-success d-flex align-items-center gap-2 alert-dismissible fade show shadow-xs mb-4" role="alert">
+            <i class="bi bi-check-circle-fill text-success fs-5"></i>
+            <div>@Model.StatusMessage</div>
+            <button type="button" class="btn-close ms-auto" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    }
+
+    @if (Model.Chapters.Count == 0)
+    {
+        <div class="academic-card text-center py-5">
+            <div class="text-slate-400 mb-3">
+                <i class="bi bi-journal-plus" style="font-size: 3rem;"></i>
+            </div>
+            <h5 class="fw-bold text-slate-700">Chưa có chương học nào được tạo</h5>
+            <p class="text-slate-500 small max-w-md mx-auto mb-3">
+                Hãy tạo các chương học đầu tiên theo đề cương PRN222 để phân loại tài liệu bài giảng.
+            </p>
+            @if (Model.CanManageDocuments)
+            {
+                <a asp-controller="Chapters" asp-action="Create" class="btn-academic-primary text-decoration-none">
+                    <i class="bi bi-plus-lg"></i> Thêm chương đầu tiên
+                </a>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="academic-card p-0 overflow-hidden">
+            <div class="table-responsive">
+                <table class="table table-academic align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th scope="col" style="width: 110px;" class="text-center">Số thứ tự</th>
+                            <th scope="col" style="min-width: 320px;">Tên tiêu đề chương học</th>
+                            <th scope="col" style="width: 180px;" class="text-center">Tài liệu liên kết</th>
+                            @if (Model.CanManageDocuments)
+                            {
+                                <th scope="col" class="text-end pe-4" style="width: 200px;">Thao tác</th>
+                            }
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var chapter in Model.Chapters)
+                        {
+                            <tr>
+                                <td class="text-center">
+                                    <span class="badge bg-primary text-white fs-6 px-2.5 py-1 font-monospace">
+                                        @chapter.Number
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="fw-bold text-slate-900 fs-6">@chapter.Title</span>
+                                </td>
+                                <td class="text-center">
+                                    <a asp-controller="Documents" asp-action="Index" asp-route-selectedChapterId="@chapter.Id"
+                                       class="badge bg-light text-primary border border-primary-subtle text-decoration-none px-2.5 py-1.5 fw-semibold"
+                                       title="Xem tài liệu thuộc chương này">
+                                        <i class="bi bi-files me-1"></i>@chapter.DocumentCount tài liệu
+                                    </a>
+                                </td>
+                                @if (Model.CanManageDocuments)
+                                {
+                                    <td class="text-end pe-4">
+                                        <div class="d-flex gap-2 justify-content-end align-items-center">
+                                            <a asp-controller="Chapters" asp-action="Edit" asp-route-id="@chapter.Id"
+                                               class="btn btn-sm btn-academic-outline"
+                                               title="Sửa chương">
+                                                <i class="bi bi-pencil"></i> Sửa
+                                            </a>
+                                            <a asp-controller="Chapters" asp-action="Delete" asp-route-id="@chapter.Id"
+                                               class="btn btn-sm btn-outline-danger d-inline-flex align-items-center gap-1"
+                                               title="Xóa chương">
+                                                <i class="bi bi-trash"></i> Xóa
+                                            </a>
+                                        </div>
+                                    </td>
+                                }
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+
+    <div class="mt-4">
+        <a asp-controller="Documents" asp-action="Index" class="btn btn-sm btn-academic-outline">
+            <i class="bi bi-arrow-left"></i> Quay lại kho tài liệu
+        </a>
+    </div>
 </div>

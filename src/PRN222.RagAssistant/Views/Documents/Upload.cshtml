@@ -1,49 +1,104 @@
 @model DocumentUploadViewModel
 @{
-    ViewData["Title"] = "Tải lên tài liệu môn PRN222";
+    ViewData["Title"] = "Tải Lên Tài Liệu - PRN222";
 }
 
-<div class="row justify-content-center">
-    <div class="col-md-8">
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <h2>Tải lên tài liệu môn PRN222</h2>
-            <a asp-controller="Documents" asp-action="Index" class="btn btn-outline-secondary">Quay lại danh sách</a>
-        </div>
+<div class="container py-4">
+    <!-- Breadcrumb -->
+    <div class="academic-breadcrumb">
+        <a asp-page="/Index"><i class="bi bi-house-door"></i> Trang chủ</a>
+        <span class="academic-breadcrumb-separator">/</span>
+        <a asp-controller="Documents" asp-action="Index">Kho tài liệu giáo trình</a>
+        <span class="academic-breadcrumb-separator">/</span>
+        <span class="text-slate-800 fw-semibold">Tải lên tài liệu</span>
+    </div>
 
-        <div class="card shadow-sm">
-            <div class="card-body">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <h1 class="fw-bold fs-3 text-slate-900 mb-1">
+                        <i class="bi bi-cloud-arrow-up text-primary me-2"></i>Tải Lên Tài Liệu Môn PRN222
+                    </h1>
+                    <p class="text-slate-500 mb-0">Hệ thống sẽ tự động trích xuất nội dung văn bản và tạo vector embeddings.</p>
+                </div>
+                <a asp-controller="Documents" asp-action="Index" class="btn btn-sm btn-academic-outline">
+                    <i class="bi bi-arrow-left"></i> Quay lại
+                </a>
+            </div>
+
+            <div class="academic-card shadow-sm">
                 <form method="post" asp-controller="Documents" asp-action="Upload" enctype="multipart/form-data">
-                    <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+                    <div asp-validation-summary="ModelOnly" class="alert alert-danger d-flex align-items-center gap-2 mb-4" role="alert"></div>
 
-                    <div class="mb-3">
-                        <label asp-for="Input.Title" class="form-label fw-bold"></label>
-                        <input asp-for="Input.Title" class="form-control" placeholder="Nhập tiêu đề mô tả cho tài liệu..." />
-                        <span asp-validation-for="Input.Title" class="text-danger"></span>
+                    <!-- Title -->
+                    <div class="mb-4">
+                        <label asp-for="Input.Title" class="form-label fw-bold text-slate-800">
+                            Tiêu đề tài liệu <span class="text-danger">*</span>
+                        </label>
+                        <input asp-for="Input.Title" class="form-control" placeholder="Ví dụ: Giáo trình Chương 1: Nền tảng .NET 10 &amp; CLR Internals" />
+                        <div class="form-text text-slate-500">Đặt tên tiêu đề rõ ràng theo nội dung bài giảng để sinh viên dễ dàng tra cứu.</div>
+                        <span asp-validation-for="Input.Title" class="text-danger small mt-1 d-block"></span>
                     </div>
 
-                    <div class="mb-3">
-                        <label asp-for="Input.ChapterId" class="form-label fw-bold"></label>
+                    <!-- Chapter Selector -->
+                    <div class="mb-4">
+                        <label asp-for="Input.ChapterId" class="form-label fw-bold text-slate-800">
+                            Chương học tương ứng
+                        </label>
                         <div class="input-group">
                             <select asp-for="Input.ChapterId" asp-items="Model.ChapterOptions" class="form-select">
-                                <option value="">-- Chọn chương môn học (Không bắt buộc) --</option>
+                                <option value="">-- Tài liệu chung / Không thuộc chương cụ thể --</option>
                             </select>
-                            <a asp-controller="Chapters" asp-action="Create" class="btn btn-outline-secondary" title="Tạo chương mới">
-                                + Tạo chương mới
+                            <a asp-controller="Chapters" asp-action="Create" class="btn btn-academic-outline" title="Tạo chương mới">
+                                <i class="bi bi-plus-lg"></i> Thêm chương
                             </a>
                         </div>
-                        <span asp-validation-for="Input.ChapterId" class="text-danger"></span>
+                        <div class="form-text text-slate-500">Gán tài liệu vào chương học theo Syllabus FLM môn PRN222.</div>
+                        <span asp-validation-for="Input.ChapterId" class="text-danger small mt-1 d-block"></span>
                     </div>
 
+                    <!-- File Dropzone -->
                     <div class="mb-4">
-                        <label asp-for="Input.File" class="form-label fw-bold"></label>
-                        <input asp-for="Input.File" type="file" class="form-control" accept=".pdf,.docx,.pptx" />
-                        <div class="form-text">Định dạng chấp nhận: PDF, DOCX, PPTX (Dung lượng tối đa: 50MB).</div>
-                        <span asp-validation-for="Input.File" class="text-danger"></span>
+                        <label asp-for="Input.File" class="form-label fw-bold text-slate-800">
+                            Tệp tài liệu đính kèm <span class="text-danger">*</span>
+                        </label>
+                        
+                        <div class="academic-dropzone" onclick="document.getElementById('Input_File').click();">
+                            <div class="academic-dropzone-icon">
+                                <i class="bi bi-file-earmark-arrow-up"></i>
+                            </div>
+                            <h5 class="fw-bold text-slate-800 mb-1">Nhấp để chọn tệp hoặc kéo thả tệp vào đây</h5>
+                            <p class="text-slate-500 small mb-3">Hỗ trợ các định dạng bài giảng: <strong>.PDF, .DOCX, .PPTX</strong> (Tối đa 50MB)</p>
+                            
+                            <div class="d-flex justify-content-center gap-2 mb-2">
+                                <span class="file-badge-icon file-badge-pdf">PDF</span>
+                                <span class="file-badge-icon file-badge-docx">DOCX</span>
+                                <span class="file-badge-icon file-badge-pptx">PPTX</span>
+                            </div>
+                            
+                            <div id="fileSelectedName" class="text-primary fw-bold small mt-2 d-none">
+                                <i class="bi bi-check-circle-fill"></i> <span id="fileNameText"></span> (<span id="fileSizeText"></span>)
+                            </div>
+                        </div>
+
+                        <input asp-for="Input.File" type="file" class="d-none" accept=".pdf,.docx,.pptx"
+                               onchange="handleFileSelect(this);" />
+                        <span asp-validation-for="Input.File" class="text-danger small mt-1 d-block"></span>
                     </div>
 
-                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
-                        <a asp-controller="Documents" asp-action="Index" class="btn btn-light me-md-2">Hủy bỏ</a>
-                        <button type="submit" class="btn btn-primary px-4">Tải lên & Tự động Index</button>
+                    <div class="alert alert-info d-flex align-items-center gap-2 small mb-4" role="alert">
+                        <i class="bi bi-info-circle-fill text-info fs-5 flex-shrink-0"></i>
+                        <div>
+                            Tài liệu sau khi tải lên sẽ được đưa vào hàng đợi xử lý ngầm (Background Worker). Hệ thống sẽ tự động tách nội dung và sinh vector qua mô hình <strong>qwen3-embedding:0.6b</strong>.
+                        </div>
+                    </div>
+
+                    <div class="d-flex justify-content-end gap-2">
+                        <a asp-controller="Documents" asp-action="Index" class="btn btn-academic-outline">Hủy bỏ</a>
+                        <button type="submit" class="btn-academic-accent px-4">
+                            <i class="bi bi-cloud-arrow-up"></i> Tải lên &amp; Tự động Index
+                        </button>
                     </div>
                 </form>
             </div>
@@ -53,4 +108,15 @@
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
+    <script>
+        function handleFileSelect(input) {
+            if (input.files && input.files[0]) {
+                const file = input.files[0];
+                const sizeMb = (file.size / (1024 * 1024)).toFixed(2);
+                document.getElementById('fileNameText').innerText = file.name;
+                document.getElementById('fileSizeText').innerText = sizeMb + ' MB';
+                document.getElementById('fileSelectedName').classList.remove('d-none');
+            }
+        }
+    </script>
 }

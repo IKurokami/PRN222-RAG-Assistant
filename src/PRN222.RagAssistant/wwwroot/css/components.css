@@ -1,0 +1,951 @@
+/* PRN222 RAG Assistant - Humata Inspired High-End Components */
+
+/* ==========================================================================
+   1. Translucent Top Navigation (Navbar)
+   ========================================================================== */
+.navbar-humata {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 50;
+    padding: 1.25rem 0;
+    background: rgba(26, 21, 18, 0.4);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.navbar-humata-solid {
+    position: relative;
+    z-index: 50;
+    padding: 1rem 0;
+    background: #1a1512;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.brand-humata {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.625rem;
+    font-family: var(--font-heading);
+    font-weight: 700;
+    font-size: 1.1875rem;
+    color: #ffffff !important;
+    text-decoration: none;
+    letter-spacing: -0.01em;
+}
+
+.brand-icon-humata {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    border-radius: var(--radius-sm);
+    background: rgba(255, 255, 255, 0.15);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    color: #ffffff;
+    font-size: 1rem;
+}
+
+.nav-link-humata {
+    font-family: var(--font-body);
+    font-weight: 500;
+    font-size: 0.9375rem;
+    color: rgba(255, 255, 255, 0.8) !important;
+    padding: 0.5rem 0.875rem !important;
+    transition: color var(--transition-fast);
+    text-decoration: none;
+}
+
+.nav-link-humata:hover {
+    color: #ffffff !important;
+}
+
+.btn-humata-login {
+    color: #ffffff !important;
+    font-weight: 600;
+    font-size: 0.875rem;
+    padding: 0.5rem 1.125rem;
+    border-radius: var(--radius-full);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    background: rgba(255, 255, 255, 0.08);
+    transition: all var(--transition-fast);
+    text-decoration: none;
+}
+
+.btn-humata-login:hover {
+    background: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.5);
+    color: #ffffff !important;
+}
+
+.btn-humata-signup {
+    color: #ffffff !important;
+    font-weight: 600;
+    font-size: 0.875rem;
+    padding: 0.5rem 1.25rem;
+    border-radius: var(--radius-full);
+    background-color: var(--color-btn-dark);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+    transition: all var(--transition-fast);
+    text-decoration: none;
+}
+
+.btn-humata-signup:hover {
+    background-color: var(--color-btn-dark-hover);
+    color: #ffffff !important;
+    transform: translateY(-1px);
+}
+
+/* ==========================================================================
+   2. Hero Section with Video Background & Typewriter Effect
+   ========================================================================== */
+.hero-humata-video-container {
+    position: relative;
+    width: 100%;
+    min-height: 80vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    background-color: #1a1512;
+}
+
+.hero-video-element {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    min-width: 100%;
+    min-height: 100%;
+    width: auto;
+    height: auto;
+    transform: translate(-50%, -50%);
+    object-fit: cover;
+    z-index: 1;
+    filter: brightness(0.75) contrast(1.1);
+}
+
+.hero-video-overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+        180deg,
+        rgba(11, 15, 23, 0.5) 0%,
+        rgba(11, 15, 23, 0.2) 50%,
+        rgba(11, 15, 23, 0.8) 100%
+    );
+    z-index: 2;
+}
+
+.hero-humata-content {
+    position: relative;
+    z-index: 10;
+    text-align: center;
+    padding: 8rem 1.5rem 6rem 1.5rem;
+    max-width: 900px;
+    margin: 0 auto;
+}
+
+.hero-humata-subtitle {
+    font-family: var(--font-body);
+    font-size: 1.125rem;
+    font-weight: 500;
+    color: #e6ded3;
+    margin-bottom: 1.25rem;
+    letter-spacing: -0.01em;
+}
+
+.hero-humata-title {
+    font-family: var(--font-heading);
+    font-size: 3.5rem;
+    font-weight: 800;
+    color: #ffffff;
+    line-height: 1.15;
+    letter-spacing: -0.03em;
+    margin-bottom: 0;
+}
+
+@media (max-width: 768px) {
+    .hero-humata-title {
+        font-size: 2.25rem;
+    }
+}
+
+.typewriter-prefix {
+    color: #ffffff;
+}
+
+.typewriter-dynamic {
+    color: #f7e6d4;
+    position: relative;
+}
+
+.typewriter-cursor {
+    display: inline-block;
+    width: 3px;
+    height: 1em;
+    background-color: #ea580c;
+    margin-left: 4px;
+    vertical-align: middle;
+    animation: blink-caret 0.8s infinite;
+}
+
+@keyframes blink-caret {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+}
+
+/* Center Bottom Notch */
+.hero-notch-tab {
+    position: absolute;
+    bottom: -1px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 20;
+    background-color: var(--color-bg-warm);
+    padding: 0.625rem 1.5rem;
+    border-top-left-radius: var(--radius-lg);
+    border-top-right-radius: var(--radius-lg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-text-main);
+    box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.hero-notch-tab i {
+    font-size: 1.25rem;
+    color: var(--color-btn-dark);
+}
+
+/* ==========================================================================
+   3. Section 2: App Showcase & Carousel
+   ========================================================================== */
+.section-showcase {
+    background-color: var(--color-bg-warm);
+    padding: 4.5rem 0 5rem 0;
+}
+
+.pill-badge-humata {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.35rem 0.875rem;
+    background-color: var(--color-pill-bg);
+    border: 1px solid var(--color-pill-border);
+    color: var(--color-pill-text);
+    font-family: var(--font-heading);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    border-radius: var(--radius-full);
+    margin-bottom: 1.25rem;
+}
+
+.section-humata-title {
+    font-family: var(--font-heading);
+    font-weight: 800;
+    font-size: 2.5rem;
+    color: var(--color-text-main);
+    letter-spacing: -0.025em;
+    margin-bottom: 0.75rem;
+}
+
+.section-humata-subtitle {
+    font-size: 1.0625rem;
+    color: var(--color-text-muted);
+    margin-bottom: 2.5rem;
+}
+
+.link-humata-cta {
+    color: var(--color-text-main);
+    font-weight: 600;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    border-bottom: 1.5px solid var(--color-text-main);
+    padding-bottom: 1px;
+    transition: all var(--transition-fast);
+}
+
+.link-humata-cta:hover {
+    color: var(--color-btn-accent);
+    border-color: var(--color-btn-accent);
+}
+
+/* Showcase Window Frame */
+.showcase-window {
+    background: #ffffff;
+    border-radius: var(--radius-xl);
+    border: 1px solid var(--color-border-warm);
+    box-shadow: var(--shadow-hover);
+    overflow: hidden;
+    position: relative;
+    max-width: 1140px;
+    margin: 0 auto;
+}
+
+.showcase-slider-track {
+    display: flex;
+    transition: transform var(--transition-smooth);
+    width: 100%;
+}
+
+.showcase-slide {
+    min-width: 100%;
+    box-sizing: border-box;
+}
+
+.showcase-slide img {
+    width: 100%;
+    height: auto;
+    display: block;
+}
+
+.showcase-indicators {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 1.5rem;
+}
+
+.showcase-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: var(--radius-full);
+    background-color: var(--color-border-warm);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    border: none;
+    padding: 0;
+}
+
+.showcase-dot.active {
+    width: 24px;
+    background-color: var(--color-btn-dark);
+}
+
+/* ==========================================================================
+   4. Section 3: Pricing Cards (3 Tiers)
+   ========================================================================== */
+.section-pricing {
+    background-color: #ffffff;
+    padding: 5rem 0;
+    border-top: 1px solid var(--color-border-subtle);
+    border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.pricing-card {
+    background: #ffffff;
+    border: 1px solid var(--color-border-warm);
+    border-radius: var(--radius-lg);
+    padding: 2.25rem 1.75rem;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    transition: transform var(--transition-smooth), box-shadow var(--transition-smooth);
+}
+
+.pricing-card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-card);
+}
+
+.pricing-card-popular {
+    border: 2px solid var(--color-border-warm);
+    box-shadow: var(--shadow-soft);
+    position: relative;
+    background: #ffffff;
+    padding-top: 3.25rem;
+}
+
+.pricing-popular-banner {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    background-color: var(--color-bg-secondary);
+    color: var(--color-btn-dark);
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-align: center;
+    padding: 0.4rem 0;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border-top-left-radius: var(--radius-lg);
+    border-top-right-radius: var(--radius-lg);
+    border-bottom: 1px solid var(--color-border-warm);
+}
+
+.pricing-card-title {
+    font-family: var(--font-heading);
+    font-weight: 700;
+    font-size: 1.125rem;
+    color: var(--color-text-main);
+    text-align: center;
+    margin-bottom: 0.5rem;
+}
+
+.pricing-card-price {
+    font-family: var(--font-heading);
+    font-weight: 800;
+    font-size: 2.5rem;
+    color: var(--color-text-main);
+    text-align: center;
+    margin-bottom: 0.25rem;
+    line-height: 1;
+}
+
+.pricing-card-period {
+    text-align: center;
+    font-size: 0.8125rem;
+    color: var(--color-text-subtle);
+    margin-bottom: 1.75rem;
+}
+
+.pricing-features-list {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 2rem 0;
+    flex-grow: 1;
+}
+
+.pricing-features-list li {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.625rem;
+    font-size: 0.875rem;
+    color: var(--color-text-muted);
+    margin-bottom: 0.875rem;
+    line-height: 1.4;
+}
+
+.pricing-features-list li i {
+    color: #16a34a;
+    font-size: 1rem;
+    margin-top: 1px;
+    flex-shrink: 0;
+}
+
+.btn-pricing {
+    background-color: var(--color-btn-dark);
+    color: #ffffff;
+    font-family: var(--font-heading);
+    font-weight: 600;
+    font-size: 0.9375rem;
+    padding: 0.65rem 1.25rem;
+    border-radius: var(--radius-md);
+    text-align: center;
+    text-decoration: none;
+    border: none;
+    transition: background-color var(--transition-fast);
+    width: 100%;
+}
+
+.btn-pricing:hover {
+    background-color: var(--color-btn-dark-hover);
+    color: #ffffff;
+}
+
+/* ==========================================================================
+   5. Section 4: FAQ Accordion
+   ========================================================================== */
+.section-faq {
+    background-color: #ffffff;
+    padding: 5rem 0 4rem 0;
+}
+
+.faq-list {
+    max-width: 800px;
+    margin: 0 auto 3.5rem auto;
+}
+
+.faq-item {
+    border-bottom: 1px solid var(--color-border-warm);
+    padding: 1.25rem 0;
+}
+
+.faq-question {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    background: none;
+    border: none;
+    text-align: left;
+    font-family: var(--font-heading);
+    font-weight: 600;
+    font-size: 1.0625rem;
+    color: var(--color-text-main);
+    padding: 0;
+    cursor: pointer;
+}
+
+.faq-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    border-radius: var(--radius-full);
+    border: 1px solid var(--color-border-warm);
+    color: var(--color-text-subtle);
+    font-size: 1rem;
+    transition: transform var(--transition-fast), color var(--transition-fast);
+    flex-shrink: 0;
+    margin-left: 1rem;
+}
+
+.faq-item.active .faq-icon {
+    transform: rotate(45deg);
+    color: var(--color-btn-accent);
+}
+
+.faq-answer {
+    display: none;
+    padding-top: 0.875rem;
+    color: var(--color-text-muted);
+    font-size: 0.9375rem;
+    line-height: 1.6;
+}
+
+.faq-item.active .faq-answer {
+    display: block;
+}
+
+/* Support Box */
+.support-card {
+    background-color: var(--color-bg-warm);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--color-border-warm);
+    padding: 2.5rem 1.5rem;
+    text-align: center;
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+.support-avatars-img {
+    height: 48px;
+    width: auto;
+    margin-bottom: 1rem;
+}
+
+/* ==========================================================================
+   6. Section 5: Testimonials Carousel
+   ========================================================================== */
+.section-testimonials {
+    background-color: var(--color-bg-warm);
+    padding: 5rem 0;
+    border-top: 1px solid var(--color-border-warm);
+}
+
+.testimonial-quote {
+    font-family: var(--font-heading);
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--color-text-main);
+    line-height: 1.5;
+    letter-spacing: -0.015em;
+    max-width: 850px;
+    margin: 0 auto 2rem auto;
+}
+
+.testimonial-avatar {
+    width: 52px;
+    height: 52px;
+    border-radius: var(--radius-full);
+    object-fit: cover;
+    margin-bottom: 0.75rem;
+    border: 2px solid var(--color-border-warm);
+}
+
+.testimonial-name {
+    font-weight: 700;
+    font-size: 0.9375rem;
+    color: var(--color-text-main);
+    margin-bottom: 0.125rem;
+}
+
+.testimonial-role {
+    font-size: 0.8125rem;
+    color: var(--color-text-subtle);
+    margin-bottom: 0.625rem;
+}
+
+.testimonial-stars {
+    color: #f59e0b;
+    font-size: 0.875rem;
+    display: flex;
+    justify-content: center;
+    gap: 0.25rem;
+    margin-bottom: 1.5rem;
+}
+
+.testimonial-indicators {
+    display: flex;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+.testimonial-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: var(--radius-full);
+    background-color: var(--color-border-warm);
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.testimonial-dot.active {
+    width: 20px;
+    background-color: var(--color-btn-dark);
+}
+
+/* ==========================================================================
+   7. Section 6: Floating CTA Card (Overlapping between content & footer)
+   ========================================================================== */
+.floating-cta-section {
+    position: relative;
+    z-index: 25;
+    margin-bottom: -4.5rem;
+    padding: 0 1.5rem;
+}
+
+.floating-cta-card {
+    background-color: #ffffff;
+    border-radius: var(--radius-xl);
+    border: 1px solid var(--color-border-warm);
+    box-shadow: 0 20px 45px -10px rgba(0, 0, 0, 0.12);
+    padding: 3rem 3.5rem;
+    max-width: 1100px;
+    margin: 0 auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 2rem;
+}
+
+@media (max-width: 768px) {
+    .floating-cta-card {
+        flex-direction: column;
+        text-align: center;
+        padding: 2rem 1.5rem;
+    }
+}
+
+.floating-cta-title {
+    font-family: var(--font-heading);
+    font-weight: 800;
+    font-size: 2rem;
+    color: var(--color-text-main);
+    letter-spacing: -0.025em;
+    margin-bottom: 0.5rem;
+}
+
+.floating-cta-desc {
+    font-size: 0.9375rem;
+    color: var(--color-text-muted);
+    margin-bottom: 0;
+}
+
+.floating-cta-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.875rem;
+    flex-shrink: 0;
+}
+
+.btn-cta-outline {
+    font-family: var(--font-heading);
+    font-weight: 600;
+    font-size: 0.875rem;
+    padding: 0.625rem 1.25rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--color-border-warm);
+    background-color: #ffffff;
+    color: var(--color-text-main);
+    text-decoration: none;
+    transition: all var(--transition-fast);
+}
+
+.btn-cta-outline:hover {
+    background-color: var(--color-bg-secondary);
+    color: var(--color-text-main);
+    border-color: #cbd5e1;
+}
+
+.btn-cta-solid {
+    font-family: var(--font-heading);
+    font-weight: 600;
+    font-size: 0.875rem;
+    padding: 0.625rem 1.375rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--color-btn-dark);
+    background-color: var(--color-btn-dark);
+    color: #ffffff;
+    text-decoration: none;
+    transition: all var(--transition-fast);
+}
+
+.btn-cta-solid:hover {
+    background-color: var(--color-btn-dark-hover);
+    color: #ffffff;
+    transform: translateY(-1px);
+}
+
+/* ==========================================================================
+   8. Deep Obsidian Footer (Humata Style)
+   ========================================================================== */
+.footer-humata-deep {
+    background-color: #0b0f17;
+    padding-top: 7.5rem;
+    padding-bottom: 3.5rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    text-align: center;
+}
+
+.footer-brand-logo {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.625rem;
+    font-family: var(--font-heading);
+    font-weight: 700;
+    font-size: 1.25rem;
+    color: #ffffff;
+    text-decoration: none;
+    margin-bottom: 1.5rem;
+}
+
+.footer-nav-links {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1.75rem;
+    margin-bottom: 2rem;
+    list-style: none;
+    padding: 0;
+}
+
+.footer-nav-links a {
+    color: rgba(255, 255, 255, 0.65);
+    font-size: 0.875rem;
+    font-weight: 500;
+    text-decoration: none;
+    transition: color var(--transition-fast);
+}
+
+.footer-nav-links a:hover {
+    color: #ffffff;
+}
+
+.footer-socials {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 1.25rem;
+    margin-bottom: 2.5rem;
+}
+
+.footer-socials a {
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 1.125rem;
+    transition: color var(--transition-fast);
+    text-decoration: none;
+}
+
+.footer-socials a:hover {
+    color: #ffffff;
+}
+
+.footer-copyright {
+    color: rgba(255, 255, 255, 0.35);
+    font-size: 0.8125rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    padding-top: 2rem;
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+/* ==========================================================================
+   9. Standalone Auth Layout (Login & Sign Up - Humata 50/50 Split Screen)
+   ========================================================================== */
+.auth-split-wrapper {
+    min-height: 100vh;
+    min-height: 100dvh;
+    display: flex;
+    width: 100%;
+}
+
+.auth-split-left {
+    flex: 1;
+    background-color: var(--color-bg-warm);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 3rem 4rem;
+    position: relative;
+    border-right: 1px solid var(--color-border-subtle);
+}
+
+@media (max-width: 992px) {
+    .auth-split-left {
+        display: none;
+    }
+}
+
+.auth-brand-logo {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.625rem;
+    font-family: var(--font-heading);
+    font-weight: 700;
+    font-size: 1.25rem;
+    color: var(--color-text-main);
+    text-decoration: none;
+}
+
+.auth-testimonial-content {
+    max-width: 520px;
+    margin: auto;
+    text-align: center;
+}
+
+.auth-testimonial-quote {
+    font-family: var(--font-heading);
+    font-weight: 600;
+    font-size: 1.375rem;
+    color: var(--color-text-main);
+    line-height: 1.55;
+    letter-spacing: -0.015em;
+    margin-bottom: 2rem;
+    transition: opacity var(--transition-fast);
+}
+
+.auth-split-right {
+    flex: 1;
+    background-color: #ffffff;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 3rem 2rem;
+    min-height: 100vh;
+}
+
+.auth-form-container {
+    width: 100%;
+    max-width: 380px;
+}
+
+.auth-form-title {
+    font-family: var(--font-heading);
+    font-weight: 800;
+    font-size: 2rem;
+    color: var(--color-text-main);
+    letter-spacing: -0.025em;
+    margin-bottom: 0.375rem;
+}
+
+.auth-form-subtitle {
+    font-size: 0.9375rem;
+    color: var(--color-text-muted);
+    margin-bottom: 1.75rem;
+}
+
+.btn-social-google {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    width: 100%;
+    padding: 0.625rem 1rem;
+    border: 1px solid var(--color-border-warm);
+    border-radius: var(--radius-sm);
+    background-color: #ffffff;
+    font-family: var(--font-heading);
+    font-weight: 600;
+    font-size: 0.875rem;
+    color: var(--color-text-main);
+    text-decoration: none;
+    transition: all var(--transition-fast);
+}
+
+.btn-social-google:hover {
+    background-color: var(--color-bg-secondary);
+    border-color: #cbd5e1;
+    color: var(--color-text-main);
+}
+
+.auth-divider {
+    display: flex;
+    align-items: center;
+    margin: 1.5rem 0;
+    color: var(--color-text-subtle);
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+    content: "";
+    flex: 1;
+    border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.auth-divider span {
+    padding: 0 0.875rem;
+}
+
+.auth-input-label {
+    font-family: var(--font-heading);
+    font-weight: 600;
+    font-size: 0.8125rem;
+    color: var(--color-text-main);
+    margin-bottom: 0.375rem;
+    display: block;
+}
+
+.auth-input-control {
+    width: 100%;
+    padding: 0.625rem 0.875rem;
+    font-size: 0.875rem;
+    border: 1px solid var(--color-border-warm);
+    border-radius: var(--radius-sm);
+    background-color: #ffffff;
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.auth-input-control:focus {
+    border-color: var(--color-btn-dark);
+    box-shadow: 0 0 0 3px rgba(70, 51, 39, 0.12);
+    outline: none;
+}
+
+.btn-auth-submit {
+    width: 100%;
+    padding: 0.7rem 1.25rem;
+    background-color: var(--color-btn-dark);
+    color: #ffffff;
+    font-family: var(--font-heading);
+    font-weight: 600;
+    font-size: 0.9375rem;
+    border: none;
+    border-radius: var(--radius-sm);
+    transition: background-color var(--transition-fast), transform var(--transition-fast);
+    cursor: pointer;
+}
+
+.btn-auth-submit:hover {
+    background-color: var(--color-btn-dark-hover);
+    color: #ffffff;
+    transform: translateY(-1px);
+}

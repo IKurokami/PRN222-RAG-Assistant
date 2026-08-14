@@ -1,10 +1,292 @@
-﻿@page
+@page
 @model IndexModel
 @{
-    ViewData["Title"] = "Home page";
+    ViewData["Title"] = "PRN222 RAG Assistant - Nền Tảng Học Tập AI Thông Minh";
 }
 
-<div class="text-center">
-    <h1 class="display-4">Welcome</h1>
-    <p>Learn about <a href="https://learn.microsoft.com/aspnet/core">building Web apps with ASP.NET Core</a>.</p>
-</div>
+<!-- 1. Hero Section with Looping Ambient Video & Typewriter Effect -->
+<section class="hero-humata-video-container">
+    <video class="hero-video-element" autoplay muted loop playsinline poster="/images/hero-laptop-typing.jpg">
+        <source src="/videos/hero-typing.webm" type="video/webm" />
+        <source src="/videos/hero-document-ambient.mp4" type="video/mp4" />
+    </video>
+    <div class="hero-video-overlay"></div>
+
+    <div class="hero-humata-content">
+        <p class="hero-humata-subtitle">
+            Trí tuệ nhân tạo kết hợp cùng kho tri thức học tập
+        </p>
+        <h1 class="hero-humata-title">
+            <span class="typewriter-prefix">Hỏi đáp về </span>
+            <span id="typewriterDynamic" class="typewriter-dynamic">tài liệu PDF</span>
+            <span class="typewriter-cursor"></span>
+        </h1>
+    </div>
+
+    <!-- Center Bottom Notch -->
+    <div class="hero-notch-tab">
+        <i class="bi bi-mortarboard-fill"></i>
+    </div>
+</section>
+
+<!-- 2. Section: Ask questions across all of your files (App Showcase) -->
+<section class="section-showcase text-center">
+    <div class="container">
+        <div class="d-flex justify-content-center">
+            <div class="pill-badge-humata">
+                <i class="bi bi-patch-check-fill text-success"></i>
+                PRN222 RAG Assistant • Nền tảng học tập thông minh ĐH FPT
+            </div>
+        </div>
+
+        <h2 class="section-humata-title">
+            Hỏi đáp trên toàn bộ tài liệu học tập của bạn
+        </h2>
+        <p class="section-humata-subtitle">
+            Nhận câu trả lời tin cậy có trích dẫn nguồn gốc. Để AI hỗ trợ quá trình nghiên cứu của bạn. 
+            <a asp-controller="Documents" asp-action="Index" class="link-humata-cta ms-1">
+                Trải nghiệm miễn phí <i class="bi bi-arrow-right"></i>
+            </a>
+        </p>
+
+        <!-- Showcase Browser Frame Carousel -->
+        <div class="showcase-window">
+            <div id="showcaseSliderTrack" class="showcase-slider-track">
+                <!-- Slide 1: CLR & Memory Management -->
+                <div class="showcase-slide">
+                    <img src="~/images/showcase/showcase-slide-1.png" alt="Giao diện hỏi đáp giáo trình C# 12 & .NET 10" />
+                </div>
+                <!-- Slide 2: Async/Await & TPL -->
+                <div class="showcase-slide">
+                    <img src="~/images/showcase/showcase-slide-2.png" alt="Giao diện tra cứu lập trình bất đồng bộ Task & ValueTask" />
+                </div>
+                <!-- Slide 3: pgvector & Semantic Search -->
+                <div class="showcase-slide">
+                    <img src="~/images/showcase/showcase-slide-3.png" alt="Giao diện tìm kiếm vector embeddings với pgvector" />
+                </div>
+            </div>
+        </div>
+
+        <!-- Carousel Indicators -->
+        <div class="showcase-indicators">
+            <button type="button" class="showcase-dot active" aria-label="Slide 1"></button>
+            <button type="button" class="showcase-dot" aria-label="Slide 2"></button>
+            <button type="button" class="showcase-dot" aria-label="Slide 3"></button>
+        </div>
+    </div>
+</section>
+
+<!-- 3. Section: Pricing & Tiers -->
+<section id="pricing" class="section-pricing">
+    <div class="container">
+        <div class="text-center max-w-2xl mx-auto mb-5">
+            <div class="text-uppercase small fw-bold text-slate-500 mb-1" style="letter-spacing: 0.05em;">Bảng Gói Học Tập</div>
+            <h2 class="section-humata-title mb-2">Bắt đầu miễn phí. Dễ dàng mở rộng.</h2>
+            <p class="section-humata-subtitle mb-0">
+                Lựa chọn gói linh hoạt đồng hành cùng quá trình học tập và nghiên cứu của bạn. 
+                <a href="#faq" class="link-humata-cta ms-1">Tìm hiểu thêm <i class="bi bi-arrow-right"></i></a>
+            </p>
+        </div>
+
+        <div class="row g-4 justify-content-center">
+            <!-- Card 1: Free (Sinh Viên) -->
+            <div class="col-lg-4 col-md-6">
+                <div class="pricing-card">
+                    <div class="pricing-card-title">Sinh Viên Cơ Bản</div>
+                    <div class="pricing-card-price">0đ</div>
+                    <div class="pricing-card-period">miễn phí trọn đời</div>
+
+                    <ul class="pricing-features-list">
+                        <li><i class="bi bi-check2"></i> Truy cập tính năng hỏi đáp RAG cơ bản</li>
+                        <li><i class="bi bi-check2"></i> Tải lên tối đa 60 trang tài liệu</li>
+                        <li><i class="bi bi-check2"></i> 10 lượt hỏi đáp AI đối soát mỗi ngày</li>
+                        <li><i class="bi bi-check2"></i> Tra cứu toàn bộ đề cương Syllabus FLM</li>
+                    </ul>
+
+                    <a asp-page="/Account/Login" class="btn-pricing">Bắt đầu ngay</a>
+                </div>
+            </div>
+
+            <!-- Card 2: Expert (Chuyên Sâu - Most Popular) -->
+            <div class="col-lg-4 col-md-6">
+                <div class="pricing-card pricing-card-popular">
+                    <div class="pricing-popular-banner">Gói được ưa chuộng nhất</div>
+                    <div class="pricing-card-title">Chuyên Sâu (Nghiên Cứu)</div>
+                    <div class="pricing-card-price">99.000đ</div>
+                    <div class="pricing-card-period">mỗi tháng / người dùng</div>
+
+                    <ul class="pricing-features-list">
+                        <li><i class="bi bi-check2"></i> Toàn bộ tính năng gói Cơ Bản</li>
+                        <li><i class="bi bi-check2"></i> Tải lên tới 500 trang tài liệu</li>
+                        <li><i class="bi bi-check2"></i> 0.05đ cho mỗi trang bổ sung</li>
+                        <li><i class="bi bi-check2"></i> 2 tài khoản học tập đồng thời</li>
+                        <li><i class="bi bi-check2"></i> Hỗ trợ giải đáp ưu tiên 24/7</li>
+                    </ul>
+
+                    <a asp-page="/Account/Login" class="btn-pricing">Bắt đầu ngay</a>
+                </div>
+            </div>
+
+            <!-- Card 3: Team (Nhóm / Giảng Viên) -->
+            <div class="col-lg-4 col-md-6">
+                <div class="pricing-card">
+                    <div class="pricing-card-title">Nhóm &amp; Giảng Viên</div>
+                    <div class="pricing-card-price">299.000đ</div>
+                    <div class="pricing-card-period">mỗi tháng / nhóm</div>
+
+                    <ul class="pricing-features-list">
+                        <li><i class="bi bi-check2"></i> Truy cập không giới hạn tính năng</li>
+                        <li><i class="bi bi-check2"></i> Lên đến 5.000 trang tài liệu</li>
+                        <li><i class="bi bi-check2"></i> 0.01đ cho mỗi trang bổ sung</li>
+                        <li><i class="bi bi-check2"></i> 10 tài khoản nhóm nghiên cứu</li>
+                        <li><i class="bi bi-check2"></i> Phân quyền chi tiết theo cấp bậc và vai trò</li>
+                        <li><i class="bi bi-check2"></i> OCR hình ảnh &amp; tài liệu scan nâng cao</li>
+                        <li><i class="bi bi-check2"></i> Cá nhân hóa câu trả lời AI theo giáo trình</li>
+                    </ul>
+
+                    <a asp-page="/Account/Login" class="btn-pricing">Bắt đầu ngay</a>
+                </div>
+            </div>
+        </div>
+
+        <div class="text-center mt-4 text-slate-600 small">
+            Cần mở rộng quy mô cho toàn bộ khoa hoặc trường? Hãy trao đổi với ban quản trị môn học. 
+            <a href="#faq" class="link-humata-cta ms-1">Trao đổi với chúng tôi <i class="bi bi-arrow-right"></i></a>
+        </div>
+    </div>
+</section>
+
+<!-- 4. Section: Frequently Asked Questions (FAQ) -->
+<section id="faq" class="section-faq">
+    <div class="container">
+        <div class="text-center max-w-2xl mx-auto mb-5">
+            <h2 class="section-humata-title mb-2">Các câu hỏi thường gặp</h2>
+            <p class="section-humata-subtitle mb-0">Giải đáp nhanh các thắc mắc phổ biến nhất về hệ thống PRN222 RAG.</p>
+        </div>
+
+        <div class="faq-list">
+            <!-- FAQ 1 -->
+            <div class="faq-item active">
+                <button type="button" class="faq-question">
+                    <span>Lợi ích khi sử dụng Trợ lý PRN222 RAG so với ChatGPT thông thường là gì?</span>
+                    <span class="faq-icon"><i class="bi bi-plus"></i></span>
+                </button>
+                <div class="faq-answer">
+                    Khác với ChatGPT thông thường dễ bị ảo giác (hallucination), hệ thống PRN222 RAG Assistant thực hiện đối soát ngữ nghĩa trực tiếp từ kho giáo trình, slide và đề cương FLM của Đại học FPT. Mỗi câu trả lời đều đính kèm trích dẫn số trang chính xác và đoạn văn bản gốc trong tài liệu để sinh viên tự tin ôn thi.
+                </div>
+            </div>
+
+            <!-- FAQ 2 -->
+            <div class="faq-item">
+                <button type="button" class="faq-question">
+                    <span>Sinh viên Đại học FPT có được sử dụng hệ thống miễn phí không?</span>
+                    <span class="faq-icon"><i class="bi bi-plus"></i></span>
+                </button>
+                <div class="faq-answer">
+                    Có! Toàn bộ sinh viên đang theo học môn PRN222 đều được cấp quyền truy cập miễn phí với đầy đủ tính năng tra cứu giáo trình, xem các chương học và hỏi đáp bài tập với trợ lý AI.
+                </div>
+            </div>
+
+            <!-- FAQ 3 -->
+            <div class="faq-item">
+                <button type="button" class="faq-question">
+                    <span>Hệ thống hỗ trợ những định dạng tài liệu bài giảng nào?</span>
+                    <span class="faq-icon"><i class="bi bi-plus"></i></span>
+                </button>
+                <div class="faq-answer">
+                    Hệ thống hỗ trợ toàn diện các định dạng giáo trình chuẩn: tệp tài liệu PDF (qua engine PdfPig), văn bản Word DOCX và slide thuyết trình PowerPoint PPTX (qua engine OpenXml). Dung lượng mỗi tệp lên tới 50MB.
+                </div>
+            </div>
+
+            <!-- FAQ 4 -->
+            <div class="faq-item">
+                <button type="button" class="faq-question">
+                    <span>Chính sách bảo mật dữ liệu tài liệu môn học như thế nào?</span>
+                    <span class="faq-icon"><i class="bi bi-plus"></i></span>
+                </button>
+                <div class="faq-answer">
+                    Toàn bộ tài liệu giáo trình và vector embeddings được lưu trữ cục bộ trong hệ thống cơ sở dữ liệu PostgreSQL của Đại học FPT. Mô hình ngôn ngữ lớn (Ollama) hoạt động nội bộ trên máy chủ riêng biệt, tuyệt đối không gửi dữ liệu ra các dịch vụ AI bên ngoài.
+                </div>
+            </div>
+
+            <!-- FAQ 5 -->
+            <div class="faq-item">
+                <button type="button" class="faq-question">
+                    <span>Tôi có thể chỉnh sửa hoặc phân bổ lại chương học sau khi tải lên không?</span>
+                    <span class="faq-icon"><i class="bi bi-plus"></i></span>
+                </button>
+                <div class="faq-answer">
+                    Trưởng môn (Subject Leader) có toàn quyền chỉnh sửa tiêu đề tài liệu, thay đổi chương học liên kết, kích hoạt Re-index để tạo lại vector embeddings hoặc xóa bỏ tài liệu bất cứ lúc nào.
+                </div>
+            </div>
+
+            <!-- FAQ 6 -->
+            <div class="faq-item">
+                <button type="button" class="faq-question">
+                    <span>Cơ chế tính toán và lưu trữ Vector Embeddings hoạt động ra sao?</span>
+                    <span class="faq-icon"><i class="bi bi-plus"></i></span>
+                </button>
+                <div class="faq-answer">
+                    Khi tài liệu được tải lên, Background Worker sẽ trích xuất văn bản, chia thành các đoạn nhỏ (chunks) và gửi qua mô hình nhúng qwen3-embedding:0.6b để sinh vector 1024 chiều. Các vector này được đánh chỉ mục trong PostgreSQL qua extension pgvector để hỗ trợ tìm kiếm Cosine Similarity dưới 15ms.
+                </div>
+            </div>
+        </div>
+
+        <!-- Support Callout Card -->
+        <div class="support-card">
+            <img src="~/images/avatars/support-group.png" alt="Đội ngũ hỗ trợ" class="support-avatars-img" />
+            <h3 class="fw-bold fs-5 text-slate-900 mb-1">Bạn vẫn còn thắc mắc?</h3>
+            <p class="text-slate-600 small mb-3">Không tìm thấy câu trả lời bạn cần? Hãy trao đổi với đội ngũ trợ giảng của chúng tôi.</p>
+            <a href="mailto:support@prn222.fpt.edu.vn" class="btn-pricing d-inline-block px-4" style="width: auto;">
+                Liên hệ hỗ trợ
+            </a>
+        </div>
+    </div>
+</section>
+
+<!-- 5. Section: Testimonials Carousel -->
+<section class="section-testimonials text-center">
+    <div class="container">
+        <blockquote id="testiQuote" class="testimonial-quote">
+            “Giao diện thân thiện giúp mọi sinh viên đều dễ dàng tiếp cận, đưa các thông tin quan trọng từ giáo trình đến tay bạn ngay khi từng giây phút đều quý giá trong kỳ thi.”
+        </blockquote>
+
+        <div class="d-flex flex-column align-items-center">
+            <img id="testiAvatar" src="~/images/avatars/avatar-1.png" alt="Avatar" class="testimonial-avatar" />
+            <div id="testiName" class="testimonial-name">Trần Minh Hoàng</div>
+            <div id="testiRole" class="testimonial-role">Sinh viên K18 Ngành Kỹ thuật Phần mềm — ĐH FPT</div>
+            
+            <div class="testimonial-stars">
+                <i class="bi bi-star-fill"></i>
+                <i class="bi bi-star-fill"></i>
+                <i class="bi bi-star-fill"></i>
+                <i class="bi bi-star-fill"></i>
+                <i class="bi bi-star-fill"></i>
+            </div>
+
+            <div class="testimonial-indicators">
+                <button type="button" class="testimonial-dot active" aria-label="Đánh giá 1"></button>
+                <button type="button" class="testimonial-dot" aria-label="Đánh giá 2"></button>
+                <button type="button" class="testimonial-dot" aria-label="Đánh giá 3"></button>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- 6. Section: Floating Call-to-Action Card -->
+<section class="floating-cta-section">
+    <div class="container">
+        <div class="floating-cta-card">
+            <div>
+                <h3 class="floating-cta-title">Bắt đầu trải nghiệm miễn phí</h3>
+                <p class="floating-cta-desc">
+                    Không cần thẻ tín dụng. Trải nghiệm ngay trợ lý AI hỏi đáp tài liệu môn học miễn phí.
+                </p>
+            </div>
+            <div class="floating-cta-actions">
+                <a href="#pricing" class="btn-cta-outline">Xem bảng giá</a>
+                <a asp-page="/Account/Login" class="btn-cta-solid">Bắt đầu ngay</a>
+            </div>
+        </div>
+    </div>
+</section>

@@ -2,8 +2,29 @@
 @using Microsoft.AspNetCore.Authorization
 @attribute [AllowAnonymous]
 @{
-    ViewData["Title"] = "Access denied";
+    ViewData["Title"] = "Từ Chối Truy Cập - PRN222";
 }
 
-<h1 class="h3 text-danger">Access denied</h1>
-<p>You do not have permission to access this resource.</p>
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6 text-center">
+            <div class="academic-card shadow-sm py-5">
+                <div class="mb-3 text-danger">
+                    <i class="bi bi-shield-lock-fill" style="font-size: 3.5rem;"></i>
+                </div>
+                <h1 class="fw-bold fs-3 text-slate-900 mb-2">Truy Cập Bị Từ Chối (403 Forbidden)</h1>
+                <p class="text-slate-600 mb-4 px-3">
+                    Bạn không có thẩm quyền thực hiện thao tác này. Tính năng quản lý chương học và tải lên tài liệu chỉ dành riêng cho tài khoản <strong>Trưởng môn (Subject Leader)</strong>.
+                </p>
+                <div class="d-flex justify-content-center gap-2">
+                    <a asp-page="/Index" class="btn btn-academic-primary">
+                        <i class="bi bi-house-door"></i> Về trang chủ
+                    </a>
+                    <a asp-controller="Documents" asp-action="Index" class="btn btn-academic-outline">
+                        <i class="bi bi-journal-bookmark"></i> Xem kho tài liệu
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
