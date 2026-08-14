@@ -6,13 +6,13 @@ The project defines:
 
 1. **Flow 1 - Document Management & Indexing** - complete
 2. **Flow 2 - RAG Question & Answer & Conversation Management** - pending
-3. **Flow 3 - Report & Statistics** - pending
+3. **Flow 3 - Report & Statistics** - complete through PR #12
 
-Conversation History belongs to Flow 2. Flow 3 is a separate read-only reporting workflow and should not reshape shared contracts unnecessarily.
+Conversation History belongs to Flow 2. Flow 3 is a separate read-only reporting workflow and completed without requiring a reporting-specific shared contract.
 
 ## Current integration status
 
-Member 1 established the shared contracts. Member 2 consumes `IDocumentIndexingQueue` from the merged document upload/re-index flow. Member 3 has now completed and merged the indexing implementation through PR #9.
+Member 1 established the shared contracts. Member 2 consumes `IDocumentIndexingQueue` from the merged document upload/re-index flow. Member 3 completed and merged the indexing implementation through PR #9. Member 2 then completed Flow 3 reporting through PR #12.
 
 The active Flow 1 handoff is:
 
@@ -34,7 +34,7 @@ IDocumentIndexingService.IndexAsync(documentId)
 
 `InMemoryDocumentIndexingQueue` is an in-process transport consumed by the worker. It is not a durable broker. The worker recovers persisted `Uploaded`/`Processing` documents at startup by re-enqueueing them.
 
-Member 4 is now the next main consumer of the completed indexing boundary. Member 2 may implement Flow 3 in parallel using read-only aggregate queries.
+Member 4 is now the next main consumer of the completed indexing boundary. Member 5 will consume Member 4's `IRagQueryService` implementation from presentation code. Flow 3 is already merged and should be treated as a read-only downstream consumer of existing persistence.
 
 See:
 
@@ -87,7 +87,7 @@ Presentation-facing boundary for asking a grounded question in an existing chat 
 
 Presentation-safe result models for Flow 2.
 
-There is intentionally no reporting-specific shared contract yet. Initial Flow 3 aggregates should use focused read-only EF Core queries unless a concrete reusable application-layer need justifies an abstraction.
+There is intentionally no reporting-specific shared contract. Flow 3 completed using focused read-only EF Core aggregate queries over existing persistence.
 
 ## Ownership expectations
 
@@ -118,6 +118,30 @@ Merged PR #9 provides:
 
 Member 3's output for downstream consumers is persisted successfully indexed `DocumentChunk` rows plus document index state.
 
+### Flow 3 Report & Statistics - Member 2 - COMPLETE
+
+PR #12 merged the read-only reporting workflow.
+
+It aggregates:
+
+- chapters
+- documents/indexing status
+- document/chapter grouping
+- chunks
+- recent indexed/failed document state
+- chat sessions/messages/citations
+
+Flow 3 must remain read-only and must not:
+
+- enqueue or process indexing work
+- mutate index status
+- perform similarity retrieval
+- call Ollama
+- mutate chat/session/message/citation data
+- duplicate Member 5 conversation pages
+- create speculative analytics schema
+- force shared-contract changes
+
 ### Flow 2 RAG backend - Member 4 - PENDING
 
 Member 4 should use the existing boundaries to:
@@ -131,7 +155,7 @@ Member 4 should use the existing boundaries to:
 - persist messages/citations
 - provide explicit no-evidence/out-of-scope behavior
 
-Do not parse raw source files or create a second embedding/indexing path.
+Do not parse raw source files, create a second embedding/indexing path, or recreate the reporting workflow.
 
 ### Flow 2 presentation - Member 5 - PENDING
 
@@ -143,29 +167,6 @@ Member 5 depends on `IRagQueryService` and owns:
 - evaluation-facing presentation/tooling
 
 Do not expose provider or pgvector details directly to browser/UI code.
-
-### Flow 3 Report & Statistics - Member 2 - PENDING
-
-The initial reporting workflow is read-only and may aggregate:
-
-- chapters
-- documents/indexing status
-- document/chapter grouping
-- chunks where useful
-- chat sessions/messages/citations
-
-Because Member 3 is complete, document/indexing aggregates can use real merged data immediately.
-
-Flow 3 must not:
-
-- enqueue or process indexing work
-- mutate index status
-- perform similarity retrieval
-- call Ollama
-- mutate chat/session/message/citation data
-- duplicate Member 5 conversation pages
-- create speculative analytics schema
-- force shared-contract changes
 
 ## Contract changes
 
