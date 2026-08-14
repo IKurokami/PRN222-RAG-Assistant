@@ -13,6 +13,8 @@ Merged baseline reviewed:
 
 This handoff records the completed Flow 1 indexing boundary for Member 4, Member 5, and the already-completed Flow 3 reporting workflow.
 
+The remaining Flow 2 presentation is assigned to **ASP.NET Core MVC Controllers + Views**; this does not change Member 3's indexing boundary.
+
 ## Completed scope
 
 Member 3 implemented:
@@ -130,7 +132,7 @@ Member 4 should:
 8. return `RagAnswer` / `RagCitation` to the presentation layer;
 9. provide explicit no-evidence/out-of-scope behavior when retrieval is insufficient.
 
-Member 4 must not:
+Member 4 must remain presentation-agnostic and must not:
 
 - parse raw uploaded files
 - reimplement chunking
@@ -138,12 +140,22 @@ Member 4 must not:
 - bypass the existing `ITextEmbeddingService`
 - mutate indexing state as part of normal question answering
 - duplicate the completed Flow 3 reporting workflow
+- put pgvector/Ollama logic directly in an MVC controller
 
-## Handoff to Member 5
+## Handoff to Member 5 - Flow 2 MVC presentation
 
-Member 5 should consume `IRagQueryService` from presentation code. Member 5 does not need to know parser/chunker/Ollama embedding payload details.
+Member 5 should consume `IRagQueryService` from **ASP.NET Core MVC Controllers + Views**.
+
+Expected presentation areas:
+
+```text
+src/PRN222.RagAssistant/Controllers/
+src/PRN222.RagAssistant/Views/Chat/
+```
 
 Conversation History and citation rendering remain part of Flow 2 presentation.
+
+Member 5 does not need to know parser/chunker/Ollama embedding payload details, must not query pgvector directly from controllers/views, and must not create a parallel Razor Pages implementation under `Pages/Chat` or `Pages/Conversation`.
 
 ## Flow 3 reporting consumer - COMPLETE
 
