@@ -51,12 +51,12 @@
                             <a class="nav-link nav-link-custom" asp-area="" asp-page="/Index">Home</a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link nav-link-custom" asp-area="" asp-page="/Documents/Index">Documents</a>
+                            <a class="nav-link nav-link-custom" asp-area="" asp-controller="Documents" asp-action="Index">Documents</a>
                         </li>
                         @if (User.IsInRole("SubjectLeader"))
                         {
                             <li class="nav-item">
-                                <a class="nav-link nav-link-custom" asp-area="" asp-page="/Chapters/Index">Chapters</a>
+                                <a class="nav-link nav-link-custom" asp-area="" asp-controller="Chapters" asp-action="Index">Chapters</a>
                             </li>
                             <li class="nav-item">
                                 <a class="nav-link nav-link-custom" asp-area="" asp-page="/Reports/Index">Reports</a>
