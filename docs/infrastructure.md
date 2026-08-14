@@ -8,9 +8,9 @@ Expected source formats are PDF, DOCX, and PPTX.
 
 The project defines three independent product workflows:
 
-1. **Flow 1 - Document Management & Indexing** - complete
-2. **Flow 2 - RAG Question & Answer & Conversation Management** - pending
-3. **Flow 3 - Report & Statistics** - complete through PR #12
+1. **Flow 1 - Document Management & Indexing** - complete - Razor Pages presentation
+2. **Flow 2 - RAG Question & Answer & Conversation Management** - pending - **MVC Controllers + Views presentation**
+3. **Flow 3 - Report & Statistics** - complete through PR #12 - Razor Pages presentation
 
 Conversation History belongs to Flow 2.
 
@@ -18,7 +18,7 @@ Conversation History belongs to Flow 2.
 
 After PR #12, the baseline includes:
 
-- ASP.NET Core MVC + Razor Pages
+- ASP.NET Core MVC + Razor Pages in the same host
 - ASP.NET Core Identity
 - PostgreSQL + pgvector
 - EF Core persistence/migrations
@@ -35,7 +35,7 @@ After PR #12, the baseline includes:
 Still pending:
 
 - Flow 2 pgvector retrieval and grounded RAG backend (Member 4)
-- Flow 2 chat/session/history/citation presentation and evaluation (Member 5)
+- Flow 2 **MVC** chat/session/history/citation presentation and evaluation (Member 5)
 
 See `docs/project-status.md` for the current milestone.
 
@@ -45,6 +45,24 @@ See `docs/project-status.md` for the current milestone.
 
 The web application is the single application process for the course demo. Both MVC controllers/views and Razor Pages are enabled so assignment requirements can share the same data/application infrastructure.
 
+The presentation allocation is intentional:
+
+```text
+Razor Pages -> Flow 1 + Flow 3 + existing auth pages
+MVC         -> Flow 2 chat / Q&A / Conversation History
+```
+
+`Program.cs` already contains both:
+
+```text
+AddControllersWithViews()
+AddRazorPages()
+MapControllerRoute(...)
+MapRazorPages()
+```
+
+Therefore Flow 2 can be added as MVC without migrating the completed Razor Pages workflows.
+
 The same application currently hosts:
 
 - authentication/authorization
@@ -52,9 +70,42 @@ The same application currently hosts:
 - Document Management
 - the document indexing background worker
 - Flow 3 Reports/Statistics
-- future Flow 2 RAG/chat endpoints
+- future Flow 2 MVC controllers/views plus RAG services
 
-Do not split indexing/reporting into extra services without a concrete requirement.
+Do not split indexing/reporting/RAG into extra services without a concrete requirement.
+
+### Flow 2 MVC presentation boundary
+
+Flow 2 is the selected MVC workflow.
+
+Expected presentation locations:
+
+```text
+src/PRN222.RagAssistant/Controllers/
+src/PRN222.RagAssistant/Views/Chat/
+```
+
+Supporting MVC Razor view files such as `Views/_ViewImports.cshtml`, `Views/_ViewStart.cshtml`, and `Views/Shared/` may be introduced as needed.
+
+Do not create `Pages/Chat`, `Pages/Conversation`, or a parallel Razor Pages implementation of Flow 2.
+
+MVC controllers are HTTP/presentation adapters only. They may handle:
+
+- authenticated request handling
+- model binding / validation
+- session/navigation orchestration
+- redirects and MVC view selection
+- passing presentation models to Views
+
+They must **not**:
+
+- call Ollama directly
+- execute pgvector similarity queries directly
+- parse/chunk/embed uploaded documents
+- recreate report aggregation
+- become the home of RAG business logic
+
+Grounded Q&A should cross the application boundary through `IRagQueryService` and related services implemented by Member 4.
 
 ### Document indexing queue and worker
 
@@ -165,6 +216,8 @@ Document/Chapter write operations require `AppPolicies.ManageDocuments`, restric
 
 The completed Flow 3 Reports/Statistics area also uses `AppPolicies.ManageDocuments` and is Subject-Leader-only. Access is enforced server-side; navigation visibility is not the security boundary.
 
+Flow 2 MVC actions must enforce authenticated user/session ownership server-side. A hidden navigation link or a View-only check is not authorization.
+
 ### PostgreSQL + pgvector
 
 PostgreSQL is the system of record for:
@@ -206,6 +259,7 @@ Ownership:
 
 - Member 3 uses Ollama behind `ITextEmbeddingService` for indexing.
 - Member 4 will use the same embedding boundary for question embeddings and `IChatCompletionService` for chat generation.
+- Member 5 MVC controllers/views consume application services and do not call Ollama directly.
 - Flow 3 reporting does not call Ollama.
 
 ### Shared application contracts
@@ -228,6 +282,8 @@ Current contracts/models:
 
 Member 3 provides the indexing-side implementations behind the first three contracts as appropriate. Member 4 should build on these boundaries rather than duplicating provider/indexing logic.
 
+`IRagQueryService` is the presentation-facing boundary for Flow 2. The MVC layer should consume it rather than embed/retrieve/generate answers itself.
+
 Flow 3 completed without changing these interfaces.
 
 ### Document storage
@@ -249,7 +305,7 @@ Subject Leader
     \--> uploads / re-indexes document
             |
             v
-Member 2 request side                 [MERGED]
+Member 2 Razor Pages request side     [MERGED]
             |
             v
 Persist Document
@@ -272,15 +328,15 @@ Member 3 indexing pipeline            [MERGED]
 
 Flow 1 is end-to-end implemented in `master`.
 
-### Flow 2 - RAG Question & Answer & Conversation Management - PENDING
+### Flow 2 - RAG Question & Answer & Conversation Management - PENDING / MVC
 
 ```text
-Student
+Student browser
     |
     | creates/opens chat session
     | asks question
     v
-Member 5 presentation                 [PENDING]
+Member 5 MVC Controller + Views       [PENDING]
     |
     v
 IRagQueryService
@@ -295,13 +351,18 @@ Member 4 RAG backend                  [PENDING]
     +--> persist messages + citations
     v
 RagAnswer + RagCitation[]
+    |
+    v
+MVC View -> answer / citations / Conversation History
 ```
 
 Conversation History remains part of this flow.
 
+There must not be a parallel Razor Pages implementation of this chat workflow.
+
 ### Flow 3 - Report & Statistics - COMPLETE
 
-PR #12 merged the reporting workflow:
+PR #12 merged the Razor Pages reporting workflow:
 
 ```text
 Subject Leader
@@ -352,7 +413,7 @@ Post-merge local smoke testing reported:
 - `Uploaded -> Processing -> Indexed` observed through the real background pipeline
 - the dashboard reflected the resulting chapter/document/chunk/indexing data
 
-This validates the current single-app infrastructure baseline for completed Flow 1 + Flow 3. Future Flow 2 branches must rerun their own relevant validation.
+This validates the current single-app infrastructure baseline for completed Flow 1 + Flow 3. Future Flow 2 MVC branches must rerun their own relevant validation.
 
 ## Intentionally not added
 
@@ -361,8 +422,9 @@ This validates the current single-app infrastructure baseline for completed Flow
 - RAGFlow/LangChain service
 - automatic FLM crawling
 - analytics warehouse/event pipeline/scheduled reporting
+- a second Razor Pages implementation of Flow 2
 
-Pending product implementation is limited to Flow 2.
+Pending product implementation is limited to Flow 2 using MVC presentation plus its backend services.
 
 ## Evaluation deliverable
 
