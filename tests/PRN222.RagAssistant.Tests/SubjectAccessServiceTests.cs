@@ -158,7 +158,7 @@ public sealed class SubjectAccessServiceTests
             authenticationType: "TestAuth"));
     }
 
-    private sealed class InMemoryPgvectorModelValidator : IModelValidator
+    public sealed class InMemoryPgvectorModelValidator : IModelValidator
     {
         public void Validate(
             IModel model,
