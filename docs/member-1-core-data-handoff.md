@@ -2,16 +2,16 @@
 
 ## Current status
 
-Member 1's shared Core/Data baseline is **complete** and is now consumed by completed Flow 1 plus the pending Flow 2/Flow 3 work.
+Member 1's shared Core/Data baseline is **complete** and is now consumed by completed Flow 1, completed Flow 3, and pending Flow 2 work.
 
 Latest merged milestone:
 
 - Member 1 Core/Data: complete
 - Member 2 Flow 1 request/presentation: complete
 - Member 3 Flow 1 indexing: complete through PR #9
+- Member 2 Flow 3 Report & Statistics: complete through PR #12
 - Member 4 Flow 2 backend: pending
 - Member 5 Flow 2 presentation/evaluation: pending
-- Member 2 Flow 3 Report & Statistics: pending
 
 For the canonical snapshot, read `docs/project-status.md`.
 
@@ -19,9 +19,9 @@ For the canonical snapshot, read `docs/project-status.md`.
 
 The shared model supports:
 
-1. **Flow 1 - Document Management & Indexing** - now end-to-end complete
+1. **Flow 1 - Document Management & Indexing** - end-to-end complete
 2. **Flow 2 - RAG Question & Answer & Conversation Management** - pending Members 4/5
-3. **Flow 3 - Report & Statistics** - pending Member 2
+3. **Flow 3 - Report & Statistics** - complete through PR #12
 
 Conversation History remains part of Flow 2.
 
@@ -50,7 +50,7 @@ Validated persistence covers:
 - chat sessions/messages
 - message citations
 
-The existing persistence is sufficient for the initial Flow 3 dashboard; reporting should aggregate existing rows before proposing new storage.
+The existing persistence was sufficient for the completed Flow 3 dashboard. PR #12 aggregated existing rows and did not introduce a reporting entity or migration.
 
 ## Core domain invariants
 
@@ -78,11 +78,11 @@ Member 2 persists the document first, then enqueues only the persisted `Document
 
 `IDocumentIndexingService`
 
-Member 3 now provides the merged indexing implementation.
+Member 3 provides the merged indexing implementation.
 
 `ITextEmbeddingService`
 
-Member 3 extended/implemented the provider-neutral embedding boundary with:
+The provider-neutral embedding boundary supports:
 
 - single-text embedding for retrieval
 - ordered batch embedding for indexing
@@ -106,7 +106,9 @@ Result models:
 
 ### Reporting
 
-Initial Flow 3 does not need a new shared contract merely to count existing data. Prefer focused read-only aggregate queries unless a concrete reusable application-layer need emerges.
+Flow 3 completed without a new shared reporting contract. The merged page uses focused read-only EF Core aggregate queries over existing persistence.
+
+Do not add a reporting-specific abstraction/schema unless a concrete new requirement justifies it.
 
 ## Flow 1 completion validates the baseline
 
@@ -141,6 +143,23 @@ Uploaded -> Processing -> Indexed
 
 No new domain entity or migration was required for this indexing implementation, confirming that the original persistence baseline was sufficient.
 
+## Flow 3 completion validates the baseline
+
+PR #12 completed the Subject-Leader-only Reports/Statistics page using existing tables:
+
+- `Chapter`
+- `Document`
+- `DocumentChunk`
+- `ChatSession`
+- `ChatMessage`
+- `MessageCitation`
+
+Implemented aggregates include chapter/document totals, chapter grouping/unassigned counts, index-state counts, chunk totals, recent indexed/failed documents, and chat usage totals.
+
+No analytics entity, denormalized counter, warehouse, scheduled aggregation, or migration was required.
+
+This confirms the original Core/Data model also supports the initial Flow 3 requirement as designed.
+
 ## Current handoff to Member 4
 
 Member 4 should build RAG retrieval on the existing model and completed indexing output.
@@ -170,29 +189,19 @@ Member 5 owns Flow 2 presentation and evaluation:
 
 Presentation should consume `IRagQueryService` and not leak provider or pgvector details.
 
-## Member 2 Flow 3 assignment
+## Flow 3 maintenance boundary
 
-Member 2 owns Flow 3 in a separate branch.
+Member 2's current Flow 3 assignment is complete.
 
-Initial read-only metrics:
+Future report changes must remain read-only and must not:
 
-- chapters/documents
-- documents by index status
-- documents by chapter/unassigned
-- chat sessions/messages/citations
+- mutate workflow data
+- enqueue indexing work
+- perform RAG retrieval
+- call Ollama
+- create speculative analytics persistence
 
-Because Member 3 is complete, indexing metrics can now show real persisted status immediately.
-
-The initial reporting scope still does **not** justify:
-
-- analytics entities
-- denormalized counters
-- event tracking
-- scheduled aggregation
-- a reporting warehouse
-- a migration solely for dashboard counts
-
-If a genuine persistence gap appears, Member 2 must document it and coordinate the change with Member 1.
+If a genuine persistence gap appears later, document it and coordinate the change with Member 1.
 
 ## Core tests
 
@@ -215,4 +224,4 @@ docs/flow-3-report-statistics-handoff.md
 
 ## Validation note
 
-The original no-speculative-migration decision remains valid after both Member 2 and Member 3 merges. Continue using the existing migration chain and coordinate genuine model changes through Member 1.
+The original no-speculative-migration decision remains valid after Member 2 Flow 1, Member 3 indexing, and Member 2 Flow 3 merges. Continue using the existing migration chain and coordinate genuine model changes through Member 1.

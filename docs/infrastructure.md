@@ -8,15 +8,15 @@ Expected source formats are PDF, DOCX, and PPTX.
 
 The project defines three independent product workflows:
 
-1. **Flow 1 - Document Management & Indexing**
-2. **Flow 2 - RAG Question & Answer & Conversation Management**
-3. **Flow 3 - Report & Statistics**
+1. **Flow 1 - Document Management & Indexing** - complete
+2. **Flow 2 - RAG Question & Answer & Conversation Management** - pending
+3. **Flow 3 - Report & Statistics** - complete through PR #12
 
 Conversation History belongs to Flow 2.
 
 ## Current merged infrastructure state
 
-After PR #9 and PR #10, the baseline includes:
+After PR #12, the baseline includes:
 
 - ASP.NET Core MVC + Razor Pages
 - ASP.NET Core Identity
@@ -28,14 +28,14 @@ After PR #9 and PR #10, the baseline includes:
 - runtime PRN222 Chapter Management
 - Document Management request/presentation flow
 - complete document parsing/chunking/embedding/indexing pipeline
+- completed read-only Report & Statistics dashboard
 - shared application contracts for indexing and RAG handoffs
-- three-flow ownership including Flow 3 Report & Statistics
+- three-flow ownership model
 
 Still pending:
 
 - Flow 2 pgvector retrieval and grounded RAG backend (Member 4)
-- Flow 2 chat/session/history/citation presentation (Member 5)
-- Flow 3 read-only Report & Statistics implementation (Member 2)
+- Flow 2 chat/session/history/citation presentation and evaluation (Member 5)
 
 See `docs/project-status.md` for the current milestone.
 
@@ -51,7 +51,8 @@ The same application currently hosts:
 - Chapter Management
 - Document Management
 - the document indexing background worker
-- future RAG and reporting endpoints
+- Flow 3 Reports/Statistics
+- future Flow 2 RAG/chat endpoints
 
 Do not split indexing/reporting into extra services without a concrete requirement.
 
@@ -65,7 +66,7 @@ The active implementation is:
 Infrastructure/Services/InMemoryDocumentIndexingQueue.cs
 ```
 
-It is now consumed by the merged `DocumentIndexingWorker`; it is no longer merely an unused Member 2 integration stub.
+It is consumed by the merged `DocumentIndexingWorker`.
 
 Architecture:
 
@@ -162,7 +163,7 @@ Application roles:
 
 Document/Chapter write operations require `AppPolicies.ManageDocuments`, restricted to Subject Leaders.
 
-The initial Flow 3 Reports/Statistics area is also Subject-Leader-facing and read-only. Access must be enforced server-side.
+The completed Flow 3 Reports/Statistics area also uses `AppPolicies.ManageDocuments` and is Subject-Leader-only. Access is enforced server-side; navigation visibility is not the security boundary.
 
 ### PostgreSQL + pgvector
 
@@ -188,7 +189,7 @@ Current application entities:
 
 Application schema changes use EF Core migrations. PostgreSQL init scripts are only for runtime concerns such as enabling the `vector` extension.
 
-Flow 3 should aggregate the existing persistence; do not add analytics tables or duplicated counters simply to display a dashboard.
+Flow 3 aggregates this existing persistence. PR #12 did not add analytics tables, duplicated counters, or a reporting migration.
 
 ### Ollama
 
@@ -205,7 +206,7 @@ Ownership:
 
 - Member 3 uses Ollama behind `ITextEmbeddingService` for indexing.
 - Member 4 will use the same embedding boundary for question embeddings and `IChatCompletionService` for chat generation.
-- Flow 3 reporting must not call Ollama.
+- Flow 3 reporting does not call Ollama.
 
 ### Shared application contracts
 
@@ -225,9 +226,9 @@ Current contracts/models:
 - `RagAnswer`
 - `RagCitation`
 
-Member 3 now provides the indexing-side implementations behind the first three contracts as appropriate. Member 4 should build on these boundaries rather than duplicating provider/indexing logic.
+Member 3 provides the indexing-side implementations behind the first three contracts as appropriate. Member 4 should build on these boundaries rather than duplicating provider/indexing logic.
 
-Flow 3 should not change these interfaces simply to compute counts.
+Flow 3 completed without changing these interfaces.
 
 ### Document storage
 
@@ -235,7 +236,7 @@ Uploaded source documents are persisted under `storage/uploads/` and mounted int
 
 Uploaded files are runtime data and must not be committed. PostgreSQL remains the metadata/index source of truth.
 
-Flow 3 must query persisted metadata rather than scanning the upload directory.
+Flow 3 queries persisted metadata rather than scanning the upload directory.
 
 ## Product workflow architecture
 
@@ -298,28 +299,32 @@ RagAnswer + RagCitation[]
 
 Conversation History remains part of this flow.
 
-### Flow 3 - Report & Statistics - PENDING
+### Flow 3 - Report & Statistics - COMPLETE
+
+PR #12 merged the reporting workflow:
 
 ```text
 Subject Leader
       |
       v
-Reports / Statistics
+Reports / Statistics                  [MERGED]
       |
       +--> Chapter/document totals
       +--> Documents by IndexStatus
       +--> Documents by Chapter / Unassigned
+      +--> Total DocumentChunk count
+      +--> Recent indexed / failed documents
       +--> Chat session/message/citation totals
       |
       v
 Read-only dashboard / tables
 ```
 
-Document/indexing metrics can use real data now that Member 3 is merged. Chat metrics must handle empty data until Flow 2 lands.
+Flow 3 uses EF Core aggregate queries with `AsNoTracking()` where appropriate. Document/indexing metrics use real Flow 1 data. Chat metrics safely return zero until Flow 2 persists chat data.
 
 ## Flow 3 non-interference boundary
 
-The first reporting implementation must not:
+Future reporting changes must not:
 
 - alter the indexing queue/worker/parser/chunker/embedding behavior
 - enqueue or re-index documents as part of reporting
@@ -331,6 +336,24 @@ The first reporting implementation must not:
 
 If reporting exposes a genuine missing persistence requirement, coordinate through Member 1.
 
+## Validation snapshot
+
+PR #12 reported `75/75` automated tests passing.
+
+Post-merge local smoke testing reported:
+
+- PostgreSQL + pgvector container healthy
+- Ollama runtime healthy with `qwen3-embedding:0.6b`
+- ASP.NET Core app healthy
+- anonymous Reports access redirected to login
+- Student Reports access denied
+- Subject Leader Reports access successful
+- Chapter creation and PDF upload/indexing successful
+- `Uploaded -> Processing -> Indexed` observed through the real background pipeline
+- the dashboard reflected the resulting chapter/document/chunk/indexing data
+
+This validates the current single-app infrastructure baseline for completed Flow 1 + Flow 3. Future Flow 2 branches must rerun their own relevant validation.
+
 ## Intentionally not added
 
 - Redis/RabbitMQ or a separate worker service
@@ -339,7 +362,7 @@ If reporting exposes a genuine missing persistence requirement, coordinate throu
 - automatic FLM crawling
 - analytics warehouse/event pipeline/scheduled reporting
 
-Pending product implementation is limited to the remaining Flow 2 and Flow 3 work described above.
+Pending product implementation is limited to Flow 2.
 
 ## Evaluation deliverable
 
@@ -356,6 +379,6 @@ Pending product implementation is limited to the remaining Flow 2 and Flow 3 wor
 - `docs/project-status.md`: current merged status
 - `docs/team-workflow.md`: canonical ownership
 - `docs/member-3-document-indexing-handoff.md`: completed indexing -> RAG handoff
-- `docs/flow-3-report-statistics-handoff.md`: reporting boundary
+- `docs/flow-3-report-statistics-handoff.md`: completed reporting boundary
 
 Secrets must never be committed.

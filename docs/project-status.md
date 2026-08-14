@@ -1,14 +1,16 @@
 # Project status
 
-Last synchronized against `master` after the merge of PR #10 (three-workflow ownership/docs) and PR #9 (Member 3 document indexing).
+Last synchronized against `master` after the merge of PR #12 (Member 2 Flow 3 Report & Statistics).
 
 Source baseline reviewed:
 
-- `master` merge commit: `5591b8d872c1a6200ced0dd75ce7af7c524b3038`
-- PR #10: **merged** - defines Flow 3 Report & Statistics and folds Conversation History into Flow 2
-- PR #9: **merged** - implements Member 3 document parsing, chunking, embeddings, indexing service, and background worker
-- PR #9 head commit: `0237813e51414a7535a7da77990d4e3f4156881b`
-- PR #9 CI run #43: **successful** before merge
+- current `master`: `00903a38693956f59090f71649ca8a99e053e604`
+- PR #12: **merged** - implements Flow 3 Report & Statistics for Subject Leaders
+- PR #11: **merged** - synchronized documentation after Member 3 / Flow 1 completion
+- PR #10: **merged** - established the three-workflow ownership model
+- PR #9: **merged** - completed Member 3 document parsing, chunking, embeddings, indexing service, and background worker
+- PR #12 verification reported `75/75` automated tests passing
+- post-merge local smoke testing reported Flow 1 and Flow 3 working end-to-end with PostgreSQL/pgvector, Ollama embeddings, authorization, and real aggregate data
 
 This file is the quickest status snapshot for team members and coding agents. When another document disagrees with this file, verify against the latest merged code on `master` and then synchronize the documentation.
 
@@ -16,9 +18,9 @@ This file is the quickest status snapshot for team members and coding agents. Wh
 
 The project defines three independent workflows:
 
-1. **Flow 1 - Document Management & Indexing**
-2. **Flow 2 - RAG Question & Answer & Conversation Management**
-3. **Flow 3 - Report & Statistics**
+1. **Flow 1 - Document Management & Indexing** - COMPLETE
+2. **Flow 2 - RAG Question & Answer & Conversation Management** - PENDING
+3. **Flow 3 - Report & Statistics** - COMPLETE
 
 Conversation History belongs to Flow 2. It is not counted as the independent third workflow.
 
@@ -31,12 +33,12 @@ Conversation History belongs to Flow 2. It is not counted as the independent thi
 | Document Management | Member 2 | Complete / merged | Upload, list, details, edit, delete, re-index request, authorization, validation, storage, and queue handoff are implemented. |
 | Document parsing/chunking/indexing | Member 3 | Complete / merged | PDF (PdfPig), DOCX/PPTX (OpenXml), chunking, batch embeddings, indexing service, worker, chunk replacement, and index-state transitions are implemented. |
 | Flow 1 end-to-end | Members 2 + 3 | Complete | Upload/re-index -> queue -> worker -> parse -> chunk -> embed -> `DocumentChunk` persistence -> `Indexed`/`Failed`. |
+| Flow 3 Report & Statistics | Member 2 | Complete / merged through PR #12 | Subject-Leader-only read-only dashboard over PRN222 chapter/document/indexing/chunk/chat aggregate data. |
 | RAG retrieval / grounded backend | Member 4 | Pending | Question embedding, pgvector retrieval, grounded prompt construction, Ollama chat generation, `IRagQueryService`, message/citation persistence remain. |
-| Chat UI / conversation history / citations | Member 5 | Pending | Chat/session UI, conversation history, citation rendering, and evaluation integration remain. |
-| Flow 3 Report & Statistics | Member 2 | Defined / pending implementation | Read-only Subject Leader reporting over existing document/indexing/chat persistence. |
+| Chat UI / conversation history / citations | Member 5 | Pending | Chat/session UI, Conversation History, citation rendering, and evaluation integration remain. |
 | Evaluation set | Member 5 | Pending | `evaluation/` remains reserved for the human-authored 50-question ground-truth set. |
 
-## Flow 1 - now end-to-end complete
+## Flow 1 - end-to-end complete
 
 ### Member 2 request/presentation side
 
@@ -92,17 +94,47 @@ Uploaded -> Processing -> Indexed
 
 Successful indexing clears `IndexError` and sets `IndexedAtUtc`. Failures persist `Failed` plus a bounded error message. Re-indexing replaces existing chunks instead of appending duplicates.
 
-### Queue/runtime note
+`InMemoryDocumentIndexingQueue` is the active in-process transport consumed by `DocumentIndexingWorker`. It is process-local rather than a durable broker; startup recovery re-enqueues persisted documents still marked `Uploaded` or `Processing`.
 
-`InMemoryDocumentIndexingQueue` is now the active in-process transport consumed by `DocumentIndexingWorker`; it is no longer an unused Member 2-only stub.
+## Flow 3 - Report & Statistics - complete
 
-It is intentionally process-local rather than a durable external queue. `DocumentIndexingWorker` rehydrates documents whose persisted state is `Uploaded` or `Processing` at application startup, so the database indexing state remains the recovery source for the course-demo architecture.
+PR #12 completed Member 2's independent reporting workflow.
 
-Do not introduce Redis/RabbitMQ or a separate worker service unless a concrete requirement justifies it.
+Primary merged files:
+
+```text
+src/PRN222.RagAssistant/Pages/Reports/Index.cshtml
+src/PRN222.RagAssistant/Pages/Reports/Index.cshtml.cs
+tests/PRN222.RagAssistant.Tests/ReportStatisticsTests.cs
+```
+
+The Reports page is protected by `AppPolicies.ManageDocuments`, which requires the `SubjectLeader` role.
+
+Current dashboard reports:
+
+- total PRN222 chapters
+- total PRN222 documents
+- unassigned documents
+- document counts by chapter
+- document counts by `Uploaded`, `Processing`, `Indexed`, and `Failed`
+- indexing completion percentage
+- total PRN222 `DocumentChunk` rows
+- recent indexing failures with `IndexError`
+- recently indexed documents with chunk counts/timestamps
+- total chat sessions/messages/citations
+- correct zero/empty states before Flow 2 data exists
+
+The implementation is read-only and uses existing persistence. No analytics entity/migration, Ollama reporting call, pgvector retrieval, or indexing mutation was introduced.
+
+Post-merge local smoke testing reported that a real PDF upload progressed through the Flow 1 worker/Ollama embedding path to `Indexed`, after which the Flow 3 dashboard reflected the resulting chapter/document/chunk/indexing data.
+
+See `docs/flow-3-report-statistics-handoff.md` for the completed reporting boundary.
 
 ## Current handoff to Member 4
 
-Member 4 can now depend on successfully indexed `DocumentChunk` rows and the merged `ITextEmbeddingService` implementation.
+Member 4 is now the primary remaining backend implementation owner.
+
+Member 4 can depend on successfully indexed `DocumentChunk` rows and the merged `ITextEmbeddingService` implementation.
 
 Member 4 owns:
 
@@ -122,7 +154,7 @@ See `docs/member-3-document-indexing-handoff.md` for the completed Member 3 boun
 
 ## Current handoff to Member 5
 
-Member 5 owns Flow 2 presentation:
+Member 5 owns Flow 2 presentation/evaluation:
 
 - chat/session creation and navigation
 - asking questions through `IRagQueryService`
@@ -131,22 +163,6 @@ Member 5 owns Flow 2 presentation:
 - evaluation set and evaluation-facing tooling
 
 UI code must not call Ollama or query pgvector directly.
-
-## Flow 3 - Report & Statistics
-
-Member 2 owns Flow 3 in a separate focused branch such as `feature/report-statistics`.
-
-The initial workflow remains read-only and should use existing persistence to show, at minimum:
-
-- total PRN222 chapters/documents
-- document counts by `DocumentIndexStatus`
-- document counts by chapter, including unassigned documents
-- total chat sessions/messages/citations
-- zero/empty states where Flow 2 data does not exist yet
-
-Because Member 3 is now complete, document/indexing statistics can use real persisted index states immediately. Chat usage statistics will naturally remain zero until Members 4/5 populate Flow 2 data.
-
-Do not add analytics tables, event tracking, scheduled aggregation, or a reporting service merely to produce these counts.
 
 ## Shared persistence and contracts
 
@@ -172,6 +188,19 @@ Current shared application contracts/models:
 - `RagCitation`
 
 Treat these public signatures as cross-member integration points. Prefer additive changes and update all affected producers/consumers together if a signature genuinely must change.
+
+Flow 3 did not need a new cross-member reporting contract or schema change.
+
+## Remaining work
+
+The main unfinished product work is now **Flow 2**:
+
+```text
+Member 4: RAG backend / retrieval / generation / persistence
+Member 5: chat UI / Conversation History / citations / evaluation
+```
+
+Do not recreate Flow 1 indexing or Flow 3 reporting in later branches.
 
 ## Required reading before continuing
 

@@ -8,10 +8,10 @@ Merged baseline reviewed:
 
 - PR #9: `feat(indexing): implement Member 3 document parsing, chunking, embedd…`
 - PR #9 head commit: `0237813e51414a7535a7da77990d4e3f4156881b`
-- merged into `master` at commit: `5591b8d872c1a6200ced0dd75ce7af7c524b3038`
-- CI run #43 on the PR head: **success**
+- PR #9 CI run #43 on the PR head: **success**
+- Flow 3 later merged through PR #12 and now consumes the persisted indexing output read-only
 
-This handoff records the completed Flow 1 indexing boundary for Members 4 and 5 and for Flow 3 reporting.
+This handoff records the completed Flow 1 indexing boundary for Member 4, Member 5, and the already-completed Flow 3 reporting workflow.
 
 ## Completed scope
 
@@ -105,7 +105,7 @@ The parser output preserves page/slide metadata where available so citations can
 
 `TextChunker` produces ordered chunks with overlap and preserves page/slide metadata.
 
-`ITextEmbeddingService` now supports:
+`ITextEmbeddingService` supports:
 
 - `EmbedAsync(string text, ...)` for single-text/query embedding
 - `EmbedBatchAsync(IReadOnlyList<string> texts, ...)` for ordered batch embedding
@@ -137,6 +137,7 @@ Member 4 must not:
 - generate document embeddings itself
 - bypass the existing `ITextEmbeddingService`
 - mutate indexing state as part of normal question answering
+- duplicate the completed Flow 3 reporting workflow
 
 ## Handoff to Member 5
 
@@ -144,19 +145,26 @@ Member 5 should consume `IRagQueryService` from presentation code. Member 5 does
 
 Conversation History and citation rendering remain part of Flow 2 presentation.
 
-## Handoff to Flow 3 reporting
+## Flow 3 reporting consumer - COMPLETE
 
-Member 2's Flow 3 can now report real indexing statistics from persisted data, including:
+Member 2's Flow 3 reporting work merged through PR #12.
+
+The Reports page now reads persisted indexing data produced by this pipeline, including:
 
 - Uploaded count
 - Processing count
 - Indexed count
 - Failed count
-- Indexed timestamps where useful
-- failed documents and persisted index errors where the UI scope requires it
+- `IndexedAtUtc`
+- failed documents and `IndexError`
 - document/chunk totals
+- recently indexed documents with chunk counts
 
-Reporting must remain read-only and must not enqueue documents or mutate index state.
+Reporting remains read-only and does not enqueue documents or mutate index state.
+
+Post-merge local smoke testing confirmed the completed consumer boundary: a PDF upload progressed through the real worker/Ollama embedding path to `Indexed`, persisted chunks were created, and Flow 3 reflected those values on the dashboard.
+
+No Member 3 indexing change was needed for PR #12.
 
 ## Files added/changed by the indexing implementation
 
@@ -175,6 +183,8 @@ src/PRN222.RagAssistant/Application/Abstractions/ITextEmbeddingService.cs
 
 PR #9 completed GitHub Actions CI successfully before merge. The merged implementation includes focused parser/chunker tests in addition to the existing architecture, EF, Chapter, and Document Management tests.
 
+PR #12 later reported `75/75` tests passing and demonstrated that the indexing output could be consumed by the completed reporting workflow without changing the pipeline.
+
 Future changes to indexing behavior should preserve coherent re-index replacement, stable metadata, status transitions, and the shared `ITextEmbeddingService` contract unless all affected consumers are updated together.
 
 ## Required reading for the next member
@@ -186,5 +196,6 @@ docs/project-status.md
 docs/team-workflow.md
 docs/infrastructure.md
 docs/member-2-document-management-handoff.md
+docs/flow-3-report-statistics-handoff.md
 this file
 ```
