@@ -10,36 +10,36 @@ See:
 - `docs/team-workflow.md` - canonical member/workflow ownership
 - `docs/infrastructure.md` - runtime/RAG architecture
 - `docs/member-3-document-indexing-handoff.md` - completed indexing handoff to RAG
-- `docs/flow-3-report-statistics-handoff.md` - Flow 3 reporting scope
+- `docs/flow-3-report-statistics-handoff.md` - completed Flow 3 reporting handoff
 
 ## Product workflows
 
 The project defines three independent workflows:
 
-1. **Flow 1 - Document Management & Indexing** - Subject Leader manages chapters/documents; uploaded material is parsed, chunked, embedded, and indexed.
-2. **Flow 2 - RAG Question & Answer & Conversation Management** - Student asks grounded questions, receives citations, and can reopen Conversation History.
-3. **Flow 3 - Report & Statistics** - Subject Leader reviews read-only document/indexing/chat-usage statistics.
+1. **Flow 1 - Document Management & Indexing** - COMPLETE. Subject Leader manages chapters/documents; uploaded material is parsed, chunked, embedded, and indexed.
+2. **Flow 2 - RAG Question & Answer & Conversation Management** - PENDING. Student asks grounded questions, receives citations, and can reopen Conversation History.
+3. **Flow 3 - Report & Statistics** - COMPLETE. Subject Leader reviews read-only document/indexing/chat-usage statistics.
 
 Conversation History belongs to Flow 2 rather than being counted as Flow 3.
 
 ## Current project status
 
-Latest baseline after PR #10 and PR #9:
+Latest merged baseline after PR #12:
 
 | Member | Scope | Status |
 | --- | --- | --- |
 | Member 1 | Core/Data, Identity, authorization, EF Core model/migrations, shared contracts | Complete |
 | Member 2 | Flow 1 Document/Chapter Management | Complete / merged |
 | Member 3 | Flow 1 parsing, chunking, embeddings, indexing worker/service | Complete / merged through PR #9 |
+| Member 2 | Flow 3 Report & Statistics | Complete / merged through PR #12 |
 | Member 4 | Flow 2 pgvector retrieval, grounded RAG backend, chat/citation persistence | Pending |
 | Member 5 | Flow 2 chat UI, Conversation History, citation rendering, evaluation | Pending |
-| Member 2 | Flow 3 Report & Statistics | Defined / pending implementation |
 
-PR #9 head CI run #43 completed successfully before merge.
+PR #12 reported `75/75` automated tests passing. Post-merge local smoke testing also confirmed Flow 1 indexing and Flow 3 reporting against real PostgreSQL/pgvector + Ollama runtime data.
 
 ## Implemented Flow 1
 
-Flow 1 is now end-to-end implemented.
+Flow 1 is end-to-end implemented.
 
 ```text
 Subject Leader
@@ -106,9 +106,43 @@ Member 3's merged PR #9 includes:
 
 `InMemoryDocumentIndexingQueue` is the active process-local queue consumed by the worker. It is not a durable external broker; startup recovery is based on persisted document indexing state.
 
+## Implemented Flow 3
+
+PR #12 completed **Report & Statistics** for the Subject Leader.
+
+Primary route:
+
+```text
+/Reports/Index
+```
+
+Current dashboard includes:
+
+- total PRN222 chapters
+- total PRN222 documents
+- unassigned document count
+- document counts by chapter
+- document counts by `Uploaded`, `Processing`, `Indexed`, and `Failed`
+- indexing completion percentage
+- total persisted PRN222 chunks
+- recent indexing failures with `IndexError`
+- recently indexed documents with chunk counts and timestamps
+- total chat sessions/messages/citations
+- graceful zero/empty states while Flow 2 has no chat data
+
+The page is protected server-side by `AppPolicies.ManageDocuments`, which requires `SubjectLeader`.
+
+Flow 3 is read-only and uses existing EF Core/PostgreSQL persistence. It does not add analytics schema, call Ollama, run pgvector similarity retrieval, or mutate the indexing pipeline.
+
+Post-merge local smoke testing confirmed that after a PDF was uploaded and indexed through Flow 1, the dashboard reflected the resulting chapter/document/chunk/indexing values.
+
+See `docs/flow-3-report-statistics-handoff.md`.
+
 ## Pending Flow 2
 
-Member 4 owns the RAG backend and can now rely on successfully indexed `DocumentChunk` rows.
+The main unfinished product work is now Flow 2.
+
+Member 4 owns the RAG backend and can rely on successfully indexed `DocumentChunk` rows.
 
 Expected backend path:
 
@@ -136,30 +170,12 @@ RagAnswer + RagCitation[]
 
 Member 5 owns presentation, session navigation, Conversation History, citation rendering, and the evaluation deliverable.
 
-## Pending Flow 3
-
-Member 2 owns **Report & Statistics** in a separate focused branch such as:
-
-```text
-feature/report-statistics
-```
-
-Initial read-only metrics:
-
-- total chapters/documents
-- documents by indexing state
-- documents by chapter/unassigned
-- total chat sessions/messages/citations
-- optional chunk totals/recent indexing failures using existing persisted data
-
-Document/indexing statistics are already meaningful now that Member 3 is merged. Chat usage metrics should render zero/empty states until Flow 2 persists chat data.
-
-Flow 3 must not add speculative analytics tables, call Ollama, run pgvector similarity retrieval, mutate indexing/chat data, or duplicate Member 5 pages.
+Flow 2 must build on the completed Flow 1 indexing pipeline and must not recreate the completed Flow 3 reporting workflow.
 
 ## Team development boundaries
 
 - **Member 1 - Core/Data Lead:** schema/migration coordination, domain/data/security/shared contracts.
-- **Member 2 - Document Management + Reporting:** completed Flow 1 request side; pending read-only Flow 3.
+- **Member 2 - Document Management + Reporting:** completed Flow 1 request side and completed Flow 3.
 - **Member 3 - Document Indexing:** completed parser/chunker/embedding/worker/index-state pipeline.
 - **Member 4 - RAG Backend:** pending question embedding/retrieval/grounding/generation/chat persistence.
 - **Member 5 - Chat UI / Conversation Management / Evaluation:** pending Flow 2 presentation/evaluation.
@@ -244,7 +260,7 @@ Roles:
 - `SubjectLeader`
 - `Student`
 
-`ManageDocuments` is restricted to `SubjectLeader`.
+`ManageDocuments` is restricted to `SubjectLeader`. The completed Reports page uses the same server-side policy.
 
 Demo-user seeding is disabled by default. To enable the local example users, copy `.env.example` to `.env` and set:
 
@@ -275,7 +291,7 @@ Uploaded documents use configured `Rag:Storage:UploadsPath`, defaulting to `stor
 
 Runtime uploads are ignored by Git; only `.gitkeep` is version-controlled.
 
-PostgreSQL remains the source of truth for document metadata/indexing state/chunks.
+PostgreSQL remains the source of truth for document metadata/indexing state/chunks and report aggregates.
 
 ## EF Core model and migrations
 
@@ -308,6 +324,8 @@ dotnet ef migrations has-pending-model-changes \
 ```
 
 Do not create application tables through PostgreSQL init scripts or `EnsureCreated`.
+
+Flow 3 completed without a reporting-specific migration.
 
 ## PRN222 seed data
 
