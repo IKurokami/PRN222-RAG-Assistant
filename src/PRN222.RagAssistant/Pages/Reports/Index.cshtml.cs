@@ -1,8 +1,8 @@
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
 using PRN222.RagAssistant.Data;
-using PRN222.RagAssistant.Data.Seed;
 using PRN222.RagAssistant.Domain.Enums;
 using PRN222.RagAssistant.Security;
 
@@ -12,160 +12,173 @@ namespace PRN222.RagAssistant.Pages.Reports;
 public sealed class IndexModel : PageModel
 {
     private readonly ApplicationDbContext _dbContext;
+    private readonly ISubjectAccessService _subjectAccessService;
 
-    public IndexModel(ApplicationDbContext dbContext)
+    public IndexModel(
+        ApplicationDbContext dbContext,
+        ISubjectAccessService subjectAccessService)
     {
         _dbContext = dbContext;
+        _subjectAccessService = subjectAccessService;
     }
 
-    // ─── Thống kê Chương & Tài liệu ─────────────────────────────────────────
+    public Guid SubjectId { get; set; }
+    public string SubjectCode { get; set; } = string.Empty;
+    public string SubjectName { get; set; } = string.Empty;
 
     public int TotalChapters { get; set; }
     public int TotalDocuments { get; set; }
     public int UnassignedDocuments { get; set; }
-
     public List<ChapterDocumentCountViewModel> DocumentsByChapter { get; set; } = [];
-
-    // ─── Thống kê Indexing ───────────────────────────────────────────────────
 
     public int UploadedCount { get; set; }
     public int ProcessingCount { get; set; }
     public int IndexedCount { get; set; }
     public int FailedCount { get; set; }
     public int TotalChunks { get; set; }
-
     public List<RecentFailureViewModel> RecentFailures { get; set; } = [];
     public List<RecentIndexedViewModel> RecentlyIndexed { get; set; } = [];
 
-    // ─── Thống kê Chat ───────────────────────────────────────────────────────
-
+    // ChatSession does not have SubjectId yet because Flow 2 is still pending.
+    // These values remain explicitly global until Member 4 introduces subject-scoped chat persistence.
     public int TotalChatSessions { get; set; }
     public int TotalChatMessages { get; set; }
     public int TotalMessageCitations { get; set; }
 
-    // ─── Handler ─────────────────────────────────────────────────────────────
-
-    public async Task OnGetAsync(CancellationToken cancellationToken)
+    public async Task<IActionResult> OnGetAsync(Guid subjectId, CancellationToken cancellationToken)
     {
-        // 1. Thống kê Chương & Tài liệu
+        if (subjectId == Guid.Empty)
+        {
+            return RedirectToAction("Index", "Subjects");
+        }
+
+        if (!await _subjectAccessService.CanManageSubjectAsync(User, subjectId, cancellationToken))
+        {
+            return Forbid();
+        }
+
+        var subject = await _dbContext.Subjects.AsNoTracking().FirstOrDefaultAsync(candidate => candidate.Id == subjectId, cancellationToken);
+        if (subject is null)
+        {
+            return NotFound();
+        }
+
+        SubjectId = subject.Id;
+        SubjectCode = subject.Code;
+        SubjectName = subject.Name;
+
         TotalChapters = await _dbContext.Chapters
             .AsNoTracking()
-            .CountAsync(c => c.SubjectId == SeedData.Prn222SubjectId, cancellationToken);
+            .CountAsync(chapter => chapter.SubjectId == subjectId, cancellationToken);
 
         TotalDocuments = await _dbContext.Documents
             .AsNoTracking()
-            .CountAsync(d => d.SubjectId == SeedData.Prn222SubjectId, cancellationToken);
+            .CountAsync(document => document.SubjectId == subjectId, cancellationToken);
 
         UnassignedDocuments = await _dbContext.Documents
             .AsNoTracking()
-            .CountAsync(d => d.SubjectId == SeedData.Prn222SubjectId && d.ChapterId == null, cancellationToken);
+            .CountAsync(document => document.SubjectId == subjectId && document.ChapterId == null, cancellationToken);
 
-        // Tài liệu theo từng chương
         var chapters = await _dbContext.Chapters
             .AsNoTracking()
-            .Where(c => c.SubjectId == SeedData.Prn222SubjectId)
-            .OrderBy(c => c.Number)
+            .Where(chapter => chapter.SubjectId == subjectId)
+            .OrderBy(chapter => chapter.Number)
             .ToListAsync(cancellationToken);
 
-        var chapterIds = chapters.Select(c => c.Id).ToList();
-
+        var chapterIds = chapters.Select(chapter => chapter.Id).ToList();
         var docCountsByChapter = await _dbContext.Documents
             .AsNoTracking()
-            .Where(d => d.SubjectId == SeedData.Prn222SubjectId && d.ChapterId.HasValue && chapterIds.Contains(d.ChapterId!.Value))
-            .GroupBy(d => d.ChapterId!.Value)
-            .Select(g => new { ChapterId = g.Key, Count = g.Count() })
+            .Where(document => document.SubjectId == subjectId
+                               && document.ChapterId.HasValue
+                               && chapterIds.Contains(document.ChapterId.Value))
+            .GroupBy(document => document.ChapterId!.Value)
+            .Select(group => new { ChapterId = group.Key, Count = group.Count() })
             .ToListAsync(cancellationToken);
 
-        var countMap = docCountsByChapter.ToDictionary(x => x.ChapterId, x => x.Count);
-
-        DocumentsByChapter = chapters.Select(c => new ChapterDocumentCountViewModel
+        var countMap = docCountsByChapter.ToDictionary(item => item.ChapterId, item => item.Count);
+        DocumentsByChapter = chapters.Select(chapter => new ChapterDocumentCountViewModel
         {
-            Number = c.Number,
-            Title = c.Title,
-            DocumentCount = countMap.TryGetValue(c.Id, out var cnt) ? cnt : 0
+            Number = chapter.Number,
+            Title = chapter.Title,
+            DocumentCount = countMap.GetValueOrDefault(chapter.Id)
         }).ToList();
 
-        // 2. Thống kê Indexing
         var statusCounts = await _dbContext.Documents
             .AsNoTracking()
-            .Where(d => d.SubjectId == SeedData.Prn222SubjectId)
-            .GroupBy(d => d.IndexStatus)
-            .Select(g => new { Status = g.Key, Count = g.Count() })
+            .Where(document => document.SubjectId == subjectId)
+            .GroupBy(document => document.IndexStatus)
+            .Select(group => new { Status = group.Key, Count = group.Count() })
             .ToListAsync(cancellationToken);
 
         foreach (var item in statusCounts)
         {
             switch (item.Status)
             {
-                case DocumentIndexStatus.Uploaded:   UploadedCount   = item.Count; break;
+                case DocumentIndexStatus.Uploaded: UploadedCount = item.Count; break;
                 case DocumentIndexStatus.Processing: ProcessingCount = item.Count; break;
-                case DocumentIndexStatus.Indexed:    IndexedCount    = item.Count; break;
-                case DocumentIndexStatus.Failed:     FailedCount     = item.Count; break;
+                case DocumentIndexStatus.Indexed: IndexedCount = item.Count; break;
+                case DocumentIndexStatus.Failed: FailedCount = item.Count; break;
             }
         }
 
-        // Tổng số chunks từ tài liệu của môn PRN222
-        var prn222DocumentIds = await _dbContext.Documents
+        var subjectDocumentIds = await _dbContext.Documents
             .AsNoTracking()
-            .Where(d => d.SubjectId == SeedData.Prn222SubjectId)
-            .Select(d => d.Id)
+            .Where(document => document.SubjectId == subjectId)
+            .Select(document => document.Id)
             .ToListAsync(cancellationToken);
 
         TotalChunks = await _dbContext.DocumentChunks
             .AsNoTracking()
-            .CountAsync(c => prn222DocumentIds.Contains(c.DocumentId), cancellationToken);
+            .CountAsync(chunk => subjectDocumentIds.Contains(chunk.DocumentId), cancellationToken);
 
-        // Danh sách tài liệu lỗi gần đây (tối đa 10)
         RecentFailures = await _dbContext.Documents
             .AsNoTracking()
-            .Where(d => d.SubjectId == SeedData.Prn222SubjectId && d.IndexStatus == DocumentIndexStatus.Failed)
-            .OrderByDescending(d => d.UploadedAtUtc)
+            .Where(document => document.SubjectId == subjectId && document.IndexStatus == DocumentIndexStatus.Failed)
+            .OrderByDescending(document => document.UploadedAtUtc)
             .Take(10)
-            .Select(d => new RecentFailureViewModel
+            .Select(document => new RecentFailureViewModel
             {
-                DocumentId = d.Id,
-                Title = d.Title,
-                OriginalFileName = d.OriginalFileName,
-                IndexError = d.IndexError,
-                UploadedAtUtc = d.UploadedAtUtc
+                DocumentId = document.Id,
+                Title = document.Title,
+                OriginalFileName = document.OriginalFileName,
+                IndexError = document.IndexError,
+                UploadedAtUtc = document.UploadedAtUtc
             })
             .ToListAsync(cancellationToken);
 
-        // Danh sách tài liệu đã index thành công gần đây (tối đa 10)
         var recentlyIndexedDocs = await _dbContext.Documents
             .AsNoTracking()
-            .Where(d => d.SubjectId == SeedData.Prn222SubjectId && d.IndexStatus == DocumentIndexStatus.Indexed && d.IndexedAtUtc.HasValue)
-            .OrderByDescending(d => d.IndexedAtUtc)
+            .Where(document => document.SubjectId == subjectId
+                               && document.IndexStatus == DocumentIndexStatus.Indexed
+                               && document.IndexedAtUtc.HasValue)
+            .OrderByDescending(document => document.IndexedAtUtc)
             .Take(10)
             .ToListAsync(cancellationToken);
 
-        var recentDocIds = recentlyIndexedDocs.Select(d => d.Id).ToList();
-
+        var recentDocIds = recentlyIndexedDocs.Select(document => document.Id).ToList();
         var chunkCountPerDoc = await _dbContext.DocumentChunks
             .AsNoTracking()
-            .Where(c => recentDocIds.Contains(c.DocumentId))
-            .GroupBy(c => c.DocumentId)
-            .Select(g => new { DocumentId = g.Key, Count = g.Count() })
+            .Where(chunk => recentDocIds.Contains(chunk.DocumentId))
+            .GroupBy(chunk => chunk.DocumentId)
+            .Select(group => new { DocumentId = group.Key, Count = group.Count() })
             .ToListAsync(cancellationToken);
 
-        var chunkCountMap = chunkCountPerDoc.ToDictionary(x => x.DocumentId, x => x.Count);
-
-        RecentlyIndexed = recentlyIndexedDocs.Select(d => new RecentIndexedViewModel
+        var chunkCountMap = chunkCountPerDoc.ToDictionary(item => item.DocumentId, item => item.Count);
+        RecentlyIndexed = recentlyIndexedDocs.Select(document => new RecentIndexedViewModel
         {
-            DocumentId = d.Id,
-            Title = d.Title,
-            OriginalFileName = d.OriginalFileName,
-            IndexedAtUtc = d.IndexedAtUtc!.Value,
-            ChunkCount = chunkCountMap.TryGetValue(d.Id, out var cc) ? cc : 0
+            DocumentId = document.Id,
+            Title = document.Title,
+            OriginalFileName = document.OriginalFileName,
+            IndexedAtUtc = document.IndexedAtUtc!.Value,
+            ChunkCount = chunkCountMap.GetValueOrDefault(document.Id)
         }).ToList();
 
-        // 3. Thống kê Chat (sẽ trả về 0 khi Flow 2 chưa có dữ liệu)
         TotalChatSessions = await _dbContext.ChatSessions.AsNoTracking().CountAsync(cancellationToken);
         TotalChatMessages = await _dbContext.ChatMessages.AsNoTracking().CountAsync(cancellationToken);
         TotalMessageCitations = await _dbContext.MessageCitations.AsNoTracking().CountAsync(cancellationToken);
-    }
 
-    // ─── ViewModels ──────────────────────────────────────────────────────────
+        return Page();
+    }
 
     public sealed class ChapterDocumentCountViewModel
     {
