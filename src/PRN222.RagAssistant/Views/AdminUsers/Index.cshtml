@@ -1,0 +1,86 @@
+@model PRN222.RagAssistant.Models.Admin.AdminUserListViewModel
+@{
+    ViewData["Title"] = "User Administration";
+}
+
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+    <div>
+        <h1 class="h3 mb-1">User Administration</h1>
+        <p class="text-muted mb-0">Create accounts and assign one application role per user.</p>
+    </div>
+    <a asp-controller="AdminUsers" asp-action="Create" class="btn btn-primary">Create user</a>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(Model.StatusMessage))
+{
+    <div class="alert alert-success" role="alert">@Model.StatusMessage</div>
+}
+
+<div class="card border-0 shadow-sm">
+    <div class="card-body p-0">
+        @if (Model.Users.Count == 0)
+        {
+            <div class="p-4 text-muted">No users were found.</div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="ps-3">User</th>
+                            <th>Role</th>
+                            <th>Created</th>
+                            <th class="text-end pe-3">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    @foreach (var user in Model.Users)
+                    {
+                        <tr>
+                            <td class="ps-3">
+                                <div class="fw-semibold">@user.DisplayName</div>
+                                <div class="small text-muted">@user.Email</div>
+                                @if (user.IsCurrentUser)
+                                {
+                                    <span class="badge text-bg-light border mt-1">Current account</span>
+                                }
+                            </td>
+                            <td>
+                                @if (user.Roles.Count == 0)
+                                {
+                                    <span class="badge text-bg-warning">No role</span>
+                                }
+                                else
+                                {
+                                    @foreach (var role in user.Roles)
+                                    {
+                                        var badgeClass = role == AppRoles.Admin
+                                            ? "text-bg-danger"
+                                            : role == AppRoles.SubjectLeader
+                                                ? "text-bg-primary"
+                                                : "text-bg-secondary";
+                                        <span class="badge @badgeClass me-1">@AppRoles.GetDisplayName(role)</span>
+                                    }
+                                }
+                            </td>
+                            <td class="text-muted small">@user.CreatedAtUtc.ToString("yyyy-MM-dd HH:mm 'UTC'")</td>
+                            <td class="text-end pe-3">
+                                <a asp-controller="AdminUsers"
+                                   asp-action="Edit"
+                                   asp-route-id="@user.Id"
+                                   class="btn btn-sm btn-outline-primary">Edit role</a>
+                            </td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</div>
+
+<div class="alert alert-light border mt-4 mb-0">
+    <strong>Role boundaries:</strong>
+    Admin manages users/roles and can override academic management; Subject Leader manages PRN222 learning content and reports; Student consumes learning features.
+</div>

@@ -1,184 +1,213 @@
-# Member 1 - Core/Data handoff
+# Member 1 - Core/Data/RBAC/documentation handoff
 
 ## Current status
 
-Member 1's shared Core/Data baseline is **complete** and is consumed by completed Flow 1, completed Flow 3, and pending Flow 2 work.
+Member 1's Core/Data baseline is complete and now includes full ownership of the application role model, Admin user/role management, role-aware shared UI, authorization regression tests, and all repository documentation.
 
-Current workflow presentation allocation:
+Workflow presentation allocation remains:
 
-1. **Flow 1 - Document Management & Indexing** - complete - **MVC Controllers + Views**
-2. **Flow 2 - RAG Question & Answer & Conversation Management** - pending - **MVC Controllers + Views**
+1. **Flow 1 - Document Management & Indexing** - complete - MVC Controllers + Views
+2. **Flow 2 - RAG Question & Answer & Conversation Management** - pending - MVC Controllers + Views
 3. **Flow 3 - Report & Statistics** - complete - Razor Pages
 
-The Flow 1 Razor Pages -> MVC conversion is presentation-only and does not alter the Core/Data model.
+Admin user management is a separate cross-workflow identity surface implemented with MVC.
 
-For the canonical snapshot, read `docs/project-status.md`.
+## Member 1 owned scope
 
-## Scope completed by Member 1
+Member 1 owns:
 
-Member 1 established:
+- core domain entities/enums;
+- EF Core configurations;
+- migration baseline and future schema coordination;
+- PostgreSQL/pgvector integration;
+- ASP.NET Core Identity integration;
+- `Admin`, `SubjectLeader`, `Student` roles;
+- `ManageUsers` and `ManageDocuments` authorization policies;
+- Identity role/demo-user seeding;
+- Admin account/role-management MVC UI;
+- role-aware shared navigation/badges;
+- cross-workflow role/policy regression tests;
+- shared `Application/` abstractions/models;
+- architecture/convention tests;
+- **all edits to README, AGENTS files, and `docs/`.**
 
-- core domain entities/enums
-- EF Core configurations
-- migration baseline
-- PostgreSQL/pgvector integration
-- ASP.NET Core Identity integration
-- `SubjectLeader` and `Student` roles
-- `ManageDocuments` authorization policy
-- shared `Application/` abstractions/models
-- architecture/convention tests
-- schema/migration coordination rules
+## Role responsibility model
 
-Validated persistence covers:
+### Admin
 
-- PRN222 subject and runtime-managed chapters
-- document metadata/storage/indexing state
-- document chunks with source metadata and embeddings
-- chat sessions/messages
-- message citations
+- manage users and role assignment;
+- access `/admin/users`;
+- create application accounts;
+- assign `Admin`, `SubjectLeader`, or `Student`;
+- use academic-management actions protected by `ManageDocuments` when operational override is needed;
+- view reports.
 
-Flow 1 MVC and Flow 3 reporting both use this existing persistence without adding presentation-specific schema.
+Safety constraints:
 
-## Core domain invariants
+- cannot remove own Admin role;
+- cannot demote the last Admin;
+- cannot expose public/self-service elevated role selection;
+- no hard-delete user UI while workflow data references users.
 
-- entities use scalar foreign keys and no navigation properties
-- EF mapping belongs in dedicated `IEntityTypeConfiguration<TEntity>` classes
-- `ApplicationDbContext` stays thin
-- application schema changes use EF Core migrations
-- `(SubjectId, Number)` is unique for chapters
-- `Document.ChapterId` is nullable
-- removing a chapter must not cascade-delete documents
-- timestamps are UTC
-- persisted enum conventions remain consistent
+### Subject Leader
 
-The Flow 1 MVC migration preserves all of these rules.
+- manage PRN222 chapters;
+- upload/edit/delete/re-index documents;
+- curate authoritative learning material;
+- view Report & Statistics;
+- cannot manage users/roles.
+
+### Student
+
+- authenticated learning consumer;
+- can view available document catalogue/details;
+- pending Flow 2: own chat sessions/history/citations;
+- cannot manage academic content or users.
+
+Canonical design: `docs/role-access-control.md`.
+
+## Policy contract
+
+```text
+AppPolicies.ManageUsers     -> Admin
+AppPolicies.ManageDocuments -> Admin OR SubjectLeader
+```
+
+Members 2-5 consume these policies; they do not redefine role names or add parallel role-management code. Any new global authorization requirement comes back through Member 1.
+
+## Admin MVC implementation
+
+Owned files:
+
+```text
+Controllers/AdminUsersController.cs
+Models/Admin/AdminUserViewModels.cs
+Views/AdminUsers/Index.cshtml
+Views/AdminUsers/Create.cshtml
+Views/AdminUsers/Edit.cshtml
+```
+
+Routes:
+
+```text
+GET  /admin/users
+GET  /admin/users/create
+POST /admin/users/create
+GET  /admin/users/{id}/role
+POST /admin/users/{id}/role
+```
+
+The controller uses `UserManager<ApplicationUser>` and existing Identity persistence. No new domain entity or EF migration is required.
+
+## Shared UI ownership
+
+Member 1 owns role-aware changes in `Pages/Shared/_Layout.cshtml` even when they surface links to Member 2-owned Flow 1/Flow 3 features.
+
+Expected navigation:
+
+- authenticated users: Home, Documents, Privacy;
+- Admin or Subject Leader: Chapters, Reports;
+- Admin only: Users;
+- role badge: Admin / Subject Leader / Student.
+
+UI visibility is not authorization; policies remain required server-side.
+
+## Core/Data invariants
+
+- entities use scalar foreign keys and no navigation properties;
+- EF mapping belongs in dedicated `IEntityTypeConfiguration<TEntity>` classes;
+- `ApplicationDbContext` stays thin;
+- application schema changes use EF Core migrations;
+- `(SubjectId, Number)` remains unique for chapters;
+- `Document.ChapterId` remains nullable;
+- chapter removal does not cascade-delete documents;
+- timestamps are UTC;
+- persisted enum conventions remain stable.
+
+Adding roles/user-role membership does not change these invariants and does not require a migration.
 
 ## Shared contracts
 
-### Document Management -> Indexing
+### Flow 1 -> indexing
 
-`IDocumentIndexingQueue`
+`IDocumentIndexingQueue` remains the request-to-background handoff. Member 2 persists a document and then enqueues its ID. Member 3 owns indexing.
 
-`DocumentsController` persists the document first and then enqueues only the persisted `Document.Id`.
+### Retrieval/generation
 
-### Indexing pipeline
+`ITextEmbeddingService`, `IChatCompletionService`, `IRagQueryService`, `RagAnswer`, and `RagCitation` remain shared boundaries for Member 4/5.
 
-`IDocumentIndexingService`
+Global authorization remains outside these provider-neutral interfaces.
 
-Member 3 provides the merged indexing implementation.
+## Handoff to Member 2
 
-`ITextEmbeddingService`
+Member 2 continues owning Flow 1 request/business behavior and Flow 3 report behavior.
 
-Supports single-text embedding for retrieval and ordered batch embedding for indexing. Indexing and retrieval must use the same configured embedding model.
+Member 2 should:
 
-### RAG backend
+- keep `ManageDocuments` attributes on Flow 1 writes/Flow 3 access;
+- not hard-code `SubjectLeader` checks when a policy already represents the authorization rule;
+- not add Admin/role-management views;
+- not edit repository docs;
+- report role/UI/doc implications to Member 1.
 
-`IChatCompletionService`
+## Handoff to Member 3
 
-Provider-neutral generation boundary owned for implementation by Member 4.
-
-`IRagQueryService`
-
-Presentation-facing grounded Q&A boundary to be implemented by Member 4 and consumed by Member 5 from MVC.
-
-Result models:
-
-- `RagAnswer`
-- `RagCitation`
-
-MVC controllers must not replace these service boundaries with direct provider/pgvector calls.
-
-### Reporting
-
-Flow 3 remains read-only Razor Pages and does not require a reporting-specific shared contract or schema.
-
-## Flow 1 validates the baseline
-
-### Request/presentation side
-
-Current implementation:
-
-```text
-Controllers/DocumentsController.cs
-Controllers/ChaptersController.cs
-Models/Documents/
-Models/Chapters/
-Views/Documents/
-Views/Chapters/
-```
-
-Behavior includes runtime Chapter CRUD, document management, authorization/validation, source storage, `Uploaded` persistence, and queue handoff.
-
-### Indexing side
-
-PR #9 completed:
-
-- PDF/DOCX/PPTX parsing
-- chunking
-- bounded/ordered embeddings
-- `DocumentIndexingWorker`
-- `DocumentIndexingService`
-- `DocumentChunk` replacement/persistence
-- indexing state transitions
-- startup recovery
-
-```text
-Uploaded -> Processing -> Indexed
-                     \-> Failed
-```
-
-No schema change was required for either the indexing implementation or the later MVC presentation migration.
-
-## Flow 3 validates the baseline
-
-Flow 3 aggregates existing `Chapter`, `Document`, `DocumentChunk`, `ChatSession`, `ChatMessage`, and `MessageCitation` rows. It does not introduce analytics tables, denormalized counters, or a reporting migration.
+Member 3 continues indexing only. RBAC and documentation remain outside Member 3 scope.
 
 ## Handoff to Member 4
 
-Member 4 should build retrieval on the existing model and indexed chunks:
+Member 4 owns server-side authenticated chat-session ownership within Flow 2 service behavior. If a global policy is needed, coordinate with Member 1 instead of adding feature-local role constants.
 
-1. validate session ownership;
-2. persist the user message;
-3. embed the question;
-4. retrieve indexed PRN222 chunks with pgvector;
-5. construct grounded context;
-6. call `IChatCompletionService`;
-7. persist assistant message/citations;
-8. return `RagAnswer` / `RagCitation`;
-9. handle insufficient evidence explicitly.
-
-Member 4 remains presentation-agnostic.
+Member 4 does not edit repository docs.
 
 ## Handoff to Member 5
 
-Member 5 owns Flow 2 MVC presentation/evaluation:
+Member 5 owns Flow 2 MVC presentation/evaluation and consumes the existing authenticated role model.
 
-- `ChatController` or equivalent focused MVC actions
-- `Views/Chat/`
-- Conversation History
-- citations
-- evaluation set/tooling
+Member 5 must not:
 
-Flow 1 already occupies `DocumentsController`, `ChaptersController`, `Views/Documents`, and `Views/Chapters`; do not mix Flow 2 responsibilities into those controllers.
+- add public role selection;
+- build a duplicate user/role administration page;
+- replace server-side session ownership with UI-only checks;
+- edit repository docs.
 
-Do not create a Razor Pages duplicate of Flow 2.
+## Documentation workflow
 
-## Core tests
+Member 1 is now the exclusive documentation editor.
 
-`CoreDataArchitectureTests` and `EntityModelConventionsTests` remain regression protection for the shared baseline. Flow 1 presentation tests now target MVC controllers/models but must not weaken Core/Data invariants.
+Members 2-5 should place the following in their PR description/handoff when relevant:
 
-## Files to read before continuing
+- completed/pending status;
+- new routes/screens;
+- new configuration;
+- changed contracts;
+- migration/runtime requirements;
+- integration notes;
+- anything README/AGENTS/docs should reflect.
+
+Member 1 then updates:
 
 ```text
+README.md
 AGENTS.md
 src/PRN222.RagAssistant/Application/AGENTS.md
 docs/project-status.md
 docs/team-workflow.md
 docs/infrastructure.md
-docs/flow-1-mvc-migration.md
-docs/member-2-document-management-handoff.md
-docs/member-3-document-indexing-handoff.md
-docs/flow-3-report-statistics-handoff.md
+relevant handoff/design docs
 ```
 
-The no-speculative-migration decision remains valid. A presentation-layer MVC conversion is not a reason to generate an EF Core migration.
+This avoids concurrent contradictory documentation edits.
+
+## Regression requirements
+
+Member 1 RBAC tests must keep proving:
+
+- all three roles exist in the catalogue;
+- Admin + Subject Leader satisfy `ManageDocuments`;
+- Student/anonymous do not satisfy `ManageDocuments`;
+- only Admin satisfies `ManageUsers`;
+- Admin user controller requires `ManageUsers`;
+- Admin POST actions use anti-forgery;
+- existing Flow 1 authorization conventions remain green;
+- EF pending-model check stays clean.

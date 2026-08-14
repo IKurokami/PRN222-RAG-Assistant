@@ -1,0 +1,52 @@
+@model PRN222.RagAssistant.Models.Admin.AdminUserRoleEditViewModel
+@{
+    ViewData["Title"] = "Edit user role";
+}
+
+<div class="row justify-content-center">
+    <div class="col-lg-7 col-xl-6">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <div>
+                <h1 class="h3 mb-1">Edit user role</h1>
+                <p class="text-muted mb-0">@Model.DisplayName · @Model.Email</p>
+            </div>
+            <a asp-controller="AdminUsers" asp-action="Index" class="btn btn-outline-secondary">Back</a>
+        </div>
+
+        <div class="card border-0 shadow-sm">
+            <div class="card-body p-4">
+                @if (Model.IsCurrentUser)
+                {
+                    <div class="alert alert-warning">
+                        This is your current Admin account. The system will not allow you to remove your own Admin role.
+                    </div>
+                }
+
+                <form method="post" asp-controller="AdminUsers" asp-action="Edit" asp-route-id="@Model.Id">
+                    <input asp-for="Id" type="hidden" />
+                    <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+
+                    <div class="mb-3">
+                        <label asp-for="Role" class="form-label">Application role</label>
+                        <select asp-for="Role" class="form-select">
+                            <option value="@AppRoles.Admin">Admin</option>
+                            <option value="@AppRoles.SubjectLeader">Subject Leader</option>
+                            <option value="@AppRoles.Student">Student</option>
+                        </select>
+                        <span asp-validation-for="Role" class="text-danger"></span>
+                    </div>
+
+                    <div class="alert alert-light border small">
+                        Admin can manage users and academic content. Subject Leader can manage PRN222 content and reports but cannot manage accounts. Student has no management permissions.
+                    </div>
+
+                    <button type="submit" class="btn btn-primary">Save role</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

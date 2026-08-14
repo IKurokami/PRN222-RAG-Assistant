@@ -1,178 +1,162 @@
 # Team workflow and ownership
 
-This document is the coordination contract for the five-member PRN222 RAG Assistant team. It complements `AGENTS.md` and `docs/project-status.md`.
+This document is the coordination contract for the five-member PRN222 RAG Assistant team. Member 1 owns this document and all other repository documentation.
 
 ## Current milestone
 
 - Member 1 Core/Data baseline: **complete**.
-- Member 2 Flow 1 Document/Chapter Management request side: **complete**, now using **MVC Controllers + Views**.
+- Member 1 Admin/SubjectLeader RBAC + Admin user-management UI: **complete on this branch**.
+- Member 2 Flow 1 Document/Chapter Management request side: **complete**, MVC.
 - Member 3 Flow 1 Document Indexing/Ingestion: **complete / merged through PR #9**.
 - Member 2 Flow 3 Report & Statistics: **complete / merged through PR #12**.
 - Member 4 Flow 2 RAG backend: **pending**.
 - Member 5 Flow 2 MVC chat/history/citation presentation + evaluation: **pending**.
 
-Flow 1 and Flow 3 are complete. The remaining product implementation is Flow 2.
-
 ## Product workflows
 
-1. **Flow 1 - Document Management & Indexing** - COMPLETE - **MVC Controllers + Views**. Subject Leader manages PRN222 chapters/documents; the indexing worker parses, chunks, embeds, and persists searchable chunks.
-2. **Flow 2 - RAG Question & Answer & Conversation Management** - PENDING - **MVC Controllers + Views**. Students ask grounded questions, receive citations, and reopen Conversation History.
-3. **Flow 3 - Report & Statistics** - COMPLETE - Razor Pages. Subject Leader reviews read-only aggregate document/indexing/chat-usage statistics.
+1. **Flow 1 - Document Management & Indexing** - COMPLETE - MVC.
+2. **Flow 2 - RAG Question & Answer & Conversation Management** - PENDING - MVC.
+3. **Flow 3 - Report & Statistics** - COMPLETE - Razor Pages.
 
-Conversation History is part of Flow 2, not a fourth or independent third workflow.
+Conversation History is part of Flow 2, not a separate workflow.
 
-## Presentation model allocation
+## Role model
 
 ```text
-Flow 1 -> MVC           [COMPLETE]
-Flow 2 -> MVC           [PENDING]
-Flow 3 -> Razor Pages   [COMPLETE]
-Auth/shell -> Razor Pages
+Admin         -> user/role administration + academic-management override + reports
+SubjectLeader -> PRN222 chapter/document/indexing-request management + reports
+Student       -> learning consumer; pending own Flow 2 sessions/history
 ```
 
-The mixed host is intentional. Do not recreate Flow 1 under `Pages/Documents` or `Pages/Chapters`, and do not create a Razor Pages version of Flow 2.
+Policies:
+
+```text
+ManageUsers     -> Admin
+ManageDocuments -> Admin OR SubjectLeader
+```
+
+Canonical design: `docs/role-access-control.md`.
 
 ## Member responsibilities
 
-### Member 1 - Core/Data Lead - COMPLETE BASELINE
+### Member 1 - Core/Data + RBAC + documentation
 
-Owns:
+Member 1 owns:
 
-- `Domain/Entities/`
-- `Domain/Enums/`
-- `Data/`
-- `Security/`
-- shared `Application/` abstractions/models
-- migration conventions
-- architecture/convention tests
-- coordination for genuine EF Core schema changes
+- domain/data/security baseline;
+- shared application contracts/models;
+- EF schema/migration coordination;
+- architecture/convention tests;
+- ASP.NET Core Identity configuration/seeding;
+- `Admin`, `SubjectLeader`, `Student` role definitions;
+- global authorization policies;
+- Admin user/role management MVC controller/models/views;
+- role-aware shared navigation and role badges;
+- cross-workflow authorization regression tests;
+- **all repository documentation edits**.
 
-Presentation migrations alone do not justify schema changes.
-
-### Member 2 - Flow 1 + Flow 3 - COMPLETE CURRENT ASSIGNMENT
-
-#### Flow 1 request/presentation
-
-Current MVC locations:
+Documentation owned exclusively by Member 1 includes:
 
 ```text
-src/PRN222.RagAssistant/Controllers/DocumentsController.cs
-src/PRN222.RagAssistant/Controllers/ChaptersController.cs
-src/PRN222.RagAssistant/Models/Documents/
-src/PRN222.RagAssistant/Models/Chapters/
-src/PRN222.RagAssistant/Views/Documents/
-src/PRN222.RagAssistant/Views/Chapters/
+README.md
+AGENTS.md
+src/PRN222.RagAssistant/Application/AGENTS.md
+docs/*
+```
+
+Members 2-5 do **not** independently update these files. They provide status/architecture/handoff notes in their PR description or tell Member 1 what changed. Member 1 then synchronizes documentation against merged code.
+
+Member 1 may modify role-aware UI around another member's screen without taking ownership of that workflow's business logic.
+
+### Member 2 - Flow 1 request side + Flow 3 reporting
+
+Flow 1 locations:
+
+```text
+Controllers/DocumentsController.cs
+Controllers/ChaptersController.cs
+Models/Documents/
+Models/Chapters/
+Views/Documents/
+Views/Chapters/
 ```
 
 Owned behavior:
 
-- chapter list/create/edit/delete
-- document list/filter/upload/details/edit/delete/re-index
-- PDF/DOCX/PPTX validation and 50 MB limit
-- configured source-file storage
-- document metadata persistence
-- PRN222 `ChapterId` validation
-- `AppPolicies.ManageDocuments` on write actions
-- anti-forgery protection on POST actions
-- enqueueing persisted document IDs through `IDocumentIndexingQueue`
-- safe chapter deletion that unassigns referenced documents
+- runtime chapter CRUD;
+- document list/filter/upload/details/edit/delete/re-index;
+- PDF/DOCX/PPTX validation and 50 MB limit;
+- source-file storage and document metadata persistence;
+- PRN222 chapter validation;
+- queue handoff after persistence;
+- safe chapter deletion.
 
-Flow 1 controllers must not parse/chunk/embed, perform pgvector retrieval, or call Ollama.
+Flow 1 writes consume `AppPolicies.ManageDocuments`. Member 2 does not redefine the policy or role strings.
 
-See `docs/flow-1-mvc-migration.md` and `docs/member-2-document-management-handoff.md`.
+Flow 3 remains read-only under `Pages/Reports/`. It also consumes `ManageDocuments`, so Admin or Subject Leader may view it.
 
-#### Flow 3 Report & Statistics
-
-Flow 3 remains under `Pages/Reports/` and remains Razor Pages.
-
-It is read-only and Subject-Leader-only. It must not mutate workflow rows, enqueue indexing, perform RAG retrieval, call Ollama, duplicate Conversation History, or introduce speculative analytics persistence.
+Member 2 must not implement role-management UI and must not edit repository docs.
 
 ### Member 3 - Document Indexing / Ingestion - COMPLETE
 
-Owns the already-merged background Flow 1 pipeline:
+Owns:
 
-- PDF via PdfPig
-- DOCX/PPTX via OpenXml
-- `DocumentParserFactory`
-- `TextChunker`
-- `TextEmbeddingBatcher`
-- `OllamaTextEmbeddingService`
-- `DocumentIndexingService`
-- `DocumentIndexingWorker`
-- coherent `DocumentChunk` replacement
-- indexing state/error/timestamp transitions
-- startup recovery for persisted `Uploaded`/`Processing` documents
+- PDF/DOCX/PPTX parsing;
+- `DocumentParserFactory`;
+- `TextChunker`;
+- `TextEmbeddingBatcher`;
+- `OllamaTextEmbeddingService`;
+- `DocumentIndexingService`;
+- `DocumentIndexingWorker`;
+- coherent `DocumentChunk` replacement;
+- indexing state/error/timestamp transitions;
+- startup recovery.
 
-State flow:
-
-```text
-Uploaded -> Processing -> Indexed
-                     \-> Failed
-```
-
-Do not build a second indexing pipeline.
+Do not build a second indexing pipeline. Member 3 does not edit RBAC or repository docs.
 
 ### Member 4 - RAG / Chat Backend - PENDING
 
-Owns Flow 2 backend:
+Owns:
 
-- question embedding through `ITextEmbeddingService`
-- pgvector retrieval over indexed PRN222 chunks
-- top-K context selection
-- grounded prompt construction
-- no-evidence/out-of-scope behavior
-- `IChatCompletionService`
-- `IRagQueryService`
-- session ownership validation
-- `ChatMessage` and `MessageCitation` persistence
+- question embedding;
+- pgvector retrieval over indexed PRN222 chunks;
+- top-K context selection;
+- grounded prompt/no-evidence behavior;
+- `IChatCompletionService`;
+- `IRagQueryService`;
+- authenticated chat-session ownership validation;
+- `ChatMessage` and `MessageCitation` persistence.
 
-Member 4 remains presentation-agnostic and must not depend on MVC Controller/Razor Page types.
+Member 4 remains presentation-agnostic. If Flow 2 genuinely needs a new global policy, coordinate with Member 1. Do not invent feature-local role strings and do not edit repository docs.
 
 ### Member 5 - Flow 2 MVC Presentation / Conversation Management / Evaluation - PENDING
 
 Owns:
 
-- chat/session MVC controller actions
-- `Views/Chat/` presentation
-- session creation/open/navigation
-- Conversation History
-- citation/source rendering
-- consumption of `IRagQueryService`
-- 50-question evaluation set and evaluation tooling
+- chat/session MVC controller actions;
+- `Views/Chat/`;
+- session create/open/navigation;
+- Conversation History;
+- citation/source rendering;
+- consumption of `IRagQueryService`;
+- 50-question evaluation set/tooling.
 
-Flow 2 should coexist with the existing Flow 1 MVC controllers without modifying document/chapter behavior unnecessarily.
+Member 5 consumes established authentication/authorization. It does not create Admin/SubjectLeader management UI and does not edit repository docs.
 
-Do not create `Pages/Chat` or `Pages/Conversation`.
+## Integration boundaries
 
-## Shared integration contracts
-
-Stable handoff points under `Application/`:
-
-- `IDocumentIndexingQueue`
-- `IDocumentIndexingService`
-- `ITextEmbeddingService`
-- `IChatCompletionService`
-- `IRagQueryService`
-- `RagAnswer`
-- `RagCitation`
-
-Prefer additive changes. If a public signature must change, update affected producers/consumers together and synchronize docs.
-
-## Flow 1 integration
+### Flow 1
 
 ```text
-Subject Leader browser
+Admin or Subject Leader
         |
         v
-DocumentsController / ChaptersController     [MVC]
+DocumentsController / ChaptersController
         |
         +--> validate / persist / manage
         |
         v
-IDocumentIndexingQueue.EnqueueAsync(documentId)
-        |
-        v
-InMemoryDocumentIndexingQueue
+IDocumentIndexingQueue
         |
         v
 DocumentIndexingWorker
@@ -180,77 +164,90 @@ DocumentIndexingWorker
         v
 DocumentIndexingService
         |
-        +--> parse PDF / DOCX / PPTX
+        +--> parse
         +--> chunk
-        +--> batch embed via Ollama
-        +--> replace DocumentChunk rows
+        +--> embed
+        +--> DocumentChunk
         \--> Indexed / Failed
 ```
 
-The MVC migration changes only the first request/presentation stage.
+### Admin user management
 
-## Flow 2 handoff
+```text
+Admin browser
+    |
+    v
+AdminUsersController                  [Member 1]
+    |
+    +--> UserManager<ApplicationUser>
+    +--> create account
+    +--> assign one managed role
+    +--> self-demotion / last-Admin guards
+    \--> Identity role membership
+```
+
+Subject Leader and Student must fail `ManageUsers` server-side.
+
+### Flow 2
 
 ```text
 Student browser
         |
         v
-Member 5 ChatController + MVC Views          [PENDING]
+Member 5 ChatController + MVC Views
         |
         v
 IRagQueryService
         |
         v
-Member 4 RAG backend                         [PENDING]
+Member 4 RAG backend
         |
+        +--> authenticated session ownership
         +--> question embedding
         +--> pgvector retrieval
         +--> grounded generation
         +--> messages/citations persistence
-        |
-        v
-RagAnswer + RagCitation[]
 ```
 
-Member 5 must not implement provider/retrieval logic in controllers.
-
-## Flow 3 integration
+### Flow 3
 
 ```text
-Subject Leader
+Admin or Subject Leader
         |
         v
-Pages/Reports Razor Pages                    [COMPLETE]
+Pages/Reports
         |
         v
 Read-only aggregate EF Core queries
 ```
 
-Flow 3 automatically benefits from real Flow 1 persisted data and later Flow 2 chat persistence.
-
 ## Database coordination
 
 If later work genuinely requires a schema change:
 
-1. document the missing persistence requirement;
+1. document the missing persistence requirement in the PR/handoff notes;
 2. coordinate through Member 1;
-3. update entity + dedicated EF configuration together;
+3. Member 1 updates entity/configuration/migration boundaries as appropriate;
 4. synchronize with latest `master`;
-5. generate one EF Core migration;
-6. run pending-model checks and tests.
+5. generate one migration;
+6. run pending-model checks and tests;
+7. Member 1 updates documentation after merge.
 
 Avoid competing migrations.
 
-## Branch guidance
+The Admin role/user-role changes in the current RBAC work require no migration because the Identity role schema already exists.
 
-Recommended unfinished-work branches remain focused around Flow 2, for example:
+## Documentation workflow
 
-```text
-feature/rag-chat
-feature/mvc-chat-ui-history
-```
+This is now explicit team policy:
 
-Do not recreate completed document indexing/reporting work or add a parallel Razor Flow 1/Flow 2 implementation.
+1. Member 2/3/4/5 implement their owned code/tests.
+2. Their PR description includes any status, architecture, route, config, or handoff information that documentation should reflect.
+3. They do not edit README/AGENTS/docs in parallel.
+4. Member 1 reviews merged/current code and performs documentation synchronization.
+5. `master` code remains the source of truth if documentation is temporarily behind.
+
+This centralization is intended to prevent contradictory status files and overlapping docs commits across five parallel members.
 
 ## Required reading
 
@@ -260,11 +257,10 @@ src/PRN222.RagAssistant/Application/AGENTS.md
 docs/project-status.md
 docs/team-workflow.md
 docs/infrastructure.md
+docs/role-access-control.md
 docs/flow-1-mvc-migration.md
 docs/member-1-core-data-handoff.md
 docs/member-2-document-management-handoff.md
 docs/member-3-document-indexing-handoff.md
 docs/flow-3-report-statistics-handoff.md
 ```
-
-Before handoff, run relevant build/tests and report remaining blockers. After major merges, synchronize ownership/status docs against the actual `master` baseline.
