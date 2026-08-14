@@ -59,7 +59,7 @@ compose.override.yml
 
 # Future AI/RAG runtime artifacts
 .ollama/
-models/
+/models/
 rag-data/
 vector-data/
 

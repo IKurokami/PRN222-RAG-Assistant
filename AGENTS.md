@@ -2,9 +2,9 @@
 
 ## Scope
 
-This file applies to the whole repository. If a deeper `AGENTS.md` exists, its instructions apply to that subtree in addition to this file.
+This file applies to the whole repository. Deeper `AGENTS.md` files add rules for their subtree.
 
-Follow explicit user requests when they change the current phase. Otherwise preserve the merged architecture/ownership below and do not expand scope on your own.
+Follow explicit user requests when they change the current phase. Otherwise preserve the architecture/ownership below and do not expand scope on your own.
 
 Before changing workflow code, read:
 
@@ -14,6 +14,7 @@ src/PRN222.RagAssistant/Application/AGENTS.md
 docs/project-status.md
 docs/team-workflow.md
 docs/infrastructure.md
+docs/flow-1-mvc-migration.md
 ```
 
 For indexing/RAG work also read `docs/member-3-document-indexing-handoff.md`.
@@ -21,13 +22,10 @@ For reporting work also read `docs/flow-3-report-statistics-handoff.md`.
 
 ## Current project baseline
 
-Repository: PRN222 course RAG assistant.
-
 - Main project: `src/PRN222.RagAssistant`
 - Test project: `tests/PRN222.RagAssistant.Tests`
 - Target: `net10.0`
-- Web: ASP.NET Core MVC + Razor Pages
-- Presentation allocation: **Flow 1 + Flow 3 use Razor Pages; Flow 2 must use MVC Controllers + Views**
+- Web host: ASP.NET Core MVC + Razor Pages
 - Auth: ASP.NET Core Identity + EF Core/PostgreSQL
 - Roles: `SubjectLeader`, `Student`
 - Database/vector store: PostgreSQL + pgvector
@@ -35,34 +33,39 @@ Repository: PRN222 course RAG assistant.
 - Source storage: `storage/uploads/`
 - Solution: `PRN222-RAG-Assistant.sln`
 
-The demo is scoped to PRN222. Subject Leaders curate/upload course documents. Chapters are runtime-managed data. Students consume successfully indexed content through Flow 2 chat. Automatic FLM crawling is not authoritative ingestion.
+Presentation allocation:
+
+```text
+Flow 1 -> MVC Controllers + Views   [COMPLETE]
+Flow 2 -> MVC Controllers + Views   [PENDING]
+Flow 3 -> Razor Pages               [COMPLETE]
+Auth/shell -> Razor Pages
+```
+
+The demo is scoped to PRN222. Subject Leaders curate/upload course documents. Chapters are runtime-managed. Students consume successfully indexed content through Flow 2 chat. Automatic FLM crawling is not authoritative ingestion.
 
 ## Product workflows
 
-1. **Flow 1 - Document Management & Indexing** - COMPLETE - Razor Pages
-2. **Flow 2 - RAG Question & Answer & Conversation Management** - PENDING - **ASP.NET Core MVC**
+1. **Flow 1 - Document Management & Indexing** - COMPLETE - MVC
+2. **Flow 2 - RAG Question & Answer & Conversation Management** - PENDING - MVC
 3. **Flow 3 - Report & Statistics** - COMPLETE - Razor Pages
 
-Conversation History belongs to Flow 2 and is not counted as Flow 3.
+Conversation History belongs to Flow 2 and is not counted as a separate workflow.
 
-## Current merged milestone
-
-Latest synchronized baseline after PR #12:
+## Current milestone
 
 - Member 1 Core/Data: **complete**
-- Member 2 Flow 1 Document/Chapter Management request side: **complete / merged**
+- Member 2 Flow 1 Document/Chapter Management request side: **complete**, now MVC
 - Member 3 Flow 1 Document Indexing/Ingestion: **complete / merged through PR #9**
 - Member 2 Flow 3 Report & Statistics: **complete / merged through PR #12**
 - Member 4 Flow 2 RAG backend: **pending**
 - Member 5 Flow 2 MVC chat/history/citation presentation + evaluation: **pending**
 
-PR #9 completed the Member 2 -> Member 3 Flow 1 handoff. PR #12 completed Member 2's independent Flow 3 reporting assignment. The main unfinished product work is now Flow 2, and its presentation model is fixed to ASP.NET Core MVC rather than Razor Pages.
-
-When status is unclear, latest merged code on `master` is the source of truth; synchronize docs afterward.
+When status is unclear, latest merged code on `master` is the source of truth; synchronize docs afterward. During an open migration PR, its branch docs describe the intended post-merge state.
 
 ## Team ownership and integration boundaries
 
-### Member 1 - Core/Data Lead - COMPLETE BASELINE
+### Member 1 - Core/Data Lead
 
 Owns:
 
@@ -73,15 +76,28 @@ Owns:
 - cross-workflow `Application/` contracts/models
 - schema/migration conventions
 - architecture/convention tests
-- coordination for genuine EF model/migration changes
+- coordination for genuine EF model changes
 
-Do not move later workflow business logic into Member 1 simply because shared contracts live under `Application/`.
+Do not move workflow business logic into Member 1 simply because shared contracts live under `Application/`.
 
-### Member 2 - Document Management + Report & Statistics - COMPLETE CURRENT ASSIGNMENT
+### Member 2 - Flow 1 Document Management + Flow 3 Reporting
 
-#### Flow 1 request/presentation - COMPLETE
+#### Flow 1 request/presentation - COMPLETE / MVC
 
-Merged behavior includes:
+Current locations:
+
+```text
+src/PRN222.RagAssistant/Controllers/DocumentsController.cs
+src/PRN222.RagAssistant/Controllers/ChaptersController.cs
+src/PRN222.RagAssistant/Models/Documents/
+src/PRN222.RagAssistant/Models/Chapters/
+src/PRN222.RagAssistant/Views/Documents/
+src/PRN222.RagAssistant/Views/Chapters/
+```
+
+The previous `Pages/Documents/` and `Pages/Chapters/` Flow 1 implementation has been removed. **Do not recreate a parallel Razor Pages implementation.**
+
+Flow 1 behavior includes:
 
 - runtime PRN222 Chapter list/create/edit/delete
 - Document list/filter/upload/details/edit/delete/re-index request
@@ -90,48 +106,35 @@ Merged behavior includes:
 - source-file persistence
 - document metadata persistence
 - PRN222 chapter validation
-- `AppPolicies.ManageDocuments` server-side enforcement
+- `AppPolicies.ManageDocuments` enforcement on writes
+- anti-forgery validation on POST actions
 - queue handoff after document persistence
 - safe chapter deletion that unassigns referenced documents first
 
-Flow 1 request handlers must not parse, chunk, embed, query pgvector, or call Ollama.
+Flow 1 controllers must not parse, chunk, embed, query pgvector, or call Ollama directly. Upload/re-index hands off through `IDocumentIndexingQueue`.
 
-#### Flow 3 Report & Statistics - COMPLETE
+See `docs/flow-1-mvc-migration.md` and `docs/member-2-document-management-handoff.md`.
 
-PR #12 merged a read-only Subject Leader reporting dashboard under `Pages/Reports/`.
+#### Flow 3 Report & Statistics - COMPLETE / Razor Pages
 
-Implemented reporting includes:
+Flow 3 remains under `Pages/Reports/`.
 
-- total PRN222 chapters/documents
-- documents by indexing state
-- documents by chapter/unassigned
-- total PRN222 `DocumentChunk` count
-- indexing completion percentage
-- recent indexing failures / `IndexError`
-- recently indexed documents with chunk counts/timestamps
-- total chat sessions/messages/citations
-- graceful empty/zero states before Flow 2 data exists
+It includes read-only Subject-Leader metrics for chapters/documents, indexing state, chunks, recent indexing failures/successes, and chat session/message/citation totals.
 
-The Reports page uses `AppPolicies.ManageDocuments` and is server-side restricted to `SubjectLeader`.
-
-Flow 3 must remain read-only and must not:
+Flow 3 must not:
 
 - enqueue/re-index documents as part of reporting
 - alter parser/chunker/embedding/worker behavior
 - mutate workflow data
 - run pgvector similarity retrieval
 - call Ollama
-- duplicate Member 5 Conversation History UI
+- duplicate Conversation History UI
 - add speculative analytics entities/migrations
 - change shared contracts solely for dashboard convenience
 
-If reporting exposes a genuine persistence gap, coordinate through Member 1.
-
-Do not recreate `feature/report-statistics` as a competing implementation; Flow 3 is already merged.
-
 ### Member 3 - Document Indexing / Ingestion - COMPLETE
 
-PR #9 merged:
+Merged indexing responsibilities:
 
 - `DocumentParserFactory`
 - PDF parser via PdfPig
@@ -139,54 +142,47 @@ PR #9 merged:
 - `TextChunker`
 - `TextEmbeddingBatcher`
 - `OllamaTextEmbeddingService`
-- single and ordered-batch `ITextEmbeddingService` support
 - `DocumentIndexingService`
 - `DocumentIndexingWorker`
 - coherent `DocumentChunk` replacement
-- index state/error/timestamp persistence
-- startup rehydration of `Uploaded`/`Processing` documents
+- indexing state/error/timestamp persistence
+- startup rehydration of persisted `Uploaded`/`Processing` documents
 
-Implemented state flow:
+State flow:
 
 ```text
 Uploaded -> Processing -> Indexed
                      \-> Failed
 ```
 
-The active `InMemoryDocumentIndexingQueue` is an in-process queue consumed by the worker. It is not a durable external broker. Worker startup recovery is based on persisted document state.
+`InMemoryDocumentIndexingQueue` is process-local, not a durable broker. Recovery is based on persisted document state.
 
-Do not create a second indexing pipeline in later member branches.
-
-See `docs/member-3-document-indexing-handoff.md`.
+Do not create a second indexing pipeline.
 
 ### Member 4 - RAG / Chat Backend - PENDING
 
-Member 4 is the primary remaining backend implementation owner.
-
-Owns Flow 2 backend:
+Owns:
 
 - question embedding through `ITextEmbeddingService.EmbedAsync`
 - pgvector similarity retrieval over successfully indexed PRN222 chunks
 - top-K context selection
 - grounded prompt construction
 - explicit no-evidence/out-of-scope behavior
-- `IChatCompletionService` implementation
-- `IRagQueryService` implementation
+- `IChatCompletionService`
+- `IRagQueryService`
 - chat-session ownership validation
 - user/assistant message persistence
 - ordered `MessageCitation` persistence
 
-Member 4's backend must remain presentation-agnostic. It must not depend on MVC `Controller`, Razor Pages `PageModel`, `HttpContext`, or browser-specific DTOs.
+Member 4 must remain presentation-agnostic and must not depend on MVC `Controller`, Razor `PageModel`, `HttpContext`, or browser-specific DTOs.
 
-Member 4 must not parse raw source files, chunk documents, generate document embeddings, mutate indexing state as part of normal Q&A, recreate Flow 3 reporting, or place pgvector/Ollama logic directly in an MVC controller.
+Member 4 must not parse raw source files, duplicate indexing, recreate Flow 3 reporting, or place provider/retrieval logic directly in controllers.
 
 ### Member 5 - Flow 2 MVC Presentation / Conversation Management / Evaluation - PENDING
 
-Flow 2 presentation is explicitly assigned to **ASP.NET Core MVC Controllers + Views**, not Razor Pages.
+Owns:
 
-Member 5 owns:
-
-- MVC chat controller/actions
+- focused MVC chat controller/actions
 - MVC chat/session views
 - chat-session creation/opening/navigation presentation
 - Conversation History presentation
@@ -195,39 +191,40 @@ Member 5 owns:
 - human-authored 50-question evaluation set
 - evaluation-facing tooling/tests
 
-Expected presentation areas include:
+Expected locations:
 
 ```text
-src/PRN222.RagAssistant/Controllers/
+src/PRN222.RagAssistant/Controllers/ChatController.cs
 src/PRN222.RagAssistant/Views/Chat/
 ```
 
-Additional MVC view-support files such as `Views/_ViewImports.cshtml`, `Views/_ViewStart.cshtml`, or `Views/Shared/` may be added when needed.
+Supporting shared MVC view files may be reused where appropriate.
 
-**Do not implement Flow 2 under `Pages/Chat`, `Pages/Conversation`, or other new Razor Page folders.** Existing Flow 1/Flow 3 Razor Pages remain unchanged.
+**Do not implement Flow 2 under `Pages/Chat`, `Pages/Conversation`, or another Razor Pages folder.**
 
-MVC controllers must stay thin: they handle HTTP/model binding/authorization/navigation and delegate grounded Q&A to `IRagQueryService`. Browser/controller code must not call Ollama or query pgvector directly.
+Because Flow 1 already uses MVC, do not mix Flow 2 responsibilities into `DocumentsController` or `ChaptersController`.
 
-Member 5 must not count Conversation History as a separate workflow or duplicate the completed Reports page.
+MVC chat controllers must stay thin and delegate grounded Q&A to `IRagQueryService`. They must not call Ollama or query pgvector directly.
 
 ## Presentation model rules
 
-The mixed ASP.NET Core host is intentional:
+The mixed host is intentional:
 
-- **Flow 1:** Razor Pages - already complete; do not migrate it merely for consistency.
-- **Flow 2:** **MVC Controllers + Views - mandatory for new implementation.**
-- **Flow 3:** Razor Pages - already complete; do not migrate it merely for consistency.
-- Authentication pages may remain Razor Pages.
+- **Flow 1:** MVC Controllers + Views - complete.
+- **Flow 2:** MVC Controllers + Views - required for implementation.
+- **Flow 3:** Razor Pages - complete.
+- Authentication/shell pages may remain Razor Pages.
 
-`Program.cs` already registers both `AddControllersWithViews()` and `AddRazorPages()` and maps both MVC controller routes and Razor Pages. Flow 2 therefore does not require replacing the existing host architecture.
+`Program.cs` registers/maps both MVC and Razor Pages.
 
-For Flow 2:
+For MVC workflow code:
 
-- use MVC controllers/actions as the HTTP entry points;
-- render MVC views under `Views/`;
-- do not create a parallel Razor Pages implementation;
-- keep retrieval, embedding, generation, and persistence business logic behind application/service boundaries rather than inside controllers;
-- reuse shared styling/layout conventions where practical without rewriting completed Flow 1/Flow 3 pages.
+- use controller actions as HTTP entry points;
+- render views under `Views/`;
+- keep request/view models out of domain entities;
+- enforce authorization server-side;
+- use anti-forgery protection for state-changing form posts;
+- keep provider/retrieval/indexing business logic behind service boundaries.
 
 ## Shared-contract rules
 
@@ -243,47 +240,37 @@ Current contracts/models:
 - `RagAnswer`
 - `RagCitation`
 
-`ITextEmbeddingService` supports both single-text embedding and ordered batch embedding. Indexing and retrieval must use the same configured embedding model.
+`ITextEmbeddingService` supports single-text and ordered batch embedding. Indexing and retrieval must use the same configured embedding model.
 
-Treat public signatures as stable. Prefer additive changes. If a contract genuinely must change, update all affected producers/consumers together and synchronize docs.
-
-Flow 3 completed without a reporting-specific shared contract. Do not add one unless a concrete new requirement justifies it.
+Treat public signatures as stable. Prefer additive changes. If a contract must change, update affected producers/consumers together and synchronize docs.
 
 ## Repository layout
 
-- `src/PRN222.RagAssistant/Application/`: shared abstractions/models
-- `src/PRN222.RagAssistant/Domain/Entities/`: persistence entities
-- `src/PRN222.RagAssistant/Domain/Enums/`: domain enums
-- `src/PRN222.RagAssistant/Data/`: DbContext/configurations/migrations/seed IDs
-- `src/PRN222.RagAssistant/Security/`: role/policy constants
-- `src/PRN222.RagAssistant/Infrastructure/Parsing/`: merged document parsers/chunker
-- `src/PRN222.RagAssistant/Infrastructure/Services/`: queue, indexing, Ollama embedding services
-- `src/PRN222.RagAssistant/Pages/Account/`: auth Razor Pages
-- `src/PRN222.RagAssistant/Pages/Chapters/`: completed Flow 1 Chapter Management Razor Pages
-- `src/PRN222.RagAssistant/Pages/Documents/`: completed Flow 1 Document Management Razor Pages
-- `src/PRN222.RagAssistant/Pages/Reports/`: completed Flow 3 Reports/Statistics Razor Pages
-- `src/PRN222.RagAssistant/Controllers/`: reserved for pending Flow 2 MVC presentation
-- `src/PRN222.RagAssistant/Views/`: reserved for pending Flow 2 MVC presentation
-- `tests/PRN222.RagAssistant.Tests/`: unit/architecture/convention tests
-- `docs/`: project status/architecture/ownership/handoffs
-- `evaluation/`: version-controlled evaluation set
-- `infrastructure/postgres/init/`: DB runtime initialization such as pgvector extension
+- `Application/`: shared abstractions/models
+- `Domain/Entities/`: persistence entities
+- `Domain/Enums/`: domain enums
+- `Data/`: DbContext/configurations/migrations/seed IDs
+- `Security/`: role/policy constants
+- `Infrastructure/Parsing/`: parsers/chunker
+- `Infrastructure/Services/`: queue/indexing/Ollama services
+- `Controllers/DocumentsController.cs`: Flow 1 document MVC request side
+- `Controllers/ChaptersController.cs`: Flow 1 chapter MVC request side
+- `Models/Documents/`, `Models/Chapters/`: Flow 1 MVC view/input models
+- `Views/Documents/`, `Views/Chapters/`: Flow 1 MVC views
+- `Pages/Account/`: auth Razor Pages
+- `Pages/Reports/`: Flow 3 Reports/Statistics Razor Pages
+- `Controllers/` + `Views/Chat/`: shared MVC root / pending Flow 2 presentation
+- `tests/PRN222.RagAssistant.Tests/`: tests
+- `docs/`: status/architecture/ownership/handoffs
+- `evaluation/`: evaluation set
+- `infrastructure/postgres/init/`: pgvector/runtime DB initialization
 - `storage/uploads/`: runtime source documents; never commit uploads
 
 ## Mandatory EF Core entity rules
 
-1. **No navigation properties in entity classes.**
-   - Store explicit scalar foreign keys.
-
-2. **No EF mapping attributes inside entities.**
-   - Mapping belongs in dedicated configuration classes.
-   - Validation annotations belong on request/input models when needed.
-
+1. **No navigation properties in entity classes.** Use scalar foreign keys.
+2. **No EF mapping attributes in entities.** Mapping belongs in dedicated configuration classes; validation annotations belong on request/input models when needed.
 3. **Every entity has a dedicated `IEntityTypeConfiguration<TEntity>`.**
-   - Location: `Data/Configurations/`
-   - Name: `<EntityName>Configuration`
-   - Configure table/key/length/type/requiredness/enums/indexes/relationships/delete behavior/seed data there.
-
 4. **Configure relationships without navigation properties.**
 
 ```csharp
@@ -293,29 +280,12 @@ builder.HasOne<Subject>()
     .OnDelete(DeleteBehavior.Restrict);
 ```
 
-5. **Keep `ApplicationDbContext` thin.**
-   - Call `base.OnModelCreating(builder)`.
-   - Use `ApplyConfigurationsFromAssembly(...)`.
-   - Do not add entity-specific Fluent API mapping directly in DbContext.
+5. **Keep `ApplicationDbContext` thin.** Use `ApplyConfigurationsFromAssembly(...)`.
+6. **Use EF Core migrations for application schema.** Do not create application tables in PostgreSQL init scripts or use `EnsureCreated`.
+7. Use stable conventions: `Guid` PKs unless required otherwise, UTC timestamps with `Utc` suffix, explicit delete behavior, established enum persistence.
+8. Keep architecture/convention tests green.
 
-6. **Use EF Core migrations for application schema.**
-   - repository-local `dotnet-ef`
-   - migrations under `Data/Migrations/`
-   - do not create application tables in PostgreSQL init scripts
-   - do not use `EnsureCreated`
-   - do not hand-edit generated migration/snapshot files unless repairing a known issue
-   - synchronize with latest `master` before generating migrations
-
-7. **Stable persistence conventions.**
-   - application PKs use `Guid` unless requirement says otherwise
-   - timestamps use UTC and `Utc` suffix
-   - explicit delete behavior
-   - domain enums follow established persisted-string convention unless justified otherwise
-
-8. **Convention tests must stay green.**
-   - `EntityModelConventionsTests`
-   - `CoreDataArchitectureTests`
-   - existing Chapter/Document/indexing/reporting tests
+A presentation-only MVC migration does **not** justify an EF Core migration.
 
 ## Identity and authorization rules
 
@@ -323,8 +293,10 @@ builder.HasOne<Subject>()
 - Role names live in `Security/AppRoles.cs`.
 - Policy names live in `Security/AppPolicies.cs`.
 - Document/Chapter writes require `AppPolicies.ManageDocuments` and `SubjectLeader`.
-- Flow 3 Reports also require `AppPolicies.ManageDocuments` and are read-only.
-- Flow 2 MVC actions must enforce authenticated-user/session ownership server-side; hiding links is not authorization.
+- Flow 1 POST write actions use anti-forgery validation.
+- Flow 3 Reports require `AppPolicies.ManageDocuments` and remain read-only.
+- Flow 2 must validate authenticated user/session ownership server-side.
+- Hiding UI is not authorization.
 - Users must never self-select `SubjectLeader` through public registration.
 - Demo-user seeding is config-driven and disabled by default.
 - Never commit real credentials.
@@ -340,29 +312,27 @@ builder.HasOne<Subject>()
 - `ChatMessage`
 - `MessageCitation`
 
-Only PRN222 is seeded as subject scope. Chapters are runtime-managed and must not be invented from FLM in migrations/code without verified requirements.
-
-The model supports completed Flow 1, pending Flow 2 persistence, and completed Flow 3 aggregate reporting. Do not add duplicate fields merely because Flow 2 is still pending.
+Only PRN222 subject scope is seeded. Chapters are runtime-managed and must not be invented from FLM in migrations/code without a verified requirement.
 
 ## Indexing rules
 
-- Member 2 persists source file + `Document`, then enqueues `Document.Id`.
-- Worker performs indexing out of request handlers.
+- Flow 1 persists source file + `Document`, then enqueues `Document.Id`.
+- Worker performs indexing outside request actions.
 - Re-indexing replaces stale chunks coherently.
-- On success: `Indexed`, `IndexedAtUtc`, clear error.
-- On failure: `Failed`, bounded `IndexError`.
-- Do not use a different embedding model for retrieval than indexing.
+- On success: `Indexed`, set `IndexedAtUtc`, clear error.
+- On failure: `Failed`, persist bounded `IndexError`.
+- Retrieval must use the same embedding model as indexing.
 - If embedding model changes, re-index affected documents.
-- Do not introduce an external broker unless required.
+- Do not introduce an external broker without a concrete requirement.
 
 ## Reporting rules
 
 - Reports read existing PostgreSQL persistence only.
 - Use aggregate EF Core queries and `AsNoTracking()` where appropriate.
 - Do not scan `storage/uploads/` for counts.
-- Do not mutate workflow rows from report handlers.
-- Chat metrics must tolerate zero data until Flow 2 persists sessions/messages/citations.
-- Preserve the Subject-Leader-only authorization boundary.
+- Do not mutate workflow rows from reports.
+- Chat metrics must tolerate zero data until Flow 2 persists chat rows.
+- Preserve Subject-Leader-only authorization.
 
 ## Infrastructure configuration
 
@@ -385,8 +355,7 @@ Do not add pgAdmin, Qdrant, Redis, RabbitMQ, Elasticsearch, RAGFlow, analytics w
 
 ## Dependencies and frontend assets
 
-Frontend libraries are restored by LibMan; source of truth is `libman.json`.
-Repository-local .NET CLI tools are declared in `dotnet-tools.json`.
+Frontend libraries are restored by LibMan; `libman.json` is the source of truth. Repository-local .NET CLI tools are declared in `dotnet-tools.json`.
 
 Do not directly edit generated/downloaded frontend library files.
 
@@ -414,13 +383,12 @@ Do not run `docker compose down -v` or remove named volumes unless explicitly re
 
 ## Git and file hygiene
 
-- Remote default branch is `origin/master`.
+- Remote default branch is `master`.
 - Use focused feature branches/PRs.
-- Do not have multiple members independently modify the same shared schema/contract without coordination.
-- Do not recreate already merged document-indexing or report-statistics implementations.
-- Do not create a Razor Pages implementation of Flow 2 in parallel with the required MVC implementation.
+- Do not let multiple members independently modify the same shared schema/contract without coordination.
+- Do not recreate already merged indexing/reporting implementations.
+- Do not recreate Flow 1 Razor Pages or create Flow 2 Razor Pages.
 - Never commit `.env`, credentials, keys, DB dumps, logs, uploaded documents, build output, downloaded Ollama models, or runtime data.
-- Keep source/tests/docs/migrations/config examples version-controlled.
 - `storage/uploads/` is runtime data except `.gitkeep`; temp/processed/chunks paths remain ignored.
 - Preserve unrelated changes.
 

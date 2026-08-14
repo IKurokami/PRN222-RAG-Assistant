@@ -1,5 +1,4 @@
-@page
-@model PRN222.RagAssistant.Pages.Documents.UploadModel
+@model DocumentUploadViewModel
 @{
     ViewData["Title"] = "Tải lên tài liệu môn PRN222";
 }
@@ -8,12 +7,12 @@
     <div class="col-md-8">
         <div class="d-flex justify-content-between align-items-center mb-4">
             <h2>Tải lên tài liệu môn PRN222</h2>
-            <a asp-page="./Index" class="btn btn-outline-secondary">Quay lại danh sách</a>
+            <a asp-controller="Documents" asp-action="Index" class="btn btn-outline-secondary">Quay lại danh sách</a>
         </div>
 
         <div class="card shadow-sm">
             <div class="card-body">
-                <form method="post" enctype="multipart/form-data">
+                <form method="post" asp-controller="Documents" asp-action="Upload" enctype="multipart/form-data">
                     <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
 
                     <div class="mb-3">
@@ -28,7 +27,7 @@
                             <select asp-for="Input.ChapterId" asp-items="Model.ChapterOptions" class="form-select">
                                 <option value="">-- Chọn chương môn học (Không bắt buộc) --</option>
                             </select>
-                            <a asp-page="/Chapters/Create" class="btn btn-outline-secondary" title="Tạo chương mới">
+                            <a asp-controller="Chapters" asp-action="Create" class="btn btn-outline-secondary" title="Tạo chương mới">
                                 + Tạo chương mới
                             </a>
                         </div>
@@ -43,7 +42,7 @@
                     </div>
 
                     <div class="d-grid gap-2 d-md-flex justify-content-md-end">
-                        <a asp-page="./Index" class="btn btn-light me-md-2">Hủy bỏ</a>
+                        <a asp-controller="Documents" asp-action="Index" class="btn btn-light me-md-2">Hủy bỏ</a>
                         <button type="submit" class="btn btn-primary px-4">Tải lên & Tự động Index</button>
                     </div>
                 </form>

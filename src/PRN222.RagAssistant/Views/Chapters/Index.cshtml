@@ -1,5 +1,4 @@
-@page
-@model PRN222.RagAssistant.Pages.Chapters.IndexModel
+@model ChapterIndexViewModel
 @{
     ViewData["Title"] = "Quản lý Chương - PRN222";
 }
@@ -11,7 +10,7 @@
     </div>
     @if (Model.CanManageDocuments)
     {
-        <a asp-page="./Create" class="btn btn-primary">
+        <a asp-controller="Chapters" asp-action="Create" class="btn btn-primary">
             <i class="bi bi-plus-circle"></i> Thêm chương mới
         </a>
     }
@@ -32,7 +31,7 @@
         <p class="text-muted">Các chương môn học sẽ hiển thị tại đây.</p>
         @if (Model.CanManageDocuments)
         {
-            <a asp-page="./Create" class="btn btn-primary mt-2">Thêm chương đầu tiên</a>
+            <a asp-controller="Chapters" asp-action="Create" class="btn btn-primary mt-2">Thêm chương đầu tiên</a>
         }
     </div>
 }
@@ -58,8 +57,7 @@ else
                         <td class="fw-bold text-center">@chapter.Number</td>
                         <td>@chapter.Title</td>
                         <td class="text-center">
-                            <a asp-page="/Documents/Index"
-                               asp-route-selectedChapterId="@chapter.Id"
+                            <a asp-controller="Documents" asp-action="Index" asp-route-selectedChapterId="@chapter.Id"
                                class="badge bg-info text-dark text-decoration-none">
                                 @chapter.DocumentCount tài liệu
                             </a>
@@ -68,12 +66,12 @@ else
                         {
                             <td class="text-end pe-3">
                                 <div class="d-flex gap-2 justify-content-end">
-                                    <a asp-page="./Edit" asp-route-id="@chapter.Id"
+                                    <a asp-controller="Chapters" asp-action="Edit" asp-route-id="@chapter.Id"
                                        class="btn btn-sm px-3 fw-medium"
                                        style="background:#e8f4fd;color:#0d6efd;border:none;border-radius:8px;">
                                         Sửa
                                     </a>
-                                    <a asp-page="./Delete" asp-route-id="@chapter.Id"
+                                    <a asp-controller="Chapters" asp-action="Delete" asp-route-id="@chapter.Id"
                                        class="btn btn-sm px-3 fw-medium"
                                        style="background:#fde8e8;color:#dc3545;border:none;border-radius:8px;">
                                         Xóa
@@ -89,5 +87,5 @@ else
 }
 
 <div class="mt-3">
-    <a asp-page="/Documents/Index" class="btn btn-outline-secondary btn-sm">← Quay lại danh sách tài liệu</a>
+    <a asp-controller="Documents" asp-action="Index" class="btn btn-outline-secondary btn-sm">← Quay lại danh sách tài liệu</a>
 </div>

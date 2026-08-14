@@ -1,6 +1,5 @@
-@page
 @using PRN222.RagAssistant.Domain.Enums
-@model PRN222.RagAssistant.Pages.Documents.IndexModel
+@model DocumentIndexViewModel
 @{
     ViewData["Title"] = "Quản lý tài liệu PRN222";
 }
@@ -12,7 +11,7 @@
     </div>
     @if (Model.CanManageDocuments)
     {
-        <a asp-page="./Upload" class="btn btn-primary">
+        <a asp-controller="Documents" asp-action="Upload" class="btn btn-primary">
             <i class="bi bi-upload"></i> Tải lên tài liệu mới
         </a>
     }
@@ -28,7 +27,7 @@
 
 <div class="card mb-4 shadow-sm">
     <div class="card-body">
-        <form method="get" class="row g-3 align-items-center">
+        <form method="get" asp-controller="Documents" asp-action="Index" class="row g-3 align-items-center">
             <div class="col-md-6 col-lg-4">
                 <label asp-for="SelectedChapterId" class="form-label mb-1 fw-bold">Lọc theo Chương môn học:</label>
                 <select asp-for="SelectedChapterId" asp-items="Model.ChapterOptions" class="form-select" onchange="this.form.submit()">
@@ -38,7 +37,7 @@
             @if (Model.SelectedChapterId.HasValue)
             {
                 <div class="col-md-auto align-self-end">
-                    <a asp-page="./Index" class="btn btn-outline-secondary">Xóa bộ lọc</a>
+                    <a asp-controller="Documents" asp-action="Index" class="btn btn-outline-secondary">Xóa bộ lọc</a>
                 </div>
             }
         </form>
@@ -52,7 +51,7 @@
         <p class="text-muted">Các tài liệu sau khi tải lên sẽ hiển thị tại đây để sinh viên truy vấn RAG.</p>
         @if (Model.CanManageDocuments)
         {
-            <a asp-page="./Upload" class="btn btn-primary mt-2">Tải lên tài liệu ngay</a>
+            <a asp-controller="Documents" asp-action="Upload" class="btn btn-primary mt-2">Tải lên tài liệu ngay</a>
         }
     </div>
 }
@@ -75,7 +74,7 @@ else
                 {
                     <tr>
                         <td>
-                            <a asp-page="./Details" asp-route-id="@doc.Id" class="fw-bold text-decoration-none text-dark">
+                            <a asp-controller="Documents" asp-action="Details" asp-route-id="@doc.Id" class="fw-bold text-decoration-none text-dark">
                                 @doc.Title
                             </a>
                             <div class="small text-muted">@doc.OriginalFileName</div>
@@ -111,7 +110,7 @@ else
                         <td class="small text-muted">@doc.UploadedAtUtc.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
                         <td class="text-end pe-3">
                             <div class="d-flex gap-2 justify-content-end align-items-center flex-nowrap">
-                                <a asp-page="./Details" asp-route-id="@doc.Id"
+                                <a asp-controller="Documents" asp-action="Details" asp-route-id="@doc.Id"
                                    class="btn btn-sm px-3 fw-medium"
                                    style="background:#e8f4fd;color:#0d6efd;border:none;border-radius:8px;"
                                    title="Xem chi tiết">
@@ -120,7 +119,7 @@ else
 
                                 @if (Model.CanManageDocuments)
                                 {
-                                    <form method="post" asp-page-handler="Reindex" asp-route-id="@doc.Id" class="m-0"
+                                    <form method="post" asp-controller="Documents" asp-action="Reindex" asp-route-id="@doc.Id" asp-route-selectedChapterId="@Model.SelectedChapterId" class="m-0"
                                           onsubmit="return confirm('Yêu cầu index lại tài liệu này?');">
                                         <button type="submit"
                                                 class="btn btn-sm px-3 fw-medium"
@@ -130,7 +129,7 @@ else
                                         </button>
                                     </form>
 
-                                    <form method="post" asp-page-handler="Delete" asp-route-id="@doc.Id" class="m-0"
+                                    <form method="post" asp-controller="Documents" asp-action="Delete" asp-route-id="@doc.Id" asp-route-selectedChapterId="@Model.SelectedChapterId" class="m-0"
                                           onsubmit="return confirm('Xóa tài liệu này? Thao tác không thể hoàn tác.');">
                                         <button type="submit"
                                                 class="btn btn-sm px-3 fw-medium"

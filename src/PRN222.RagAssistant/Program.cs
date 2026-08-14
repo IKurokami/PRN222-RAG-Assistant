@@ -2,7 +2,8 @@ using PRN222.RagAssistant.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Support both presentation models required by the course assignments.
+// Flow 1 and the pending Flow 2 use MVC Controllers + Views.
+// Razor Pages remain enabled for authentication, shell pages, and Flow 3 reporting.
 builder.Services.AddControllersWithViews();
 builder.Services.AddRazorPages();
 builder.Services.AddInfrastructure(builder.Configuration);
