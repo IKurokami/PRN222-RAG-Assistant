@@ -12,7 +12,7 @@ namespace PRN222.RagAssistant.Tests;
 public sealed class ChapterAuthorizationTests
 {
     [Fact]
-    public async Task ManageDocuments_policy_requires_SubjectLeader_role_only()
+    public async Task ManageDocuments_policy_requires_Admin_or_SubjectLeader()
     {
         var services = BuildServices();
         await using var provider = services.BuildServiceProvider();
@@ -22,9 +22,25 @@ public sealed class ChapterAuthorizationTests
 
         Assert.NotNull(policy);
         var roleRequirement = Assert.Single(policy!.Requirements.OfType<RolesAuthorizationRequirement>());
+        Assert.Contains(AppRoles.Admin, roleRequirement.AllowedRoles);
         Assert.Contains(AppRoles.SubjectLeader, roleRequirement.AllowedRoles);
         Assert.DoesNotContain(AppRoles.Student, roleRequirement.AllowedRoles);
-        Assert.Single(roleRequirement.AllowedRoles);
+        Assert.Equal(2, roleRequirement.AllowedRoles.Count());
+    }
+
+    [Fact]
+    public async Task Admin_satisfies_ManageDocuments_policy()
+    {
+        var services = BuildServices();
+        await using var provider = services.BuildServiceProvider();
+        var authService = provider.GetRequiredService<IAuthorizationService>();
+
+        var result = await authService.AuthorizeAsync(
+            TestPrincipals.WithRole(AppRoles.Admin),
+            resource: null,
+            AppPolicies.ManageDocuments);
+
+        Assert.True(result.Succeeded);
     }
 
     [Fact]
@@ -70,6 +86,91 @@ public sealed class ChapterAuthorizationTests
             AppPolicies.ManageDocuments);
 
         Assert.False(result.Succeeded);
+    }
+
+    [Fact]
+    public async Task ManageUsers_policy_requires_Admin_only()
+    {
+        var services = BuildServices();
+        await using var provider = services.BuildServiceProvider();
+        var policyProvider = provider.GetRequiredService<IAuthorizationPolicyProvider>();
+
+        var policy = await policyProvider.GetPolicyAsync(AppPolicies.ManageUsers);
+
+        Assert.NotNull(policy);
+        var roleRequirement = Assert.Single(policy!.Requirements.OfType<RolesAuthorizationRequirement>());
+        Assert.Contains(AppRoles.Admin, roleRequirement.AllowedRoles);
+        Assert.DoesNotContain(AppRoles.SubjectLeader, roleRequirement.AllowedRoles);
+        Assert.DoesNotContain(AppRoles.Student, roleRequirement.AllowedRoles);
+        Assert.Single(roleRequirement.AllowedRoles);
+    }
+
+    [Fact]
+    public async Task Admin_satisfies_ManageUsers_policy()
+    {
+        var services = BuildServices();
+        await using var provider = services.BuildServiceProvider();
+        var authService = provider.GetRequiredService<IAuthorizationService>();
+
+        var result = await authService.AuthorizeAsync(
+            TestPrincipals.WithRole(AppRoles.Admin),
+            resource: null,
+            AppPolicies.ManageUsers);
+
+        Assert.True(result.Succeeded);
+    }
+
+    [Fact]
+    public async Task SubjectLeader_does_not_satisfy_ManageUsers_policy()
+    {
+        var services = BuildServices();
+        await using var provider = services.BuildServiceProvider();
+        var authService = provider.GetRequiredService<IAuthorizationService>();
+
+        var result = await authService.AuthorizeAsync(
+            TestPrincipals.WithRole(AppRoles.SubjectLeader),
+            resource: null,
+            AppPolicies.ManageUsers);
+
+        Assert.False(result.Succeeded);
+    }
+
+    [Fact]
+    public void AdminUsers_controller_requires_ManageUsers_policy()
+    {
+        var attributes = typeof(AdminUsersController)
+            .GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
+            .Cast<AuthorizeAttribute>()
+            .ToList();
+
+        var authorizeAttribute = Assert.Single(attributes);
+        Assert.Equal(AppPolicies.ManageUsers, authorizeAttribute.Policy);
+    }
+
+    [Theory]
+    [InlineData(nameof(AdminUsersController.Create))]
+    [InlineData(nameof(AdminUsersController.Edit))]
+    public void AdminUsers_POST_actions_validate_anti_forgery_tokens(string actionName)
+    {
+        var postMethods = typeof(AdminUsersController)
+            .GetMethods()
+            .Where(method => method.Name == actionName)
+            .Where(method => method.GetCustomAttributes(typeof(HttpPostAttribute), inherit: true).Any())
+            .ToList();
+
+        Assert.NotEmpty(postMethods);
+        Assert.All(postMethods, method => Assert.Contains(
+            method.GetCustomAttributes(typeof(ValidateAntiForgeryTokenAttribute), inherit: true),
+            attribute => attribute is ValidateAntiForgeryTokenAttribute));
+    }
+
+    [Fact]
+    public void Application_role_catalog_contains_Admin_SubjectLeader_and_Student()
+    {
+        Assert.Equal(3, AppRoles.All.Length);
+        Assert.Contains(AppRoles.Admin, AppRoles.All);
+        Assert.Contains(AppRoles.SubjectLeader, AppRoles.All);
+        Assert.Contains(AppRoles.Student, AppRoles.All);
     }
 
     [Fact]

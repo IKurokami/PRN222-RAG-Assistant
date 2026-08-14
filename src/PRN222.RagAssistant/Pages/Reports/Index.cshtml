@@ -1,34 +1,39 @@
 @page
-@using PRN222.RagAssistant.Domain.Enums
 @model PRN222.RagAssistant.Pages.Reports.IndexModel
 @{
-    ViewData["Title"] = "Báo Cáo & Thống Kê Vận Hành - PRN222";
+    ViewData["Title"] = $"Báo cáo & Thống kê - {Model.SubjectCode}";
     var totalIndexed = Model.UploadedCount + Model.ProcessingCount + Model.IndexedCount + Model.FailedCount;
     var indexedPercent = totalIndexed > 0 ? (int)Math.Round(Model.IndexedCount * 100.0 / totalIndexed) : 0;
 }
 
 <div class="container py-4">
     <!-- Breadcrumb -->
-    <div class="academic-breadcrumb">
+    <div class="academic-breadcrumb mb-3">
         <a asp-page="/Index"><i class="bi bi-house-door"></i> Trang chủ</a>
         <span class="academic-breadcrumb-separator">/</span>
-        <span class="text-slate-800 fw-semibold">Báo cáo &amp; Thống kê</span>
+        <a asp-controller="Subjects" asp-action="Index">Môn học</a>
+        <span class="academic-breadcrumb-separator">/</span>
+        <span class="text-slate-800 fw-semibold">Báo cáo @Model.SubjectCode</span>
     </div>
 
     <!-- Header Section -->
-    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4 pb-2 border-bottom">
         <div>
+            <div class="badge bg-primary-subtle text-primary border border-primary-subtle px-2.5 py-1 mb-1 font-monospace">@Model.SubjectCode</div>
             <h1 class="fw-bold fs-3 text-slate-900 mb-1">
-                <i class="bi bi-bar-chart-line-fill text-primary me-2"></i>Báo Cáo &amp; Thống Kê PRN222
+                <i class="bi bi-bar-chart-line-fill text-primary me-2"></i>Báo Cáo &amp; Thống Kê
             </h1>
-            <p class="text-slate-500 mb-0">Giám sát tổng quan dữ liệu bài giảng, hiệu năng vector embeddings và hoạt động RAG.</p>
+            <p class="text-slate-500 mb-0">@Model.SubjectName — Giám sát tổng quan dữ liệu bài giảng, hiệu năng vector embeddings và hoạt động RAG.</p>
         </div>
         <div class="d-flex gap-2">
-            <a asp-controller="Documents" asp-action="Index" class="btn btn-sm btn-academic-outline">
-                <i class="bi bi-journal-bookmark"></i> Quản lý tài liệu
+            <a asp-controller="Documents" asp-action="Index" asp-route-subjectId="@Model.SubjectId" class="btn btn-sm btn-academic-outline">
+                <i class="bi bi-journal-bookmark"></i> Tài liệu
             </a>
-            <a asp-controller="Chapters" asp-action="Index" class="btn btn-sm btn-academic-outline">
-                <i class="bi bi-list-nested"></i> Quản lý chương
+            <a asp-controller="Chapters" asp-action="Index" asp-route-subjectId="@Model.SubjectId" class="btn btn-sm btn-academic-outline">
+                <i class="bi bi-list-nested"></i> Chương
+            </a>
+            <a asp-controller="Subjects" asp-action="Index" class="btn btn-sm btn-academic-outline">
+                <i class="bi bi-grid"></i> Danh mục môn học
             </a>
         </div>
     </div>
@@ -39,7 +44,7 @@
             <div class="academic-card h-100">
                 <div class="text-uppercase text-slate-500 fw-bold small mb-1">Tổng Số Chương Học</div>
                 <div class="stat-value text-slate-900">@Model.TotalChapters</div>
-                <div class="small text-slate-500 mt-1">Chương trình FLM PRN222</div>
+                <div class="small text-slate-500 mt-1">Chương trình môn @Model.SubjectCode</div>
             </div>
         </div>
         <div class="col-sm-6 col-lg-3">
@@ -84,7 +89,7 @@
                 @if (totalIndexed == 0)
                 {
                     <div class="text-center py-4 text-slate-500">
-                        Chưa có tài liệu nào trong hệ thống.
+                        Chưa có tài liệu nào trong môn học này.
                     </div>
                 }
                 else
@@ -160,7 +165,7 @@
                                         <td class="ps-3 fw-bold font-monospace">Chương @item.Number</td>
                                         <td class="text-slate-800">@item.Title</td>
                                         <td class="text-end pe-3">
-                                            <a asp-controller="Documents" asp-action="Index" asp-route-selectedChapterId="@item.Id"
+                                            <a asp-controller="Documents" asp-action="Index" asp-route-subjectId="@Model.SubjectId" asp-route-selectedChapterId="@item.Id"
                                                class="badge bg-light text-primary border border-primary-subtle text-decoration-none px-2.5 py-1">
                                                 @item.DocumentCount tài liệu
                                             </a>
@@ -185,7 +190,48 @@
         </div>
     </div>
 
-    <!-- 3. Recently Indexed Documents -->
+    <!-- 3. Recent Failures -->
+    @if (Model.RecentFailures.Count > 0)
+    {
+        <div class="academic-card p-0 overflow-hidden mb-4">
+            <div class="p-3 border-bottom d-flex justify-content-between align-items-center">
+                <h3 class="fw-bold fs-5 text-danger mb-0">
+                    <i class="bi bi-exclamation-triangle text-danger me-1"></i>Lỗi Indexing Gần Đây
+                </h3>
+                <span class="badge bg-danger-subtle text-danger border border-danger-subtle px-2.5 py-1">@Model.RecentFailures.Count lỗi</span>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-academic align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th scope="col" class="ps-3">Tài liệu</th>
+                            <th scope="col">Chi tiết lỗi</th>
+                            <th scope="col" class="pe-3 text-end">Thời gian tải lên</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var fail in Model.RecentFailures)
+                        {
+                            <tr>
+                                <td class="ps-3">
+                                    <a asp-controller="Documents" asp-action="Details" asp-route-id="@fail.DocumentId" class="fw-bold text-danger text-decoration-none">
+                                        @fail.Title
+                                    </a>
+                                    <div class="small font-monospace text-slate-500">@fail.OriginalFileName</div>
+                                </td>
+                                <td class="text-danger small font-monospace">@fail.IndexError</td>
+                                <td class="pe-3 text-end small text-slate-500 font-monospace">
+                                    @fail.UploadedAtUtc.ToLocalTime().ToString("dd/MM/yyyy HH:mm")
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+
+    <!-- 4. Recently Indexed Documents -->
     @if (Model.RecentlyIndexed.Count > 0)
     {
         <div class="academic-card p-0 overflow-hidden mb-4">

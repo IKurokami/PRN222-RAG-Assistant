@@ -48,7 +48,7 @@ public sealed class CoreDataArchitectureTests
     }
 
     [Fact]
-    public async Task ManageDocuments_policy_allows_only_the_subject_leader_role()
+    public async Task ManageDocuments_policy_allows_admin_and_subject_leader_only()
     {
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -71,9 +71,10 @@ public sealed class CoreDataArchitectureTests
         var roleRequirement = Assert.Single(
             policy!.Requirements.OfType<RolesAuthorizationRequirement>());
 
+        Assert.Contains(AppRoles.Admin, roleRequirement.AllowedRoles);
         Assert.Contains(AppRoles.SubjectLeader, roleRequirement.AllowedRoles);
         Assert.DoesNotContain(AppRoles.Student, roleRequirement.AllowedRoles);
-        Assert.Single(roleRequirement.AllowedRoles);
+        Assert.Equal(2, roleRequirement.AllowedRoles.Count());
     }
 
     private static ApplicationDbContext CreateContext()

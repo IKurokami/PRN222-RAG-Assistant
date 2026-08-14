@@ -11,6 +11,9 @@ services:
       ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=${POSTGRES_DB:-prn222_rag};Username=${POSTGRES_USER:-postgres};Password=${POSTGRES_PASSWORD:-postgres}
       Database__ApplyMigrationsOnStartup: ${DATABASE_APPLY_MIGRATIONS_ON_STARTUP:-true}
       Auth__SeedUsers__Enabled: ${AUTH_SEED_USERS:-false}
+      Auth__SeedUsers__Admin__Email: ${AUTH_ADMIN_EMAIL:-}
+      Auth__SeedUsers__Admin__Password: ${AUTH_ADMIN_PASSWORD:-}
+      Auth__SeedUsers__Admin__DisplayName: ${AUTH_ADMIN_DISPLAY_NAME:-Administrator}
       Auth__SeedUsers__SubjectLeader__Email: ${AUTH_SUBJECT_LEADER_EMAIL:-}
       Auth__SeedUsers__SubjectLeader__Password: ${AUTH_SUBJECT_LEADER_PASSWORD:-}
       Auth__SeedUsers__SubjectLeader__DisplayName: ${AUTH_SUBJECT_LEADER_DISPLAY_NAME:-Subject Leader}

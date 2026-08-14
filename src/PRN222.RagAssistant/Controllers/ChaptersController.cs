@@ -2,7 +2,6 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PRN222.RagAssistant.Data;
-using PRN222.RagAssistant.Data.Seed;
 using PRN222.RagAssistant.Domain.Entities;
 using PRN222.RagAssistant.Models.Chapters;
 using PRN222.RagAssistant.Security;
@@ -13,83 +12,125 @@ namespace PRN222.RagAssistant.Controllers;
 public sealed class ChaptersController : Controller
 {
     private readonly ApplicationDbContext _dbContext;
-    private readonly IAuthorizationService _authorizationService;
+    private readonly ISubjectAccessService _subjectAccessService;
 
-    public ChaptersController(ApplicationDbContext dbContext, IAuthorizationService authorizationService)
+    public ChaptersController(
+        ApplicationDbContext dbContext,
+        ISubjectAccessService subjectAccessService)
     {
         _dbContext = dbContext;
-        _authorizationService = authorizationService;
+        _subjectAccessService = subjectAccessService;
     }
 
     [HttpGet]
-    public async Task<IActionResult> Index(CancellationToken cancellationToken)
+    public async Task<IActionResult> Index(Guid subjectId, CancellationToken cancellationToken)
     {
-        var authResult = await _authorizationService.AuthorizeAsync(User, AppPolicies.ManageDocuments);
+        if (subjectId == Guid.Empty)
+        {
+            return RedirectToAction(nameof(SubjectsController.Index), "Subjects");
+        }
+
+        if (!await _subjectAccessService.CanViewSubjectAsync(User, subjectId, cancellationToken))
+        {
+            return Forbid();
+        }
+
+        var subject = await _dbContext.Subjects
+            .AsNoTracking()
+            .FirstOrDefaultAsync(candidate => candidate.Id == subjectId, cancellationToken);
+
+        if (subject is null)
+        {
+            return NotFound();
+        }
 
         var chapters = await _dbContext.Chapters
             .AsNoTracking()
-            .Where(c => c.SubjectId == SeedData.Prn222SubjectId)
-            .OrderBy(c => c.Number)
+            .Where(chapter => chapter.SubjectId == subjectId)
+            .OrderBy(chapter => chapter.Number)
             .ToListAsync(cancellationToken);
 
-        var chapterIds = chapters.Select(c => c.Id).ToList();
-
+        var chapterIds = chapters.Select(chapter => chapter.Id).ToList();
         var docCounts = await _dbContext.Documents
             .AsNoTracking()
-            .Where(d => d.SubjectId == SeedData.Prn222SubjectId
-                        && d.ChapterId.HasValue
-                        && chapterIds.Contains(d.ChapterId.Value))
-            .GroupBy(d => d.ChapterId!.Value)
-            .Select(g => new { ChapterId = g.Key, Count = g.Count() })
+            .Where(document => document.SubjectId == subjectId
+                               && document.ChapterId.HasValue
+                               && chapterIds.Contains(document.ChapterId.Value))
+            .GroupBy(document => document.ChapterId!.Value)
+            .Select(group => new { ChapterId = group.Key, Count = group.Count() })
             .ToListAsync(cancellationToken);
 
-        var countMap = docCounts.ToDictionary(x => x.ChapterId, x => x.Count);
+        var countMap = docCounts.ToDictionary(item => item.ChapterId, item => item.Count);
 
-        var viewModel = new ChapterIndexViewModel
+        return View(new ChapterIndexViewModel
         {
-            CanManageDocuments = authResult.Succeeded,
+            SubjectId = subject.Id,
+            SubjectCode = subject.Code,
+            SubjectName = subject.Name,
+            CanManageDocuments = await _subjectAccessService.CanManageSubjectAsync(User, subjectId, cancellationToken),
             StatusMessage = TempData["StatusMessage"] as string,
-            Chapters = chapters.Select(c => new ChapterItemViewModel
+            Chapters = chapters.Select(chapter => new ChapterItemViewModel
             {
-                Id = c.Id,
-                Number = c.Number,
-                Title = c.Title,
-                DocumentCount = countMap.TryGetValue(c.Id, out var count) ? count : 0
+                Id = chapter.Id,
+                Number = chapter.Number,
+                Title = chapter.Title,
+                DocumentCount = countMap.GetValueOrDefault(chapter.Id)
             }).ToList()
-        };
-
-        return View(viewModel);
+        });
     }
 
     [HttpGet]
     [Authorize(Policy = AppPolicies.ManageDocuments)]
-    public IActionResult Create() => View(new ChapterCreateViewModel());
+    public async Task<IActionResult> Create(Guid subjectId, CancellationToken cancellationToken)
+    {
+        if (!await _subjectAccessService.CanManageSubjectAsync(User, subjectId, cancellationToken))
+        {
+            return Forbid();
+        }
+
+        var viewModel = new ChapterCreateViewModel { SubjectId = subjectId };
+        return await PopulateSubjectMetadataAsync(viewModel, cancellationToken)
+            ? View(viewModel)
+            : NotFound();
+    }
 
     [HttpPost]
     [ValidateAntiForgeryToken]
     [Authorize(Policy = AppPolicies.ManageDocuments)]
-    public async Task<IActionResult> Create(ChapterCreateViewModel viewModel, CancellationToken cancellationToken)
+    public async Task<IActionResult> Create(
+        ChapterCreateViewModel viewModel,
+        CancellationToken cancellationToken)
     {
+        if (!await _subjectAccessService.CanManageSubjectAsync(User, viewModel.SubjectId, cancellationToken))
+        {
+            return Forbid();
+        }
+
+        if (!await PopulateSubjectMetadataAsync(viewModel, cancellationToken))
+        {
+            return NotFound();
+        }
+
         if (!ModelState.IsValid)
         {
             return View(viewModel);
         }
 
-        var duplicateExists = await _dbContext.Chapters
-            .AnyAsync(
-                c => c.SubjectId == SeedData.Prn222SubjectId && c.Number == viewModel.Input.Number!.Value,
-                cancellationToken);
+        var duplicateExists = await _dbContext.Chapters.AnyAsync(
+            chapter => chapter.SubjectId == viewModel.SubjectId
+                       && chapter.Number == viewModel.Input.Number!.Value,
+            cancellationToken);
 
         if (duplicateExists)
         {
-            ModelState.AddModelError("Input.Number", $"Chương số {viewModel.Input.Number} đã tồn tại trong môn PRN222.");
+            ModelState.AddModelError("Input.Number", $"Chương số {viewModel.Input.Number} đã tồn tại trong môn {viewModel.SubjectCode}.");
             return View(viewModel);
         }
 
         var chapter = new Chapter
         {
             Id = Guid.NewGuid(),
-            SubjectId = SeedData.Prn222SubjectId,
+            SubjectId = viewModel.SubjectId,
             Number = viewModel.Input.Number!.Value,
             Title = viewModel.Input.Title.Trim()
         };
@@ -98,7 +139,7 @@ public sealed class ChaptersController : Controller
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         TempData["StatusMessage"] = $"Đã tạo chương {chapter.Number}: {chapter.Title} thành công.";
-        return RedirectToAction(nameof(Index));
+        return RedirectToAction(nameof(Index), new { subjectId = chapter.SubjectId });
     }
 
     [HttpGet]
@@ -107,18 +148,22 @@ public sealed class ChaptersController : Controller
     {
         var chapter = await _dbContext.Chapters
             .AsNoTracking()
-            .FirstOrDefaultAsync(
-                c => c.Id == id && c.SubjectId == SeedData.Prn222SubjectId,
-                cancellationToken);
+            .FirstOrDefaultAsync(candidate => candidate.Id == id, cancellationToken);
 
         if (chapter is null)
         {
             return NotFound();
         }
 
-        return View(new ChapterEditViewModel
+        if (!await _subjectAccessService.CanManageSubjectAsync(User, chapter.SubjectId, cancellationToken))
+        {
+            return Forbid();
+        }
+
+        var viewModel = new ChapterEditViewModel
         {
             Id = chapter.Id,
+            SubjectId = chapter.SubjectId,
             OriginalNumber = chapter.Number,
             OriginalTitle = chapter.Title,
             Input = new ChapterInputModel
@@ -126,53 +171,64 @@ public sealed class ChaptersController : Controller
                 Number = chapter.Number,
                 Title = chapter.Title
             }
-        });
+        };
+
+        return await PopulateSubjectMetadataAsync(viewModel, cancellationToken)
+            ? View(viewModel)
+            : NotFound();
     }
 
     [HttpPost]
     [ValidateAntiForgeryToken]
     [Authorize(Policy = AppPolicies.ManageDocuments)]
-    public async Task<IActionResult> Edit(Guid id, ChapterEditViewModel viewModel, CancellationToken cancellationToken)
+    public async Task<IActionResult> Edit(
+        Guid id,
+        ChapterEditViewModel viewModel,
+        CancellationToken cancellationToken)
     {
-        var chapter = await _dbContext.Chapters
-            .FirstOrDefaultAsync(
-                c => c.Id == id && c.SubjectId == SeedData.Prn222SubjectId,
-                cancellationToken);
-
+        var chapter = await _dbContext.Chapters.FirstOrDefaultAsync(candidate => candidate.Id == id, cancellationToken);
         if (chapter is null)
         {
             return NotFound();
         }
 
+        if (!await _subjectAccessService.CanManageSubjectAsync(User, chapter.SubjectId, cancellationToken))
+        {
+            return Forbid();
+        }
+
         viewModel.Id = id;
+        viewModel.SubjectId = chapter.SubjectId;
         viewModel.OriginalNumber = chapter.Number;
         viewModel.OriginalTitle = chapter.Title;
+        if (!await PopulateSubjectMetadataAsync(viewModel, cancellationToken))
+        {
+            return NotFound();
+        }
 
         if (!ModelState.IsValid)
         {
             return View(viewModel);
         }
 
-        var duplicateExists = await _dbContext.Chapters
-            .AnyAsync(
-                c => c.SubjectId == SeedData.Prn222SubjectId
-                     && c.Number == viewModel.Input.Number!.Value
-                     && c.Id != id,
-                cancellationToken);
+        var duplicateExists = await _dbContext.Chapters.AnyAsync(
+            candidate => candidate.SubjectId == chapter.SubjectId
+                         && candidate.Number == viewModel.Input.Number!.Value
+                         && candidate.Id != id,
+            cancellationToken);
 
         if (duplicateExists)
         {
-            ModelState.AddModelError("Input.Number", $"Chương số {viewModel.Input.Number} đã tồn tại trong môn PRN222.");
+            ModelState.AddModelError("Input.Number", $"Chương số {viewModel.Input.Number} đã tồn tại trong môn {viewModel.SubjectCode}.");
             return View(viewModel);
         }
 
         chapter.Number = viewModel.Input.Number!.Value;
         chapter.Title = viewModel.Input.Title.Trim();
-
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         TempData["StatusMessage"] = $"Đã cập nhật chương {chapter.Number}: {chapter.Title} thành công.";
-        return RedirectToAction(nameof(Index));
+        return RedirectToAction(nameof(Index), new { subjectId = chapter.SubjectId });
     }
 
     [HttpGet]
@@ -181,22 +237,34 @@ public sealed class ChaptersController : Controller
     {
         var chapter = await _dbContext.Chapters
             .AsNoTracking()
-            .FirstOrDefaultAsync(
-                c => c.Id == id && c.SubjectId == SeedData.Prn222SubjectId,
-                cancellationToken);
+            .FirstOrDefaultAsync(candidate => candidate.Id == id, cancellationToken);
 
         if (chapter is null)
         {
             return NotFound();
         }
 
+        if (!await _subjectAccessService.CanManageSubjectAsync(User, chapter.SubjectId, cancellationToken))
+        {
+            return Forbid();
+        }
+
+        var subject = await _dbContext.Subjects.AsNoTracking().FirstOrDefaultAsync(candidate => candidate.Id == chapter.SubjectId, cancellationToken);
+        if (subject is null)
+        {
+            return NotFound();
+        }
+
         var affectedDocumentCount = await _dbContext.Documents
             .AsNoTracking()
-            .CountAsync(d => d.ChapterId == id, cancellationToken);
+            .CountAsync(document => document.SubjectId == chapter.SubjectId && document.ChapterId == id, cancellationToken);
 
         return View(new ChapterDeleteViewModel
         {
             Id = chapter.Id,
+            SubjectId = subject.Id,
+            SubjectCode = subject.Code,
+            SubjectName = subject.Name,
             ChapterNumber = chapter.Number,
             ChapterTitle = chapter.Title,
             AffectedDocumentCount = affectedDocumentCount
@@ -209,20 +277,22 @@ public sealed class ChaptersController : Controller
     [Authorize(Policy = AppPolicies.ManageDocuments)]
     public async Task<IActionResult> DeleteConfirmed(Guid id, CancellationToken cancellationToken)
     {
-        var chapter = await _dbContext.Chapters
-            .FirstOrDefaultAsync(
-                c => c.Id == id && c.SubjectId == SeedData.Prn222SubjectId,
-                cancellationToken);
-
+        var chapter = await _dbContext.Chapters.FirstOrDefaultAsync(candidate => candidate.Id == id, cancellationToken);
         if (chapter is null)
         {
             return NotFound();
         }
 
+        if (!await _subjectAccessService.CanManageSubjectAsync(User, chapter.SubjectId, cancellationToken))
+        {
+            return Forbid();
+        }
+
+        var subjectId = chapter.SubjectId;
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
 
         var affectedDocuments = await _dbContext.Documents
-            .Where(d => d.ChapterId == id)
+            .Where(document => document.SubjectId == subjectId && document.ChapterId == id)
             .ToListAsync(cancellationToken);
 
         foreach (var document in affectedDocuments)
@@ -238,6 +308,36 @@ public sealed class ChaptersController : Controller
             ? $"Đã xóa chương {chapter.Number}: {chapter.Title}. {affectedDocuments.Count} tài liệu liên quan đã được bỏ gán chương (tài liệu vẫn còn trong hệ thống)."
             : $"Đã xóa chương {chapter.Number}: {chapter.Title} thành công.";
 
-        return RedirectToAction(nameof(Index));
+        return RedirectToAction(nameof(Index), new { subjectId });
+    }
+
+    private async Task<bool> PopulateSubjectMetadataAsync(
+        ChapterCreateViewModel viewModel,
+        CancellationToken cancellationToken)
+    {
+        var subject = await _dbContext.Subjects.AsNoTracking().FirstOrDefaultAsync(candidate => candidate.Id == viewModel.SubjectId, cancellationToken);
+        if (subject is null)
+        {
+            return false;
+        }
+
+        viewModel.SubjectCode = subject.Code;
+        viewModel.SubjectName = subject.Name;
+        return true;
+    }
+
+    private async Task<bool> PopulateSubjectMetadataAsync(
+        ChapterEditViewModel viewModel,
+        CancellationToken cancellationToken)
+    {
+        var subject = await _dbContext.Subjects.AsNoTracking().FirstOrDefaultAsync(candidate => candidate.Id == viewModel.SubjectId, cancellationToken);
+        if (subject is null)
+        {
+            return false;
+        }
+
+        viewModel.SubjectCode = subject.Code;
+        viewModel.SubjectName = subject.Name;
+        return true;
     }
 }

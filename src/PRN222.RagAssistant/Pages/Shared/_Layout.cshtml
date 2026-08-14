@@ -1,8 +1,11 @@
 @using Microsoft.AspNetCore.Http
+@using PRN222.RagAssistant.Security
 @{
     var currentPage = ViewContext.RouteData.Values["page"]?.ToString() ?? "";
     var currentController = ViewContext.RouteData.Values["controller"]?.ToString() ?? "";
     var isHomePage = string.Equals(currentPage, "/Index", StringComparison.OrdinalIgnoreCase) && string.IsNullOrEmpty(currentController);
+    var isAdmin = User.IsInRole(AppRoles.Admin);
+    var isSubjectLeader = User.IsInRole(AppRoles.SubjectLeader);
 }
 <!DOCTYPE html>
 <html lang="vi">
@@ -36,16 +39,19 @@
                         <li class="nav-item">
                             <a class="nav-link-humata" asp-area="" asp-page="/Index">Trang chủ</a>
                         </li>
-                        <li class="nav-item">
-                            <a class="nav-link-humata" asp-area="" asp-controller="Documents" asp-action="Index">Kho Tài Liệu</a>
-                        </li>
-                        @if (User.IsInRole("SubjectLeader"))
+                        @if (User.Identity?.IsAuthenticated == true)
                         {
                             <li class="nav-item">
-                                <a class="nav-link-humata" asp-area="" asp-controller="Chapters" asp-action="Index">Quản Lý Chương</a>
+                                <a class="nav-link-humata" asp-area="" asp-controller="Subjects" asp-action="Index">Danh Mục Môn Học</a>
+                            </li>
+                        }
+                        @if (isAdmin)
+                        {
+                            <li class="nav-item">
+                                <a class="nav-link-humata" asp-area="" asp-controller="AdminSubjects" asp-action="Index">Quản Trị Môn Học</a>
                             </li>
                             <li class="nav-item">
-                                <a class="nav-link-humata" asp-area="" asp-page="/Reports/Index">Báo Cáo &amp; Thống Kê</a>
+                                <a class="nav-link-humata" asp-area="" asp-controller="AdminUsers" asp-action="Index">Người Dùng</a>
                             </li>
                         }
                         <li class="nav-item">
@@ -62,7 +68,11 @@
                             <div class="d-flex align-items-center gap-2 bg-white bg-opacity-10 text-white px-3 py-1.5 rounded-pill border border-white border-opacity-25">
                                 <i class="bi bi-person-circle"></i>
                                 <span class="fw-semibold small">@User.Identity.Name</span>
-                                @if (User.IsInRole("SubjectLeader"))
+                                @if (isAdmin)
+                                {
+                                    <span class="badge bg-danger rounded-pill px-2">Admin</span>
+                                }
+                                else if (isSubjectLeader)
                                 {
                                     <span class="badge bg-warning text-dark rounded-pill px-2">Trưởng Môn</span>
                                 }
@@ -80,7 +90,7 @@
                         else
                         {
                             <a class="btn-humata-login" asp-page="/Account/Login">Đăng nhập</a>
-                            <a class="btn-humata-signup" asp-page="/Account/Login">Trải nghiệm ngay</a>
+                            <a class="btn-humata-signup" asp-page="/Account/Register">Trải nghiệm ngay</a>
                         }
                     </div>
                 </div>
@@ -105,7 +115,10 @@
             <!-- Centered Nav Links -->
             <ul class="footer-nav-links">
                 <li><a asp-area="" asp-page="/Index">Trang chủ</a></li>
-                <li><a asp-area="" asp-controller="Documents" asp-action="Index">Kho Tài Liệu</a></li>
+                @if (User.Identity?.IsAuthenticated == true)
+                {
+                    <li><a asp-area="" asp-controller="Subjects" asp-action="Index">Danh mục môn học</a></li>
+                }
                 <li><a href="/#pricing">Bảng giá</a></li>
                 <li><a href="https://flm.fpt.edu.vn/gui/role/teacher/SyllabusDetails?sylID=13892" target="_blank" rel="noopener noreferrer">Đề cương FLM</a></li>
                 <li><a asp-page="/Privacy">Điều khoản &amp; Bảo mật</a></li>

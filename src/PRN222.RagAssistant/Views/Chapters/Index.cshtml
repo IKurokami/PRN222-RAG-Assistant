@@ -1,30 +1,38 @@
 @model ChapterIndexViewModel
 @{
-    ViewData["Title"] = "Quản Lý Chương Học - PRN222";
+    ViewData["Title"] = $"Quản lý chương - {Model.SubjectCode}";
 }
 
 <div class="container py-4">
     <!-- Breadcrumb -->
-    <div class="academic-breadcrumb">
+    <div class="academic-breadcrumb mb-3">
         <a asp-page="/Index"><i class="bi bi-house-door"></i> Trang chủ</a>
         <span class="academic-breadcrumb-separator">/</span>
-        <span class="text-slate-800 fw-semibold">Quản lý chương học</span>
+        <a asp-controller="Subjects" asp-action="Index">Môn học</a>
+        <span class="academic-breadcrumb-separator">/</span>
+        <span class="text-slate-800 fw-semibold">Chương môn @Model.SubjectCode</span>
     </div>
 
     <!-- Header Section -->
-    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4 pb-2 border-bottom">
         <div>
+            <div class="badge bg-primary-subtle text-primary border border-primary-subtle px-2.5 py-1 mb-1 font-monospace">@Model.SubjectCode — @Model.SubjectName</div>
             <h1 class="fw-bold fs-3 text-slate-900 mb-1">
-                <i class="bi bi-list-nested text-primary me-2"></i>Lộ Trình &amp; Quản Lý Chương Học PRN222
+                <i class="bi bi-list-nested text-primary me-2"></i>Lộ Trình &amp; Quản Lý Chương Học
             </h1>
-            <p class="text-slate-500 mb-0">Khung chương trình môn học đồng bộ theo Syllabus FLM.</p>
+            <p class="text-slate-500 mb-0">Khung chương trình môn học đồng bộ theo đề cương FLM.</p>
         </div>
-        @if (Model.CanManageDocuments)
-        {
-            <a asp-controller="Chapters" asp-action="Create" class="btn-academic-accent text-decoration-none">
-                <i class="bi bi-plus-circle-fill"></i> Thêm chương mới
+        <div class="d-flex gap-2">
+            <a asp-controller="Documents" asp-action="Index" asp-route-subjectId="@Model.SubjectId" class="btn btn-sm btn-academic-outline">
+                <i class="bi bi-journal-bookmark"></i> Kho tài liệu
             </a>
-        }
+            @if (Model.CanManageDocuments)
+            {
+                <a asp-controller="Chapters" asp-action="Create" asp-route-subjectId="@Model.SubjectId" class="btn-academic-accent text-decoration-none">
+                    <i class="bi bi-plus-circle-fill"></i> Thêm chương mới
+                </a>
+            }
+        </div>
     </div>
 
     @if (!string.IsNullOrEmpty(Model.StatusMessage))
@@ -44,11 +52,11 @@
             </div>
             <h5 class="fw-bold text-slate-700">Chưa có chương học nào được tạo</h5>
             <p class="text-slate-500 small max-w-md mx-auto mb-3">
-                Hãy tạo các chương học đầu tiên theo đề cương PRN222 để phân loại tài liệu bài giảng.
+                Hãy tạo các chương học đầu tiên theo đề cương @Model.SubjectCode để phân loại tài liệu bài giảng.
             </p>
             @if (Model.CanManageDocuments)
             {
-                <a asp-controller="Chapters" asp-action="Create" class="btn-academic-primary text-decoration-none">
+                <a asp-controller="Chapters" asp-action="Create" asp-route-subjectId="@Model.SubjectId" class="btn-academic-primary text-decoration-none">
                     <i class="bi bi-plus-lg"></i> Thêm chương đầu tiên
                 </a>
             }
@@ -83,7 +91,7 @@
                                     <span class="fw-bold text-slate-900 fs-6">@chapter.Title</span>
                                 </td>
                                 <td class="text-center">
-                                    <a asp-controller="Documents" asp-action="Index" asp-route-selectedChapterId="@chapter.Id"
+                                    <a asp-controller="Documents" asp-action="Index" asp-route-subjectId="@Model.SubjectId" asp-route-selectedChapterId="@chapter.Id"
                                        class="badge bg-light text-primary border border-primary-subtle text-decoration-none px-2.5 py-1.5 fw-semibold"
                                        title="Xem tài liệu thuộc chương này">
                                         <i class="bi bi-files me-1"></i>@chapter.DocumentCount tài liệu
@@ -113,10 +121,4 @@
             </div>
         </div>
     }
-
-    <div class="mt-4">
-        <a asp-controller="Documents" asp-action="Index" class="btn btn-sm btn-academic-outline">
-            <i class="bi bi-arrow-left"></i> Quay lại kho tài liệu
-        </a>
-    </div>
 </div>

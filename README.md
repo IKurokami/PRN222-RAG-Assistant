@@ -1,331 +1,175 @@
 # PRN222 RAG Assistant
 
-A PRN222 course project built with ASP.NET Core, EF Core, PostgreSQL/pgvector, and Ollama for a document-grounded RAG assistant.
+ASP.NET Core RAG learning assistant built with .NET 10, MVC + Razor Pages, PostgreSQL/pgvector, ASP.NET Core Identity, and Ollama.
 
-The demo is scoped to PRN222. Course documents are curated/uploaded by the Subject Leader and become the chatbot's authoritative source after indexing. Chapters are runtime-managed application data.
+The repository name remains PRN222 RAG Assistant and PRN222 remains the seeded demo subject, but the application is now designed to host **multiple subjects**. PRN222 is no longer the hard-coded workflow scope.
 
-## Product workflows
+## Current status
 
-The project defines three independent workflows:
+| Area | Status | Owner |
+|---|---|---|
+| Core/Data/Identity/RBAC | Complete | Member 1 |
+| Admin user/role management | Complete | Member 1 |
+| Multi-subject management + Subject Leader assignment | Complete on current feature branch | Member 1 |
+| Flow 1 - Document Management & Indexing | Complete | Members 2 + 3; subject-scoping owned by Member 1 |
+| Flow 2 - RAG Q&A + Conversation Management | Pending | Members 4 + 5 |
+| Flow 3 - Report & Statistics | Complete | Member 2; subject-scoping owned by Member 1 |
+| Repository documentation | Member 1 only | Member 1 |
 
-1. **Flow 1 - Document Management & Indexing** - COMPLETE - **ASP.NET Core MVC Controllers + Views**.
-2. **Flow 2 - RAG Question & Answer & Conversation Management** - PENDING - **ASP.NET Core MVC Controllers + Views**.
-3. **Flow 3 - Report & Statistics** - COMPLETE - Razor Pages.
+Product workflows:
 
-Conversation History belongs to Flow 2 rather than being counted as a separate workflow.
+1. **Flow 1 - Document Management & Indexing** - MVC Controllers + Views - complete.
+2. **Flow 2 - RAG Question & Answer & Conversation Management** - MVC Controllers + Views - pending.
+3. **Flow 3 - Report & Statistics** - Razor Pages - complete.
 
-## Presentation architecture
+Conversation History belongs to Flow 2 and is not counted as a separate flow.
 
-```text
-Flow 1 -> MVC           [COMPLETE]
-Flow 2 -> MVC           [PENDING]
-Flow 3 -> Razor Pages   [COMPLETE]
-Auth/shell -> Razor Pages
-```
+## Multi-subject model
 
-The application intentionally remains a mixed ASP.NET Core host. `Program.cs` registers both `AddControllersWithViews()` and `AddRazorPages()` and maps both MVC conventional routes and Razor Pages.
-
-Flow 1 was migrated from Razor Pages to MVC. Its current presentation code lives under:
-
-```text
-src/PRN222.RagAssistant/Controllers/DocumentsController.cs
-src/PRN222.RagAssistant/Controllers/ChaptersController.cs
-src/PRN222.RagAssistant/Models/Documents/
-src/PRN222.RagAssistant/Models/Chapters/
-src/PRN222.RagAssistant/Views/Documents/
-src/PRN222.RagAssistant/Views/Chapters/
-```
-
-The old `Pages/Documents/` and `Pages/Chapters/` implementations are removed to avoid parallel handlers.
-
-See `docs/flow-1-mvc-migration.md`.
-
-## Current project status
-
-| Member | Scope | Status |
-| --- | --- | --- |
-| Member 1 | Core/Data, Identity, authorization, EF Core model/migrations, shared contracts | Complete |
-| Member 2 | Flow 1 Document/Chapter Management MVC request side | Complete |
-| Member 3 | Flow 1 parsing, chunking, embeddings, indexing worker/service | Complete / merged through PR #9 |
-| Member 2 | Flow 3 Report & Statistics Razor Pages | Complete / merged through PR #12 |
-| Member 4 | Flow 2 pgvector retrieval, grounded RAG backend, chat/citation persistence | Pending |
-| Member 5 | Flow 2 MVC chat UI, Conversation History, citation rendering, evaluation | Pending |
-
-Before the Flow 1 presentation migration, PR #12 reported `75/75` automated tests passing and local smoke testing confirmed Flow 1 indexing and Flow 3 reporting against PostgreSQL/pgvector + Ollama. This migration updates the Flow 1 presentation/tests without changing persistence or indexing services.
-
-## Flow 1 - Document Management & Indexing
-
-### MVC request/presentation side
-
-Current behavior includes:
-
-- runtime PRN222 Chapter list/create/edit/delete
-- Document list/filter/upload/details/edit/delete/re-index
-- PDF/DOCX/PPTX validation
-- 50 MB upload limit
-- Subject-Leader-only writes through `AppPolicies.ManageDocuments`
-- anti-forgery validation on POST actions
-- configured source-file storage
-- optional server-side PRN222 `ChapterId` validation
-- safe chapter deletion that preserves documents
-- queue handoff after `Document` persistence
-
-Primary routes use the conventional MVC route:
+`Subject` is the application boundary for chapters, documents, reports, and future RAG retrieval.
 
 ```text
-/Documents/Index
-/Documents/Upload
-/Documents/Details/{id}
-/Documents/Edit/{id}
-/Chapters/Index
-/Chapters/Create
-/Chapters/Edit/{id}
-/Chapters/Delete/{id}
+Admin
+  |
+  +--> create/edit/activate/deactivate Subject
+  +--> assign Subject Leader(s)
+  \--> manage any Subject as an operational override
+
+Subject Leader
+  |
+  \--> manage only assigned Subject(s)
+       +--> Chapters
+       +--> Documents
+       +--> Re-index requests
+       \--> Reports
+
+Student
+  |
+  \--> view active Subject(s) and their document catalogue
 ```
 
-### Background indexing
+PRN222 is seeded so a fresh environment still has a usable demo subject. Additional subjects such as PRJ301/SWT301/SWP391 can be created at runtime by Admin.
+
+Subject Leader assignments are persisted through ASP.NET Core Identity user claims:
 
 ```text
-DocumentsController upload / re-index
-        |
-        v
-Persist Document / update state
-        |
-        v
-IDocumentIndexingQueue
-        |
-        v
-InMemoryDocumentIndexingQueue
-        |
-        v
-DocumentIndexingWorker
-        |
-        v
-DocumentIndexingService
-        |
-        +--> PDF parser via PdfPig
-        +--> DOCX/PPTX parsers via OpenXml
-        +--> TextChunker
-        +--> TextEmbeddingBatcher
-        +--> OllamaTextEmbeddingService
-        +--> replace/persist DocumentChunk rows
-        \--> Indexed / Failed
+Claim type  = prn222:managed-subject
+Claim value = <Subject Guid>
 ```
 
-State flow:
+This reuses the existing `AspNetUserClaims` table, so the multi-subject assignment feature does **not** require a new EF Core migration.
 
-```text
-Uploaded -> Processing -> Indexed
-                     \-> Failed
-```
-
-The active queue is process-local. Startup recovery is based on persisted `Uploaded`/`Processing` document state.
-
-The MVC controllers must not absorb parsing, chunking, embedding, pgvector retrieval, or Ollama generation logic.
-
-## Flow 3 - Report & Statistics
-
-Flow 3 remains Razor Pages under:
-
-```text
-src/PRN222.RagAssistant/Pages/Reports/
-```
-
-The Subject-Leader dashboard includes:
-
-- total PRN222 chapters/documents
-- unassigned document count
-- documents by chapter
-- documents by indexing state
-- indexing completion percentage
-- total persisted PRN222 chunks
-- recent indexing failures
-- recently indexed documents
-- total chat sessions/messages/citations
-- zero/empty states before Flow 2 chat data exists
-
-Flow 3 is read-only and uses existing EF Core/PostgreSQL persistence. It does not call Ollama or perform pgvector similarity retrieval.
-
-## Pending Flow 2 - MVC
-
-Member 4 owns the presentation-agnostic RAG backend:
-
-```text
-Question
-   |
-   v
-ITextEmbeddingService.EmbedAsync
-   |
-   v
-pgvector retrieval over Indexed PRN222 chunks
-   |
-   v
-Grounded context
-   |
-   v
-IChatCompletionService -> Ollama
-   |
-   +--> persist ChatMessage
-   \--> persist MessageCitation
-   |
-   v
-RagAnswer + RagCitation[]
-```
-
-Member 5 owns MVC presentation:
-
-```text
-Student browser
-    |
-    v
-ChatController / MVC actions
-    |
-    v
-IRagQueryService
-    |
-    v
-MVC Views/Chat -> answer + citations + Conversation History
-```
-
-Do not implement Flow 2 under `Pages/Chat` or `Pages/Conversation`. MVC controllers must not call Ollama or query pgvector directly.
-
-## Team development boundaries
-
-- **Member 1 - Core/Data Lead:** schema/migration coordination, domain/data/security/shared contracts.
-- **Member 2 - Document Management + Reporting:** Flow 1 MVC request side and Flow 3 Razor Pages reporting.
-- **Member 3 - Document Indexing:** parser/chunker/embedding/worker/index-state pipeline.
-- **Member 4 - RAG Backend:** question retrieval/grounding/generation/chat persistence.
-- **Member 5 - MVC Chat UI / Conversation Management / Evaluation:** pending Flow 2 presentation/evaluation.
-
-Read before implementing workflow work:
-
-```text
-AGENTS.md
-src/PRN222.RagAssistant/Application/AGENTS.md
-docs/project-status.md
-docs/team-workflow.md
-docs/infrastructure.md
-docs/flow-1-mvc-migration.md
-docs/member-1-core-data-handoff.md
-docs/member-2-document-management-handoff.md
-docs/member-3-document-indexing-handoff.md
-docs/flow-3-report-statistics-handoff.md
-```
-
-## Local setup
-
-Copy the example environment file when overriding Docker Compose defaults:
-
-```text
-cp .env.example .env
-```
-
-Windows Command Prompt:
-
-```text
-copy .env.example .env
-```
-
-Restore dependencies and validate:
-
-```text
-dotnet tool restore
-dotnet libman restore
-dotnet restore
-dotnet build
-dotnet test
-```
-
-Start Docker Compose:
-
-```text
-docker compose up -d --build
-docker compose ps
-```
-
-Compose starts:
-
-- ASP.NET Core application
-- PostgreSQL + pgvector
-- Ollama
-- persistent PostgreSQL/Ollama volumes
-- bind-mounted `storage/uploads/`
-
-Stop without deleting data:
-
-```text
-docker compose down
-```
-
-Do not use `docker compose down -v` unless intentionally deleting local PostgreSQL/Ollama data.
-
-## Authentication and demo accounts
+## Roles and authorization
 
 Roles:
 
-- `SubjectLeader`
-- `Student`
-
-`ManageDocuments` is restricted to `SubjectLeader`. Flow 1 MVC write actions and Flow 3 Reports use this server-side policy.
-
-Demo-user seeding is disabled by default. To enable local example users, copy `.env.example` to `.env` and set:
-
 ```text
-AUTH_SEED_USERS=true
+Admin
+SubjectLeader
+Student
 ```
 
-Change example passwords before use.
-
-Example identities:
+Coarse policies:
 
 ```text
-leader@prn222.local
-student@prn222.local
+ManageUsers     -> Admin
+ManageSubjects  -> Admin
+ManageDocuments -> Admin OR SubjectLeader
 ```
 
-Sign in at:
+`ManageDocuments` is only the coarse role gate. Every subject-specific write/report action also checks `ISubjectAccessService` against the concrete `SubjectId`.
+
+This means a Subject Leader assigned to PRN222 cannot modify PRJ301 merely because they have the `SubjectLeader` role.
+
+Admin routes:
 
 ```text
-http://localhost:8080/Account/Login
+/admin/users
+/admin/subjects
+/admin/subjects/create
+/admin/subjects/{id}/edit
+/admin/subjects/{id}/leaders
 ```
 
-Users cannot self-select the `SubjectLeader` role.
-
-## Document storage
-
-Uploaded documents use configured `Rag:Storage:UploadsPath`, defaulting to `storage/uploads/` locally.
-
-Runtime uploads are ignored by Git; only `.gitkeep` is version-controlled. PostgreSQL remains the source of truth for document metadata/indexing state/chunks.
-
-## EF Core model and migrations
-
-Application persistence uses `ApplicationDbContext` with ASP.NET Core Identity.
-
-Project conventions:
-
-- no navigation properties in domain entities
-- scalar foreign keys
-- dedicated `IEntityTypeConfiguration<TEntity>` per entity
-- entity-specific Fluent API stays out of `ApplicationDbContext`
-- application schema changes use EF Core migrations
-
-The Flow 1 MVC migration does **not** require an EF Core migration.
-
-Generate a migration only when the EF model genuinely changes:
+Authenticated subject catalogue:
 
 ```text
-dotnet tool restore
-dotnet ef migrations add <MigrationName> --project src/PRN222.RagAssistant --startup-project src/PRN222.RagAssistant --output-dir Data/Migrations
-dotnet ef migrations has-pending-model-changes --project src/PRN222.RagAssistant --startup-project src/PRN222.RagAssistant
+/subjects
 ```
 
-Do not create application tables through PostgreSQL init scripts or `EnsureCreated`.
+Flow 1/3 requests carry subject context through `subjectId`.
 
-## PRN222 seed data
+## Subject lifecycle
 
-Only PRN222 subject identity/scope is seeded. Chapters are runtime-managed application data and must not be invented from FLM in code/migrations without a verified requirement.
+Subjects support:
 
-## Ollama models
+- create;
+- edit code/name;
+- activate/deactivate;
+- assign zero, one, or multiple Subject Leaders.
+
+Hard-delete is intentionally not exposed because Chapters/Documents reference Subjects. Deactivation is the safe operational lifecycle for now.
+
+A Subject Leader may be assigned multiple subjects. If a user is demoted away from `SubjectLeader`, managed-subject claims are removed so stale assignments cannot reactivate later.
+
+## Flow 1
+
+Flow 1 is MVC:
+
+```text
+SubjectsController
+      |
+      v
+DocumentsController / ChaptersController
+      |
+      +--> subject-specific authorization
+      +--> validate/persist
+      v
+IDocumentIndexingQueue
+      |
+      v
+DocumentIndexingWorker
+      |
+      v
+DocumentIndexingService
+      +--> parse
+      +--> chunk
+      +--> embed
+      \--> persist DocumentChunk / status
+```
+
+`Document` and `Chapter` already contain `SubjectId`, so the indexing pipeline stays document-ID driven and does not need a second implementation for additional subjects.
+
+## Flow 3
+
+Reports remain Razor Pages and are now opened with a concrete `subjectId`. Chapter/document/index/chunk/failure metrics are scoped to that subject.
+
+Chat totals are temporarily global because Flow 2 is not implemented and `ChatSession` does not yet contain `SubjectId`. This is documented intentionally rather than pretending those metrics are subject-scoped.
+
+## Flow 2 requirement before implementation
+
+Flow 2 must be subject-scoped from the start. Member 4/5 must not retrieve from a global corpus.
+
+Before implementing retrieval/chat persistence, coordinate with Member 1 to introduce the necessary subject context so that:
+
+- a chat session belongs to one subject;
+- retrieval filters indexed chunks through documents belonging to that subject;
+- Conversation History preserves the subject boundary;
+- citations cannot leak sources from another subject;
+- report chat metrics can later become subject-scoped.
+
+Any real EF model change for Flow 2 is coordinated by Member 1 to avoid competing migrations.
+
+## Technology
+
+- .NET 10 / ASP.NET Core
+- MVC + Razor Pages
+- ASP.NET Core Identity
+- EF Core
+- PostgreSQL + pgvector
+- Ollama
+- PDF parsing via PdfPig
+- DOCX/PPTX parsing via OpenXml
 
 Default local models:
 
@@ -334,11 +178,61 @@ Chat:      qwen3:4b
 Embedding: qwen3-embedding:0.6b
 ```
 
-Pull them after Ollama is running:
+## Local configuration
+
+Copy `.env.example` to `.env` for local Docker use and change demo credentials before using a non-disposable environment.
+
+Important configuration:
 
 ```text
-docker compose exec ollama ollama pull qwen3:4b
-docker compose exec ollama ollama pull qwen3-embedding:0.6b
+ConnectionStrings:Postgres
+Database:ApplyMigrationsOnStartup
+Auth:SeedUsers:Enabled
+Auth:SeedUsers:Admin:*
+Auth:SeedUsers:SubjectLeader:*
+Auth:SeedUsers:Student:*
+Rag:Ollama:BaseUrl
+Rag:Ollama:ChatModel
+Rag:Ollama:EmbeddingModel
+Rag:Storage:UploadsPath
 ```
 
-If the embedding model changes after indexing, affected documents must be re-indexed.
+## Commands
+
+```bash
+dotnet tool restore
+dotnet libman restore
+dotnet restore
+dotnet build
+dotnet test
+dotnet ef migrations has-pending-model-changes \
+  --project src/PRN222.RagAssistant \
+  --startup-project src/PRN222.RagAssistant
+
+docker compose config
+docker compose up -d --build
+```
+
+Do not run `docker compose down -v` unless data deletion is explicitly intended.
+
+## Team coordination
+
+**Member 1 is the sole repository documentation editor.** This includes:
+
+```text
+README.md
+AGENTS.md
+src/PRN222.RagAssistant/Application/AGENTS.md
+docs/*
+```
+
+Members 2-5 report code/status/doc impacts in their PR descriptions or handoff notes; Member 1 synchronizes documentation against the actual code state.
+
+Required reading:
+
+- `AGENTS.md`
+- `docs/project-status.md`
+- `docs/team-workflow.md`
+- `docs/role-access-control.md`
+- `docs/multi-subject-management.md`
+- `docs/infrastructure.md`

@@ -4,6 +4,9 @@ namespace PRN222.RagAssistant.Models.Chapters;
 
 public sealed class ChapterIndexViewModel
 {
+    public Guid SubjectId { get; set; }
+    public string SubjectCode { get; set; } = string.Empty;
+    public string SubjectName { get; set; } = string.Empty;
     public List<ChapterItemViewModel> Chapters { get; set; } = [];
     public bool CanManageDocuments { get; set; }
     public string? StatusMessage { get; set; }
@@ -19,12 +22,18 @@ public sealed class ChapterItemViewModel
 
 public sealed class ChapterCreateViewModel
 {
+    public Guid SubjectId { get; set; }
+    public string SubjectCode { get; set; } = string.Empty;
+    public string SubjectName { get; set; } = string.Empty;
     public ChapterInputModel Input { get; set; } = new();
 }
 
 public sealed class ChapterEditViewModel
 {
     public Guid Id { get; set; }
+    public Guid SubjectId { get; set; }
+    public string SubjectCode { get; set; } = string.Empty;
+    public string SubjectName { get; set; } = string.Empty;
     public int OriginalNumber { get; set; }
     public string OriginalTitle { get; set; } = string.Empty;
     public ChapterInputModel Input { get; set; } = new();
@@ -46,6 +55,9 @@ public sealed class ChapterInputModel
 public sealed class ChapterDeleteViewModel
 {
     public Guid Id { get; set; }
+    public Guid SubjectId { get; set; }
+    public string SubjectCode { get; set; } = string.Empty;
+    public string SubjectName { get; set; } = string.Empty;
     public int ChapterNumber { get; set; }
     public string ChapterTitle { get; set; } = string.Empty;
     public int AffectedDocumentCount { get; set; }

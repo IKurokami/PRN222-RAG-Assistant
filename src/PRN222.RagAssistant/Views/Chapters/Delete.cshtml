@@ -1,14 +1,16 @@
 @model ChapterDeleteViewModel
 @{
-    ViewData["Title"] = $"Xóa Chương {Model.ChapterNumber} - PRN222";
+    ViewData["Title"] = $"Xóa chương - {Model.SubjectCode}";
 }
 
 <div class="container py-4">
     <!-- Breadcrumb -->
-    <div class="academic-breadcrumb">
+    <div class="academic-breadcrumb mb-3">
         <a asp-page="/Index"><i class="bi bi-house-door"></i> Trang chủ</a>
         <span class="academic-breadcrumb-separator">/</span>
-        <a asp-controller="Chapters" asp-action="Index">Quản lý chương học</a>
+        <a asp-controller="Subjects" asp-action="Index">Môn học</a>
+        <span class="academic-breadcrumb-separator">/</span>
+        <a asp-controller="Chapters" asp-action="Index" asp-route-subjectId="@Model.SubjectId">Chương @Model.SubjectCode</a>
         <span class="academic-breadcrumb-separator">/</span>
         <span class="text-slate-800 fw-semibold">Xóa chương @Model.ChapterNumber</span>
     </div>
@@ -17,12 +19,13 @@
         <div class="col-md-7 col-lg-6">
             <div class="d-flex justify-content-between align-items-center mb-4">
                 <div>
+                    <div class="badge bg-danger-subtle text-danger border border-danger-subtle px-2.5 py-1 mb-1 font-monospace">@Model.SubjectCode — @Model.SubjectName</div>
                     <h1 class="fw-bold fs-3 text-slate-900 mb-1">
                         <i class="bi bi-exclamation-triangle text-danger me-2"></i>Xác Nhận Xóa Chương
                     </h1>
                     <p class="text-slate-500 mb-0">Vui lòng kiểm tra kỹ thông tin trước khi thực hiện thao tác xóa.</p>
                 </div>
-                <a asp-controller="Chapters" asp-action="Index" class="btn btn-sm btn-academic-outline">
+                <a asp-controller="Chapters" asp-action="Index" asp-route-subjectId="@Model.SubjectId" class="btn btn-sm btn-academic-outline">
                     <i class="bi bi-arrow-left"></i> Quay lại
                 </a>
             </div>
@@ -65,7 +68,7 @@
             }
 
             <div class="d-flex justify-content-end gap-2">
-                <a asp-controller="Chapters" asp-action="Index" class="btn btn-academic-outline">Hủy bỏ</a>
+                <a asp-controller="Chapters" asp-action="Index" asp-route-subjectId="@Model.SubjectId" class="btn btn-academic-outline">Hủy bỏ</a>
                 <form method="post" asp-controller="Chapters" asp-action="Delete" asp-route-id="@Model.Id" class="d-inline">
                     <button type="submit" class="btn btn-danger px-4">
                         <i class="bi bi-trash-fill"></i> Xác nhận xóa

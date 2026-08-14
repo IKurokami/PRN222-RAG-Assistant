@@ -1,31 +1,45 @@
 @using PRN222.RagAssistant.Domain.Enums
 @model DocumentIndexViewModel
 @{
-    ViewData["Title"] = "Kho Giáo Trình & Tài Liệu - PRN222";
+    ViewData["Title"] = $"Kho tài liệu - {Model.SubjectCode}";
 }
 
 <div class="container py-4">
     <!-- Breadcrumb -->
-    <div class="academic-breadcrumb">
+    <div class="academic-breadcrumb mb-3">
         <a asp-page="/Index"><i class="bi bi-house-door"></i> Trang chủ</a>
         <span class="academic-breadcrumb-separator">/</span>
-        <span class="text-slate-800 fw-semibold">Kho tài liệu giáo trình</span>
+        <a asp-controller="Subjects" asp-action="Index">Môn học</a>
+        <span class="academic-breadcrumb-separator">/</span>
+        <span class="text-slate-800 fw-semibold">Tài liệu @Model.SubjectCode</span>
     </div>
 
     <!-- Header Section -->
-    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4 pb-2 border-bottom">
         <div>
+            <div class="badge bg-primary-subtle text-primary border border-primary-subtle px-2.5 py-1 mb-1 font-monospace">@Model.SubjectCode — @Model.SubjectName</div>
             <h1 class="fw-bold fs-3 text-slate-900 mb-1">
-                <i class="bi bi-folder2-open text-primary me-2"></i>Kho Giáo Trình &amp; Tài Liệu PRN222
+                <i class="bi bi-folder2-open text-primary me-2"></i>Kho Giáo Trình &amp; Tài Liệu
             </h1>
-            <p class="text-slate-500 mb-0">Quản lý và tra cứu các nguồn tài liệu học thuật chính thống phục vụ hệ thống RAG.</p>
+            <p class="text-slate-500 mb-0">Quản lý và tra cứu các nguồn tài liệu học thuật môn @Model.SubjectCode phục vụ RAG.</p>
         </div>
-        @if (Model.CanManageDocuments)
-        {
-            <a asp-controller="Documents" asp-action="Upload" class="btn-academic-accent text-decoration-none">
-                <i class="bi bi-cloud-arrow-up-fill"></i> Tải lên tài liệu mới
+        <div class="d-flex gap-2 flex-wrap">
+            <a asp-controller="Subjects" asp-action="Index" class="btn btn-sm btn-academic-outline">
+                <i class="bi bi-grid"></i> Danh mục môn học
             </a>
-        }
+            @if (Model.CanManageDocuments)
+            {
+                <a asp-controller="Chapters" asp-action="Index" asp-route-subjectId="@Model.SubjectId" class="btn btn-sm btn-academic-outline">
+                    <i class="bi bi-list-nested"></i> Chương
+                </a>
+                <a asp-page="/Reports/Index" asp-route-subjectId="@Model.SubjectId" class="btn btn-sm btn-academic-outline">
+                    <i class="bi bi-bar-chart-line"></i> Báo cáo
+                </a>
+                <a asp-controller="Documents" asp-action="Upload" asp-route-subjectId="@Model.SubjectId" class="btn-academic-accent text-decoration-none">
+                    <i class="bi bi-cloud-arrow-up-fill"></i> Tải lên tài liệu
+                </a>
+            }
+        </div>
     </div>
 
     @if (!string.IsNullOrEmpty(Model.StatusMessage))
@@ -40,6 +54,7 @@
     <!-- Filter Card -->
     <div class="academic-card mb-4">
         <form method="get" asp-controller="Documents" asp-action="Index" class="row g-3 align-items-center">
+            <input asp-for="SubjectId" type="hidden" />
             <div class="col-md-6 col-lg-5">
                 <label asp-for="SelectedChapterId" class="form-label mb-1 fw-bold text-slate-700 small">
                     <i class="bi bi-funnel text-primary me-1"></i>Lọc theo chương học:
@@ -51,7 +66,7 @@
             @if (Model.SelectedChapterId.HasValue)
             {
                 <div class="col-md-auto align-self-end">
-                    <a asp-controller="Documents" asp-action="Index" class="btn btn-academic-outline">
+                    <a asp-controller="Documents" asp-action="Index" asp-route-subjectId="@Model.SubjectId" class="btn btn-academic-outline">
                         <i class="bi bi-x-circle"></i> Xóa bộ lọc
                     </a>
                 </div>
@@ -65,13 +80,13 @@
             <div class="text-slate-400 mb-3">
                 <i class="bi bi-file-earmark-x" style="font-size: 3rem;"></i>
             </div>
-            <h5 class="fw-bold text-slate-700">Chưa có tài liệu nào trong danh mục này</h5>
+            <h5 class="fw-bold text-slate-700">Chưa có tài liệu nào trong môn học này</h5>
             <p class="text-slate-500 small max-w-md mx-auto mb-3">
                 Các tài liệu sau khi tải lên sẽ được hệ thống trích xuất văn bản và tạo vector nhúng tự động.
             </p>
             @if (Model.CanManageDocuments)
             {
-                <a asp-controller="Documents" asp-action="Upload" class="btn-academic-primary text-decoration-none">
+                <a asp-controller="Documents" asp-action="Upload" asp-route-subjectId="@Model.SubjectId" class="btn-academic-primary text-decoration-none">
                     <i class="bi bi-cloud-arrow-up"></i> Tải lên tài liệu ngay
                 </a>
             }
