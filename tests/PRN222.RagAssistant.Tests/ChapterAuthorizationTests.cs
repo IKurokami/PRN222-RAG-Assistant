@@ -1,25 +1,16 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authorization.Infrastructure;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using PRN222.RagAssistant.Controllers;
 using PRN222.RagAssistant.Infrastructure;
 using PRN222.RagAssistant.Security;
 
 namespace PRN222.RagAssistant.Tests;
 
-/// <summary>
-/// Tests that verify server-side authorization rules for Chapter Management write operations.
-///
-/// These tests confirm:
-/// - <see cref="AppPolicies.ManageDocuments"/> is enforced on Chapter Create/Edit/Delete
-/// - Only <see cref="AppRoles.SubjectLeader"/> satisfies the policy
-/// - <see cref="AppRoles.Student"/> is explicitly excluded
-/// - Attribute-level checks on PageModel classes match the expected policy
-/// </summary>
 public sealed class ChapterAuthorizationTests
 {
-    // ─── Policy Configuration ─────────────────────────────────────────────────
-
     [Fact]
     public async Task ManageDocuments_policy_requires_SubjectLeader_role_only()
     {
@@ -30,15 +21,9 @@ public sealed class ChapterAuthorizationTests
         var policy = await policyProvider.GetPolicyAsync(AppPolicies.ManageDocuments);
 
         Assert.NotNull(policy);
-
-        var roleRequirement = Assert.Single(
-            policy!.Requirements.OfType<RolesAuthorizationRequirement>());
-
-        // SubjectLeader must be in the allowed list
+        var roleRequirement = Assert.Single(policy!.Requirements.OfType<RolesAuthorizationRequirement>());
         Assert.Contains(AppRoles.SubjectLeader, roleRequirement.AllowedRoles);
-        // Student must NOT be allowed
         Assert.DoesNotContain(AppRoles.Student, roleRequirement.AllowedRoles);
-        // No other roles should be added
         Assert.Single(roleRequirement.AllowedRoles);
     }
 
@@ -49,10 +34,12 @@ public sealed class ChapterAuthorizationTests
         await using var provider = services.BuildServiceProvider();
         var authService = provider.GetRequiredService<IAuthorizationService>();
 
-        var user = TestPrincipals.WithRole(AppRoles.SubjectLeader);
-        var result = await authService.AuthorizeAsync(user, resource: null, AppPolicies.ManageDocuments);
+        var result = await authService.AuthorizeAsync(
+            TestPrincipals.WithRole(AppRoles.SubjectLeader),
+            resource: null,
+            AppPolicies.ManageDocuments);
 
-        Assert.True(result.Succeeded, "SubjectLeader should be authorized for ManageDocuments.");
+        Assert.True(result.Succeeded);
     }
 
     [Fact]
@@ -62,10 +49,12 @@ public sealed class ChapterAuthorizationTests
         await using var provider = services.BuildServiceProvider();
         var authService = provider.GetRequiredService<IAuthorizationService>();
 
-        var user = TestPrincipals.WithRole(AppRoles.Student);
-        var result = await authService.AuthorizeAsync(user, resource: null, AppPolicies.ManageDocuments);
+        var result = await authService.AuthorizeAsync(
+            TestPrincipals.WithRole(AppRoles.Student),
+            resource: null,
+            AppPolicies.ManageDocuments);
 
-        Assert.False(result.Succeeded, "Student should NOT be authorized for ManageDocuments.");
+        Assert.False(result.Succeeded);
     }
 
     [Fact]
@@ -75,65 +64,69 @@ public sealed class ChapterAuthorizationTests
         await using var provider = services.BuildServiceProvider();
         var authService = provider.GetRequiredService<IAuthorizationService>();
 
-        var user = TestPrincipals.Anonymous();
-        var result = await authService.AuthorizeAsync(user, resource: null, AppPolicies.ManageDocuments);
+        var result = await authService.AuthorizeAsync(
+            TestPrincipals.Anonymous(),
+            resource: null,
+            AppPolicies.ManageDocuments);
 
-        Assert.False(result.Succeeded, "Anonymous user should NOT be authorized for ManageDocuments.");
-    }
-
-    // ─── PageModel Attribute Verification ────────────────────────────────────
-    // Verifies that Chapter write pages declare [Authorize(Policy = ManageDocuments)]
-    // so authorization is enforced at the framework level, not just hidden in UI.
-
-    [Fact]
-    public void Chapter_Create_page_has_ManageDocuments_authorization_attribute()
-    {
-        AssertHasManageDocumentsAttribute(typeof(Pages.Chapters.CreateModel));
+        Assert.False(result.Succeeded);
     }
 
     [Fact]
-    public void Chapter_Edit_page_has_ManageDocuments_authorization_attribute()
+    public void Flow1_presentation_uses_MVC_controllers()
     {
-        AssertHasManageDocumentsAttribute(typeof(Pages.Chapters.EditModel));
+        Assert.True(typeof(Controller).IsAssignableFrom(typeof(DocumentsController)));
+        Assert.True(typeof(Controller).IsAssignableFrom(typeof(ChaptersController)));
     }
 
-    [Fact]
-    public void Chapter_Delete_page_has_ManageDocuments_authorization_attribute()
+    [Theory]
+    [InlineData(typeof(ChaptersController), nameof(ChaptersController.Create))]
+    [InlineData(typeof(ChaptersController), nameof(ChaptersController.Edit))]
+    [InlineData(typeof(ChaptersController), nameof(ChaptersController.Delete))]
+    [InlineData(typeof(ChaptersController), nameof(ChaptersController.DeleteConfirmed))]
+    [InlineData(typeof(DocumentsController), nameof(DocumentsController.Upload))]
+    [InlineData(typeof(DocumentsController), nameof(DocumentsController.Edit))]
+    [InlineData(typeof(DocumentsController), nameof(DocumentsController.Delete))]
+    [InlineData(typeof(DocumentsController), nameof(DocumentsController.Reindex))]
+    public void Flow1_write_actions_have_ManageDocuments_authorization_attribute(Type controllerType, string actionName)
     {
-        AssertHasManageDocumentsAttribute(typeof(Pages.Chapters.DeleteModel));
-    }
-
-    [Fact]
-    public void Document_Upload_page_has_ManageDocuments_authorization_attribute()
-    {
-        AssertHasManageDocumentsAttribute(typeof(Pages.Documents.UploadModel));
-    }
-
-    [Fact]
-    public void Document_Edit_page_has_ManageDocuments_authorization_attribute()
-    {
-        AssertHasManageDocumentsAttribute(typeof(Pages.Documents.EditModel));
-    }
-
-    // ─── Helpers ─────────────────────────────────────────────────────────────
-
-    private static void AssertHasManageDocumentsAttribute(Type pageModelType)
-    {
-        var authorizeAttrs = pageModelType
-            .GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
-            .Cast<AuthorizeAttribute>()
+        var methods = controllerType
+            .GetMethods()
+            .Where(method => method.Name == actionName)
             .ToList();
 
-        Assert.True(
-            authorizeAttrs.Any(),
-            $"{pageModelType.Name} must have at least one [Authorize] attribute.");
+        Assert.NotEmpty(methods);
+        Assert.All(methods, method =>
+        {
+            var authorizeAttributes = method
+                .GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
+                .Cast<AuthorizeAttribute>();
 
-        var hasManageDocuments = authorizeAttrs
-            .Any(a => a.Policy == AppPolicies.ManageDocuments);
+            Assert.Contains(authorizeAttributes, attribute => attribute.Policy == AppPolicies.ManageDocuments);
+        });
+    }
 
-        Assert.True(
-            hasManageDocuments,
-            $"{pageModelType.Name} must declare [Authorize(Policy = \"{AppPolicies.ManageDocuments}\")].");
+    [Theory]
+    [InlineData(typeof(DocumentsController), nameof(DocumentsController.Upload))]
+    [InlineData(typeof(DocumentsController), nameof(DocumentsController.Edit))]
+    [InlineData(typeof(DocumentsController), nameof(DocumentsController.Delete))]
+    [InlineData(typeof(DocumentsController), nameof(DocumentsController.Reindex))]
+    [InlineData(typeof(ChaptersController), nameof(ChaptersController.Create))]
+    [InlineData(typeof(ChaptersController), nameof(ChaptersController.Edit))]
+    [InlineData(typeof(ChaptersController), nameof(ChaptersController.DeleteConfirmed))]
+    public void Flow1_POST_actions_validate_anti_forgery_tokens(Type controllerType, string actionName)
+    {
+        var postMethods = controllerType
+            .GetMethods()
+            .Where(method => method.Name == actionName)
+            .Where(method => method.GetCustomAttributes(typeof(HttpPostAttribute), inherit: true).Any()
+                          || method.GetCustomAttributes(typeof(ActionNameAttribute), inherit: true).Any())
+            .ToList();
+
+        Assert.NotEmpty(postMethods);
+        Assert.All(postMethods, method => Assert.Contains(
+            method.GetCustomAttributes(typeof(ValidateAntiForgeryTokenAttribute), inherit: true),
+            attribute => attribute is ValidateAntiForgeryTokenAttribute));
     }
 
     private static IServiceCollection BuildServices()
