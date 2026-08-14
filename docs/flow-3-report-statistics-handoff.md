@@ -150,7 +150,7 @@ Post-merge local smoke testing confirmed this consumer boundary by uploading/ind
 
 ## Relationship to pending Flow 2 - MVC
 
-Flow 2 is now explicitly assigned to **ASP.NET Core MVC Controllers + Views** for presentation.
+Flow 2 is explicitly assigned to **ASP.NET Core MVC Controllers + Views** for presentation.
 
 Flow 3 may read `ChatSession`, `ChatMessage`, and `MessageCitation` after Flow 2 begins populating them, but it does not own:
 
@@ -200,4 +200,4 @@ Flow 3 meets the original acceptance criteria:
 
 Do not recreate `feature/report-statistics` as a competing implementation.
 
-New work should focus on pending Flow 2 unless a new requirement explicitly reopens reporting.
+New work should focus on pending Flow 2 MVC unless a new requirement explicitly reopens reporting.
