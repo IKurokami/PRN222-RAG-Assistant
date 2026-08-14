@@ -33,7 +33,14 @@
                             @foreach (var leader in Model.Leaders)
                             {
                                 <label class="list-group-item d-flex gap-3 align-items-center">
-                                    <input class="form-check-input flex-shrink-0" type="checkbox" name="SelectedLeaderIds" value="@leader.UserId" checked="@leader.IsSelected" />
+                                    @if (leader.IsSelected)
+                                    {
+                                        <input class="form-check-input flex-shrink-0" type="checkbox" name="SelectedLeaderIds" value="@leader.UserId" checked />
+                                    }
+                                    else
+                                    {
+                                        <input class="form-check-input flex-shrink-0" type="checkbox" name="SelectedLeaderIds" value="@leader.UserId" />
+                                    }
                                     <span>
                                         <span class="fw-bold d-block">@leader.DisplayName</span>
                                         <span class="small text-muted">@leader.Email</span>
