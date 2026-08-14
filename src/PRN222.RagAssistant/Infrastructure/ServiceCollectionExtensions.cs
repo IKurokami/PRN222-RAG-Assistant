@@ -54,7 +54,13 @@ public static class ServiceCollectionExtensions
             options.AddPolicy(
                 AppPolicies.ManageUsers,
                 policy => policy.RequireRole(AppRoles.Admin));
+
+            options.AddPolicy(
+                AppPolicies.ManageSubjects,
+                policy => policy.RequireRole(AppRoles.Admin));
         });
+
+        services.AddScoped<ISubjectAccessService, SubjectAccessService>();
 
         var ollamaBaseUrl = configuration["Rag:Ollama:BaseUrl"];
 

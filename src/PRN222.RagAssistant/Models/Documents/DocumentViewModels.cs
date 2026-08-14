@@ -7,6 +7,9 @@ namespace PRN222.RagAssistant.Models.Documents;
 
 public sealed class DocumentIndexViewModel
 {
+    public Guid SubjectId { get; set; }
+    public string SubjectCode { get; set; } = string.Empty;
+    public string SubjectName { get; set; } = string.Empty;
     public List<DocumentItemViewModel> Documents { get; set; } = [];
     public List<SelectListItem> ChapterOptions { get; set; } = [];
     public Guid? SelectedChapterId { get; set; }
@@ -37,6 +40,9 @@ public sealed class DocumentItemViewModel
 
 public sealed class DocumentUploadViewModel
 {
+    public Guid SubjectId { get; set; }
+    public string SubjectCode { get; set; } = string.Empty;
+    public string SubjectName { get; set; } = string.Empty;
     public DocumentUploadInputModel Input { get; set; } = new();
     public List<SelectListItem> ChapterOptions { get; set; } = [];
 }
@@ -88,6 +94,9 @@ public sealed class DocumentUploadInputModel : IValidatableObject
 public sealed class DocumentEditViewModel
 {
     public Guid Id { get; set; }
+    public Guid SubjectId { get; set; }
+    public string SubjectCode { get; set; } = string.Empty;
+    public string SubjectName { get; set; } = string.Empty;
     public string DocumentTitle { get; set; } = string.Empty;
     public DocumentEditInputModel Input { get; set; } = new();
     public List<SelectListItem> ChapterOptions { get; set; } = [];
@@ -113,6 +122,7 @@ public sealed class DocumentDetailsViewModel
 public sealed class DocumentDetailViewModel
 {
     public Guid Id { get; set; }
+    public Guid SubjectId { get; set; }
     public string Title { get; set; } = string.Empty;
     public string OriginalFileName { get; set; } = string.Empty;
     public string StoragePath { get; set; } = string.Empty;
