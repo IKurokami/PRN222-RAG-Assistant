@@ -34,7 +34,7 @@ Flow 2 -> MVC           [PENDING]
 Flow 3 -> Razor Pages   [COMPLETE]
 ```
 
-Flow 2 is the workflow chosen for the MVC implementation requirement. New Flow 2 presentation must use `Controllers/` and `Views/`; do not create `Pages/Chat`, `Pages/Conversation`, or a parallel Razor Pages chat implementation.
+Flow 2 is the workflow selected by the team for the MVC implementation requirement. New Flow 2 presentation must use `Controllers/` and `Views/`; do not create `Pages/Chat`, `Pages/Conversation`, or a parallel Razor Pages chat implementation.
 
 Existing Flow 1 and Flow 3 Razor Pages should not be migrated merely for consistency.
 
