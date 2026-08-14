@@ -79,6 +79,26 @@ public sealed class ChapterAuthorizationTests
         Assert.True(typeof(Controller).IsAssignableFrom(typeof(ChaptersController)));
     }
 
+    [Fact]
+    public void Flow1_does_not_keep_legacy_Razor_Page_types()
+    {
+        var legacyNamespacePrefixes = new[]
+        {
+            "PRN222.RagAssistant.Pages.Documents",
+            "PRN222.RagAssistant.Pages.Chapters"
+        };
+
+        var legacyTypes = typeof(DocumentsController).Assembly
+            .GetTypes()
+            .Where(type => type.Namespace is not null
+                           && legacyNamespacePrefixes.Any(prefix =>
+                               type.Namespace == prefix
+                               || type.Namespace.StartsWith($"{prefix}.", StringComparison.Ordinal)))
+            .ToList();
+
+        Assert.Empty(legacyTypes);
+    }
+
     [Theory]
     [InlineData(typeof(ChaptersController), nameof(ChaptersController.Create))]
     [InlineData(typeof(ChaptersController), nameof(ChaptersController.Edit))]
