@@ -18,14 +18,41 @@ public sealed class PdfDocumentParserTests
         Assert.Contains("Hello PRN222 PDF", page.Text);
     }
 
-    private static MemoryStream CreateMinimalPdf(string text)
+    [Fact]
+    public void Parse_PositionedText_ReconstructsReadingOrderAndWordSpacing()
+    {
+        const string contentStream = """
+            BT
+            /F1 12 Tf
+            1 0 0 1 72 700 Tm
+            (Second line remains readable.) Tj
+            1 0 0 1 72 720 Tm
+            (Chapter 11.) Tj
+            1 0 0 1 145 720 Tm
+            (The presence of XML.) Tj
+            ET
+            """;
+        using var stream = CreateMinimalPdfFromContentStream(contentStream);
+
+        var pages = new PdfDocumentParser().Parse(stream);
+
+        var page = Assert.Single(pages);
+        Assert.Equal(
+            "Chapter 11. The presence of XML.\nSecond line remains readable.",
+            page.Text);
+    }
+
+    private static MemoryStream CreateMinimalPdf(string text) =>
+        CreateMinimalPdfFromContentStream($"BT /F1 12 Tf 72 720 Td ({text}) Tj ET");
+
+    private static MemoryStream CreateMinimalPdfFromContentStream(string contentStream)
     {
         var objects = new[]
         {
             "<< /Type /Catalog /Pages 2 0 R >>",
             "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
             "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>",
-            $"<< /Length {Encoding.ASCII.GetByteCount($"BT /F1 12 Tf 72 720 Td ({text}) Tj ET")} >>\nstream\nBT /F1 12 Tf 72 720 Td ({text}) Tj ET\nendstream",
+            $"<< /Length {Encoding.ASCII.GetByteCount(contentStream)} >>\nstream\n{contentStream}\nendstream",
             "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"
         };
         var builder = new StringBuilder("%PDF-1.4\n");

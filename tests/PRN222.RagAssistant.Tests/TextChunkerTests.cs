@@ -73,4 +73,56 @@ public sealed class TextChunkerTests
         Assert.Equal(500, chunks[0].Content.Length);
         Assert.Equal(200, chunks[1].Content.Length);
     }
+
+    [Fact]
+    public void Chunk_WordDelimitedText_NeverStartsOrEndsWithPartialWords()
+    {
+        var vocabulary = new[]
+        {
+            "alpha", "bravo", "charlie", "delta", "elephant", "foxtrot",
+            "gigantic", "hotel", "indigo", "juliet", "kilogram", "lemon"
+        };
+        var chunker = new TextChunker(maxChunkSize: 40, overlapSize: 10);
+        var pages = new[]
+        {
+            new ParsedPage(string.Join(' ', vocabulary), PageNumber: 1, SlideNumber: null)
+        };
+
+        var chunks = chunker.Chunk(pages);
+
+        Assert.True(chunks.Count > 1);
+        Assert.All(
+            chunks.SelectMany(chunk => chunk.Content.Split(' ', StringSplitOptions.RemoveEmptyEntries)),
+            word => Assert.Contains(word, vocabulary));
+    }
+
+    [Fact]
+    public void Chunk_SentencedText_OverlapsAtLeastOneCompleteSentence()
+    {
+        var sentences = new[]
+        {
+            "Alpha topic introduces the first complete idea.",
+            "Bravo topic explains the second complete idea.",
+            "Charlie topic develops the third complete idea.",
+            "Delta topic closes the final complete idea."
+        };
+        var chunker = new TextChunker(maxChunkSize: 100, overlapSize: 35);
+        var pages = new[]
+        {
+            new ParsedPage(string.Join(' ', sentences), PageNumber: 1, SlideNumber: null)
+        };
+
+        var chunks = chunker.Chunk(pages);
+
+        Assert.True(chunks.Count > 1);
+        for (var index = 1; index < chunks.Count; index++)
+        {
+            var previous = chunks[index - 1].Content;
+            var current = chunks[index].Content;
+            Assert.Contains(
+                sentences,
+                sentence => previous.Contains(sentence, StringComparison.Ordinal)
+                            && current.Contains(sentence, StringComparison.Ordinal));
+        }
+    }
 }
