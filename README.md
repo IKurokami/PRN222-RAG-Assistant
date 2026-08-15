@@ -2,112 +2,113 @@
 
 ASP.NET Core RAG learning assistant built with .NET 10, MVC + Razor Pages, PostgreSQL/pgvector, ASP.NET Core Identity, and a provider-neutral AI runtime.
 
-> Documentation baseline: AI-provider backup work branched from `master` after merged PR #20 on 2026-08-15.
-
-The repository name remains PRN222 RAG Assistant and PRN222 remains the seeded demo subject, but the application is designed to host multiple subjects. PRN222 is not the application-wide hard-coded workflow scope.
+PRN222 remains the seeded demo subject, but the application supports multiple subjects.
 
 ## Current status
 
 | Area | Status | Owner |
 |---|---|---|
 | Core/Data/Identity/RBAC | Complete | Member 1 |
-| Admin user/role management | Complete | Member 1 |
-| Multi-subject management + Subject Leader assignment | Complete / merged | Member 1 |
-| AI provider foundation - Ollama / Gemini / OpenAI | Implemented in this PR | **Member 1** |
-| Flow 1 - Document Management & Indexing | Complete | Member 2 request behavior + Member 3 indexing; Member 1 subject/RBAC integration |
+| Multi-subject management + Subject Leader assignment | Complete | Member 1 |
+| AI provider foundation / routing | Ollama, Gemini, OpenAI + OpenRouter free fallback | **Member 1** |
+| Flow 1 - Document Management & Indexing | Complete | Member 2 request behavior + Member 3 indexing; Member 1 subject/RBAC/provider integration |
 | Flow 2 - RAG Q&A + Conversation Management | Pending | Member 4 backend + Member 5 MVC/evaluation |
 | Flow 3 - Report & Statistics | Complete | Member 2 behavior; Member 1 subject/RBAC integration |
-| Cross-app UI/UX redesign | Complete / merged in PR #19 | **Member 3** |
-| Public Student registration | Complete / merged in PR #19 | Member 3 implementation; Member 1 retains Identity/RBAC ownership |
-| Repository documentation | Updated for provider backup | Member 1 only |
+| Cross-app UI/UX redesign | Complete / merged in PR #19 | Member 3 |
+| Repository documentation | Synchronized with provider routing | Member 1 |
 
 Product workflows:
 
-1. **Flow 1 - Document Management & Indexing** - MVC Controllers + Views - complete.
-2. **Flow 2 - RAG Question & Answer & Conversation Management** - MVC Controllers + Views - pending.
+1. **Flow 1 - Document Management & Indexing** - MVC - complete.
+2. **Flow 2 - RAG Question & Answer & Conversation Management** - MVC - pending.
 3. **Flow 3 - Report & Statistics** - Razor Pages - complete.
 
 Conversation History belongs to Flow 2 and is not counted as a separate flow.
 
-## AI runtime - local or online
+## AI runtime
 
-Workflow code consumes provider-neutral contracts:
+Workflow code consumes only:
 
 ```text
 ITextEmbeddingService
 IChatCompletionService
 ```
 
-Choose one provider through `.env` / deployment environment:
+Supported providers:
 
 ```text
+Ollama
+Gemini
+OpenAI
+OpenRouter
+```
+
+`RAG_PROVIDER` remains backward compatible and supplies both contracts when no per-purpose override is set:
+
+```env
 RAG_PROVIDER=Ollama
-RAG_PROVIDER=Gemini
-RAG_PROVIDER=OpenAI
 ```
 
-### Free/default paths
+Chat and embeddings can now be selected independently:
 
-**Ollama - local, $0 provider fee**
-
-```text
-Chat:      qwen3:4b
-Embedding: qwen3-embedding:0.6b
+```env
+RAG_CHAT_PROVIDER=OpenRouter
+RAG_EMBEDDING_PROVIDER=Gemini
 ```
 
-Inference runs on your own machine. Hardware, RAM/VRAM and electricity remain your responsibility.
-
-**Google Gemini - online Free Tier backup**
+Resolution order is:
 
 ```text
-Chat:      gemini-3.6-flash
-Embedding: gemini-embedding-2
+RAG_CHAT_PROVIDER      -> RAG_PROVIDER -> Ollama
+RAG_EMBEDDING_PROVIDER -> RAG_PROVIDER -> Ollama
 ```
 
-As of 2026-08-15, Google lists both models as available on the Gemini Developer API Standard Free Tier. Free Tier usage is rate-limited and Google states Free Tier content may be used to improve its products. Re-check official pricing/rate-limit pages before production deployment because cloud terms can change.
+### Recommended free-first hybrid
 
-### Optional paid path
-
-**OpenAI - online, paid API**
-
-```text
-Chat:      gpt-5.6-luna
-Embedding: text-embedding-3-small
+```env
+RAG_PROVIDER=Ollama
+RAG_CHAT_PROVIDER=OpenRouter
+RAG_EMBEDDING_PROVIDER=Gemini
+RAG_EMBEDDING_DIMENSIONS=1024
+OPENROUTER_API_KEY=<server-side key>
+GEMINI_API_KEY=<server-side key>
 ```
 
-OpenAI is retained as an optional provider, not as the project's free online fallback. As of 2026-08-15, GPT-5.6 Luna has no general Free API tier and OpenAI API usage is billed by usage.
-
-Canonical setup/research notes: `docs/ai-provider-backup.md`.
-
-There is deliberately no silent local-to-cloud failover. Operators must explicitly select a cloud provider because doing so changes data egress and potentially cost.
-
-## Embedding compatibility
-
-Default corpus dimension:
+OpenRouter chat uses an ordered fallback chain by default:
 
 ```text
+google/gemma-4-26b-a4b-it:free
+ -> nvidia/nemotron-3-ultra-550b-a55b:free
+ -> openrouter/free
+```
+
+OpenRouter automatically tries the next configured chat model when an earlier model fails. `openrouter/free` is the final catch-all free router and chooses from the free models currently available to OpenRouter.
+
+### Provider matrix
+
+| Provider | Chat | Embedding | Position |
+|---|---|---|---|
+| Ollama | `qwen3:4b` | `qwen3-embedding:0.6b` | local / $0 provider fee |
+| Gemini | `gemini-3.6-flash` | `gemini-embedding-2` | direct online Free Tier path |
+| OpenRouter | ordered free-model chain | `nvidia/llama-nemotron-embed-vl-1b-v2:free` | free-first router; low limits/availability can vary |
+| OpenAI | `gpt-5.6-luna` | `text-embedding-3-small` | optional paid API |
+
+OpenRouter's free tier is intended for development/demo/low-volume usage. Free model availability and rate limits can change. The default OpenRouter free embedding endpoint also has provider data-logging terms; do not use sensitive material there without reviewing current provider policy.
+
+Canonical research/setup notes: `docs/ai-provider-backup.md`.
+
+## Why chat rotates but embeddings do not
+
+Chat completions are stateless with respect to the stored pgvector corpus, so the application may use an ordered fallback chain without re-indexing documents.
+
+Embeddings are different. A searchable corpus must stay in one embedding vector space. The OpenRouter embedding adapter therefore uses exactly one configured model:
+
+```env
+OPENROUTER_EMBEDDING_MODEL=nvidia/llama-nemotron-embed-vl-1b-v2:free
 RAG_EMBEDDING_DIMENSIONS=1024
 ```
 
-The selected embedding adapter validates this dimension. OpenAI and Gemini are asked to return the configured dimension.
-
-**Do not mix embeddings from different models/providers in one searchable corpus.** Equal vector length does not mean equal vector space. Whenever the embedding provider, model, or dimension changes, re-index the complete document corpus before similarity retrieval.
-
-## UI/UX baseline after PR #19
-
-Member 3 completed the current application-wide presentation redesign. This completed task remains Member 3-owned.
-
-Implemented presentation scope includes:
-
-- redesigned landing page and application shell;
-- shared `design-tokens.css` and `components.css` design system;
-- Bootstrap Icons restored through LibMan;
-- redesigned Login/Register/Logout/AccessDenied/Error/Privacy experiences;
-- public registration that always creates a `Student` account;
-- refreshed Subjects, Admin Users, Admin Subjects, Chapters, Documents, and Reports screens;
-- document search/status filtering and preserved filter context for delete/re-index actions.
-
-Provider-backup copy changes only remove the obsolete claim that AI must always be local; they do not transfer UI/UX ownership away from Member 3.
+**Never rotate between different embedding models for already indexed documents.** Changing embedding provider, embedding model, or dimensions requires a complete corpus re-index before similarity retrieval. Equal vector length does not make different embedding models compatible.
 
 ## Multi-subject model
 
@@ -115,34 +116,20 @@ Provider-backup copy changes only remove the obsolete claim that AI must always 
 
 ```text
 Admin
-  |
-  +--> create/edit/activate/deactivate Subject
-  +--> assign Subject Leader(s)
-  \--> manage any Subject as an operational override
+  +--> manage subjects/users/roles
+  +--> assign Subject Leaders
+  \--> operational override for any subject
 
 Subject Leader
-  |
-  \--> manage only assigned Subject(s)
+  \--> assigned subjects only
        +--> Chapters
        +--> Documents
        +--> Re-index requests
        \--> Reports
 
 Student
-  |
-  \--> view active Subject(s) and their document catalogue
+  \--> active subjects/document catalogue
 ```
-
-PRN222 is seeded so a fresh environment has a usable demo subject. Additional subjects can be created at runtime by Admin.
-
-Subject Leader assignments use ASP.NET Core Identity user claims:
-
-```text
-Claim type  = prn222:managed-subject
-Claim value = <Subject Guid>
-```
-
-## Roles and authorization
 
 Roles:
 
@@ -152,7 +139,7 @@ SubjectLeader
 Student
 ```
 
-Coarse policies:
+Policies:
 
 ```text
 ManageUsers     -> Admin
@@ -160,55 +147,38 @@ ManageSubjects  -> Admin
 ManageDocuments -> Admin OR SubjectLeader
 ```
 
-`ManageDocuments` is only the coarse role gate. Subject-specific write/report actions also check `ISubjectAccessService` against the concrete `SubjectId`.
-
-Public self-registration is restricted to `Student`.
+Subject-specific writes/reports also use `ISubjectAccessService`.
 
 ## Flow 1
 
-Flow 1 is MVC:
-
 ```text
 DocumentsController / ChaptersController
-      |
-      +--> subject-specific authorization
-      +--> validate/persist
-      v
-IDocumentIndexingQueue
-      |
-      v
-DocumentIndexingWorker
-      |
-      v
-DocumentIndexingService
-      +--> parse
-      +--> chunk
-      +--> ITextEmbeddingService (selected provider)
-      \--> persist DocumentChunk / status
+ -> subject authorization
+ -> persist Document
+ -> IDocumentIndexingQueue
+ -> DocumentIndexingWorker
+ -> DocumentIndexingService
+ -> parse/chunk
+ -> ITextEmbeddingService [selected embedding provider]
+ -> DocumentChunk / status
 ```
 
-The indexing pipeline stays document-ID driven for every subject and does not branch by provider.
+Member 3 retains indexing ownership. Provider routing does not create provider-specific workers.
 
-## Flow 3
+## Flow 2 requirement
 
-Reports remain Razor Pages and require a concrete `subjectId`. Chapter/document/index/chunk/failure metrics are subject-scoped and provider-independent.
+Flow 2 must remain subject-scoped and provider-neutral:
 
-Chat totals remain temporarily global because Flow 2 is pending and `ChatSession` does not yet contain `SubjectId`.
+```text
+selected subject
+ -> ITextEmbeddingService
+ -> same-subject pgvector retrieval
+ -> grounded prompt
+ -> IChatCompletionService
+ -> same-subject messages/citations/history
+```
 
-## Flow 2 requirement before implementation
-
-Flow 2 must be subject-scoped and provider-neutral from the start.
-
-Before retrieval/chat persistence is considered complete:
-
-- a chat session must belong to one subject;
-- question embeddings must use `ITextEmbeddingService`;
-- retrieval must be constrained to indexed documents of that subject;
-- grounded generation must use `IChatCompletionService`;
-- Conversation History must preserve subject context;
-- citations must not cross subject boundaries.
-
-Member 4 must not call Ollama, Gemini, or OpenAI directly. Member 1 owns provider wiring; Member 4 owns RAG behavior.
+Member 4 must not call Ollama, Gemini, OpenAI, or OpenRouter directly.
 
 ## Technology
 
@@ -217,46 +187,54 @@ Member 4 must not call Ollama, Gemini, or OpenAI directly. Member 1 owns provide
 - ASP.NET Core Identity
 - EF Core
 - PostgreSQL + pgvector
-- Ollama local provider
-- Google Gemini Developer API online Free Tier provider
-- optional OpenAI API provider
-- PDF parsing via PdfPig
-- DOCX/PPTX parsing via OpenXml
+- Ollama local runtime
+- Google Gemini Developer API
+- OpenRouter free-first routing
+- optional OpenAI API
+- PdfPig + OpenXml document parsing
 - Bootstrap + Bootstrap Icons
-- project design system via `design-tokens.css` + `components.css`
 
 ## Environment configuration
 
-Copy `.env.example` to `.env` for Docker Compose. `.env` is ignored by Git.
+Copy `.env.example` to `.env`. `.env` is ignored by Git.
 
-Shared:
+Local Ollama for both chat/embedding:
 
-```text
+```env
 RAG_PROVIDER=Ollama
+```
+
+```bash
+docker compose --profile local-ai up -d --build
+```
+
+OpenRouter chat fallback + Gemini embedding:
+
+```env
+RAG_PROVIDER=Ollama
+RAG_CHAT_PROVIDER=OpenRouter
+RAG_EMBEDDING_PROVIDER=Gemini
+OPENROUTER_API_KEY=<key>
+GEMINI_API_KEY=<key>
+```
+
+```bash
+docker compose up -d --build
+```
+
+OpenRouter for both contracts:
+
+```env
+RAG_PROVIDER=OpenRouter
+OPENROUTER_API_KEY=<key>
 RAG_EMBEDDING_DIMENSIONS=1024
 ```
 
-Gemini Free Tier online backup:
-
-```text
-RAG_PROVIDER=Gemini
-GEMINI_API_KEY=<your key>
-GEMINI_CHAT_MODEL=gemini-3.6-flash
-GEMINI_EMBEDDING_MODEL=gemini-embedding-2
-```
-
-Optional OpenAI paid provider:
-
-```text
-RAG_PROVIDER=OpenAI
-OPENAI_API_KEY=<your key>
-OPENAI_CHAT_MODEL=gpt-5.6-luna
-OPENAI_EMBEDDING_MODEL=text-embedding-3-small
-```
+If the corpus was indexed with another embedding model, re-index all documents before retrieval.
 
 Never commit real API keys.
 
-## Commands
+## Validation
 
 ```bash
 dotnet tool restore
@@ -269,32 +247,14 @@ dotnet ef migrations has-pending-model-changes \
   --startup-project src/PRN222.RagAssistant
 
 docker compose config
-```
-
-Local Ollama runtime:
-
-```bash
-docker compose --profile local-ai up -d --build
-```
-
-Gemini/OpenAI runtime (Ollama container is not required):
-
-```bash
-docker compose up -d --build
+docker compose --profile local-ai config
 ```
 
 Do not run `docker compose down -v` unless data deletion is explicitly intended.
 
 ## Team coordination
 
-**Member 1 is the sole repository documentation editor.** This includes:
-
-```text
-README.md
-AGENTS.md
-src/PRN222.RagAssistant/Application/AGENTS.md
-docs/*
-```
+**Member 1 is the sole repository documentation editor** for `README.md`, all `AGENTS.md` files, and `docs/*`.
 
 Required reading:
 
@@ -305,4 +265,3 @@ Required reading:
 - `docs/multi-subject-management.md`
 - `docs/infrastructure.md`
 - `docs/ai-provider-backup.md`
-- `docs/member-3-ui-ux-handoff.md`

@@ -1,114 +1,67 @@
 # Team workflow and ownership
 
-> Provider-backup coordination baseline: work based on `master` after merged PR #20. Member 1 is the sole documentation owner.
+> Member 1 is the sole documentation owner.
 
 ## Current milestone
 
 - Member 1 Core/Data/Identity/RBAC: complete.
 - Member 1 multi-subject management/subject scoping: complete.
-- **Member 1 AI provider foundation: implemented in this PR.**
+- **Member 1 AI provider routing/fallback: implemented in the current PR.**
 - Member 2 Flow 1 request/business behavior: complete.
-- Member 3 Flow 1 indexing: complete / merged through PR #9.
-- Member 2 Flow 3 reporting behavior: complete / merged through PR #12.
-- Member 3 cross-app UI/UX redesign: complete / merged through PR #19.
+- Member 3 Flow 1 indexing: complete.
+- Member 2 Flow 3 reporting behavior: complete.
+- Member 3 cross-app UI/UX redesign: complete / PR #19.
 - Member 4 Flow 2 backend: pending.
 - Member 5 Flow 2 MVC/history/citations/evaluation: pending.
 
 ## Member 1 - Core/Data/RBAC/multi-subject/provider/docs
 
-Owns:
+Owns shared infrastructure, Identity/RBAC, subject management/authorization, provider selection/configuration, Ollama/Gemini/OpenAI/OpenRouter adapters, OpenRouter free chat fallback, API-key/env wiring, embedding compatibility/re-index coordination, provider tests, and all README/AGENTS/docs edits.
 
-- domain/data/security baseline;
-- shared contracts and EF migration coordination;
-- Identity configuration/seeding and RBAC rules;
-- Admin/SubjectLeader/Student roles/policies;
-- Subject management/assignment and `ISubjectAccessService`;
-- cross-workflow subject-context integration;
-- **AI provider selection/configuration**;
-- **Gemini/OpenAI/Ollama concrete AI adapters behind Application interfaces**;
-- **online API-key/env wiring**;
-- **embedding dimension/vector-space/re-index compatibility rule**;
-- provider regression tests;
-- all README/AGENTS/docs edits.
+Provider plumbing does not transfer indexing ownership from Member 3 or RAG business behavior from Member 4.
 
-The provider task is cross-cutting infrastructure. It does not move parsing/chunking/indexing workflow ownership from Member 3 or RAG business behavior from Member 4.
+## Member 2
 
-## Member 2 - Flow 1 request behavior + Flow 3 reporting
+Retains established Chapter/Document request semantics and read-only reporting behavior. Controllers/Pages do not call concrete providers.
 
-Member 2 retains established Chapter/Document request semantics and read-only reporting behavior.
+## Member 3
 
-Controllers/Pages must not call a concrete AI provider.
+Owns parser/chunker/indexing service/worker/startup recovery and completed UI/UX redesign. Indexing consumes `ITextEmbeddingService`; no provider-specific worker exists.
 
-## Member 3 - indexing + UI/UX redesign
+## Member 4
 
-### Indexing - complete
+Pending Flow 2 backend responsibilities: subject-scoped question embedding, pgvector retrieval, grounding, completion through `IChatCompletionService`, session validation, messages/citations persistence.
 
-Member 3 owns parsers, chunker, indexing service/worker, state transitions, chunk replacement, and startup recovery.
+Do not call Ollama/Gemini/OpenAI/OpenRouter directly.
 
-The pipeline consumes `ITextEmbeddingService`; Member 1 now owns which concrete provider implements that interface at startup.
+## Member 5
 
-No provider-specific worker is created.
-
-### Cross-app UI/UX redesign - complete
-
-Member 3 retains the PR #19 design system/presentation ownership. Provider-backup changes may update factual copy that previously said AI was always local, but this does not transfer visual ownership.
-
-## Member 4 - Flow 2 backend
-
-Pending responsibilities:
-
-- subject-scoped RAG query design;
-- question embeddings through `ITextEmbeddingService`;
-- pgvector retrieval over only the selected subject;
-- grounding/no-evidence behavior;
-- completion through `IChatCompletionService`;
-- session ownership validation;
-- messages/citations persistence.
-
-Do not call Ollama, Gemini, or OpenAI directly.
-
-## Member 5 - Flow 2 MVC/evaluation
-
-Owns Chat MVC actions/views, subject-aware session navigation/history/citations, and evaluation tooling.
-
-Do not call provider APIs in controllers/views.
+Owns future Chat MVC/session/history/citation UI and evaluation tooling. Do not call provider APIs in controllers/views.
 
 ## Provider integration map
 
 ```text
-RAG_PROVIDER
-   |
-   +--> Ollama [local/default, $0 provider fee]
-   +--> Gemini [online Free Tier backup]
-   \--> OpenAI [online paid optional]
-             |
-             +--> ITextEmbeddingService
-             \--> IChatCompletionService
-                        |
-              +---------+---------+
-              |                   |
-         Flow 1 indexing     future Flow 2 RAG
-         [Member 3]          [Member 4]
+RAG_PROVIDER [legacy/default]
+  |
+  +--> RAG_CHAT_PROVIDER override ------> IChatCompletionService
+  |       +--> OpenRouter ordered free-model fallback
+  |
+  \--> RAG_EMBEDDING_PROVIDER override -> ITextEmbeddingService
+          \--> exactly one embedding model per corpus
 ```
 
 ## Provider change procedure
 
-If only the chat model changes, no existing document vectors need re-indexing.
+If only chat provider/model/order changes, no document re-index is required.
 
 If embedding provider/model/dimension changes:
 
 1. Member 1 records the configuration change;
-2. existing stored embeddings are treated as stale;
+2. treat existing vectors as stale;
 3. re-index the entire searchable corpus;
-4. do not mix old/new vectors during retrieval;
-5. validate indexing/retrieval before considering the provider switch complete.
+4. do not mix old/new vectors;
+5. validate retrieval before considering the switch complete.
 
 ## Secrets
 
-Real API keys live only in local/deployment secret environments. `.env.example` contains blank placeholders.
-
-Members must never put API keys into PR descriptions, screenshots, test fixtures using real credentials, browser JavaScript, tracked appsettings, logs, or docs.
-
-## Documentation workflow
-
-Members 2-5 report code/status/doc impacts to Member 1. Member 1 reconciles docs with actual code after integration.
+Real API keys live only in local/deployment secret environments. Never put them in PR text, screenshots, tracked appsettings, browser JS, logs, or docs.
