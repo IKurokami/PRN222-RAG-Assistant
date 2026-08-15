@@ -1,6 +1,6 @@
 # Member 3 handoff - Document Indexing/Ingestion
 
-> Synchronized with `master` after PR #19. Member 3 now has two completed responsibility tracks: indexing and the cross-app UI/UX redesign documented separately in `member-3-ui-ux-handoff.md`.
+> Updated for provider-neutral AI runtime work. Member 3's indexing ownership remains unchanged.
 
 ## Status
 
@@ -14,28 +14,45 @@ Member 3 owns:
 - `DocumentParserFactory`;
 - `TextChunker`;
 - `TextEmbeddingBatcher`;
-- `OllamaTextEmbeddingService`;
 - `DocumentIndexingService`;
 - `DocumentIndexingWorker`;
 - coherent DocumentChunk replacement;
 - indexing status/error/timestamp persistence;
 - startup recovery for persisted Uploaded/Processing documents.
 
-## Multi-subject impact
+The original `OllamaTextEmbeddingService` implementation is now part of a broader provider layer coordinated by Member 1. This does **not** transfer indexing workflow ownership.
 
-No per-subject indexing pipeline is needed.
+## Provider-neutral embedding handoff
 
-Flow 1 persists:
+Indexing consumes:
 
 ```text
-Document.Id
-Document.SubjectId
-...
+ITextEmbeddingService
 ```
 
-and queues only `Document.Id`. The indexing service loads the persisted Document and indexes that record. Subject isolation matters later at retrieval time, where Member 4 must restrict candidate Documents/Chunks to the selected Subject.
+Startup configuration selects one concrete implementation:
 
-Do not add `SeedData.Prn222SubjectId` filtering to the indexing worker/service.
+```text
+OllamaTextEmbeddingService
+GeminiTextEmbeddingService
+OpenAiTextEmbeddingService
+```
+
+Member 3 must not branch the worker/indexing service by provider name and must not create separate provider-specific indexing pipelines.
+
+## Embedding provider change
+
+Default vector dimension is 1024.
+
+A provider/model switch means existing stored embeddings are semantically stale even if dimensions match. Member 1 coordinates the provider change; the existing Member 3 re-index path is then used to rebuild every searchable document.
+
+Never leave a partially mixed corpus of embeddings from different models.
+
+## Multi-subject impact
+
+No per-subject indexing pipeline is needed. Flow 1 queues only `Document.Id`; the persisted document carries `SubjectId`.
+
+Subject isolation matters later at retrieval time, where Member 4 must restrict candidate documents/chunks to the selected Subject.
 
 ## State flow
 
@@ -46,16 +63,8 @@ Uploaded -> Processing -> Indexed
 
 Re-index coherently replaces stale chunks. Startup recovery re-enqueues persisted work because the in-memory queue is not durable.
 
-## Relationship to PR #19 UI work
+## Other ownership
 
-Member 3 also completed the cross-application UI/UX redesign merged in PR #19. That assignment is tracked separately in `docs/member-3-ui-ux-handoff.md` so indexing responsibilities remain easy to identify.
+Member 3 also owns the completed PR #19 cross-app UI/UX redesign. Provider-backup factual copy updates do not transfer that presentation ownership.
 
-The UI work does not change indexing architecture or subject boundaries.
-
-## Boundaries
-
-Member 3 does not own Subject CRUD/assignments/RBAC, Flow 3 business logic, or Flow 2 retrieval/backend.
-
-Future Flow 2 MVC/history/citation/evaluation ownership remains Member 5 even though Member 5 should reuse Member 3's PR #19 design system.
-
-Any doc/status impact is reported to Member 1 rather than editing repository docs independently.
+Any docs/status impact is reported to Member 1.

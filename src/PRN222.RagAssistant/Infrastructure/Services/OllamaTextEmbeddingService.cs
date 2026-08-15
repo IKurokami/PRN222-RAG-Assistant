@@ -1,5 +1,4 @@
 using System.Net.Http.Json;
-using System.Text.Json;
 using System.Text.Json.Serialization;
 using PRN222.RagAssistant.Application.Abstractions;
 
@@ -9,6 +8,7 @@ public sealed class OllamaTextEmbeddingService : ITextEmbeddingService
 {
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly string _model;
+    private readonly int _expectedDimensions;
     private readonly ILogger<OllamaTextEmbeddingService> _logger;
 
     public OllamaTextEmbeddingService(
@@ -19,6 +19,7 @@ public sealed class OllamaTextEmbeddingService : ITextEmbeddingService
         _httpClientFactory = httpClientFactory;
         _model = configuration["Rag:Ollama:EmbeddingModel"]
             ?? throw new InvalidOperationException("Rag:Ollama:EmbeddingModel must be configured.");
+        _expectedDimensions = EmbeddingServiceGuard.GetExpectedDimensions(configuration);
         _logger = logger;
     }
 
@@ -49,25 +50,20 @@ public sealed class OllamaTextEmbeddingService : ITextEmbeddingService
         response.EnsureSuccessStatusCode();
 
         var result = await response.Content.ReadFromJsonAsync<OllamaEmbedResponse>(cancellationToken);
+        var embeddings = result?.Embeddings ?? [];
 
-        if (result?.Embeddings is null || result.Embeddings.Count != texts.Count)
-        {
-            throw new InvalidOperationException(
-                $"Ollama returned {result?.Embeddings?.Count ?? 0} embeddings for {texts.Count} inputs.");
-        }
-
-        var dimensions = result.Embeddings[0].Length;
-        if (dimensions == 0 || result.Embeddings.Any(embedding => embedding.Length != dimensions))
-        {
-            throw new InvalidOperationException("Ollama returned empty or inconsistent embedding dimensions.");
-        }
+        EmbeddingServiceGuard.ValidateResponse(
+            "Ollama",
+            embeddings,
+            texts.Count,
+            _expectedDimensions);
 
         _logger.LogDebug(
-            "Generated {EmbeddingCount} embeddings with {Dimensions} dimensions",
-            result.Embeddings.Count,
-            dimensions);
+            "Generated {EmbeddingCount} Ollama embeddings with {Dimensions} dimensions",
+            embeddings.Count,
+            _expectedDimensions);
 
-        return result.Embeddings;
+        return embeddings;
     }
 
     private sealed record OllamaEmbedRequest(

@@ -1,6 +1,6 @@
-# Member 1 handoff - Core/Data/RBAC/Multi-subject/Documentation
+# Member 1 handoff - Core/Data/RBAC/Multi-subject/AI Providers/Documentation
 
-> Synchronized with `master` after PR #19.
+> Updated for the AI-provider backup task based on `master` after PR #20.
 
 ## Ownership
 
@@ -15,9 +15,58 @@ Member 1 owns:
 - subject-specific authorization service;
 - cross-workflow subject-context integration;
 - role/subject regression tests;
+- **AI provider selection/configuration**;
+- **Ollama/Gemini/OpenAI adapters behind provider-neutral interfaces**;
+- **API-key/env wiring and startup validation**;
+- **embedding dimension/vector-space/re-index coordination**;
 - all repository documentation.
 
-## Current completed baseline
+## AI provider assignment
+
+This task is explicitly assigned to **Member 1**.
+
+Supported runtime choices:
+
+```text
+Ollama -> local/default
+Gemini -> online Free Tier backup
+OpenAI -> online paid optional
+```
+
+Selected models as of 2026-08-15:
+
+```text
+Ollama: qwen3:4b + qwen3-embedding:0.6b
+Gemini: gemini-3.6-flash + gemini-embedding-2
+OpenAI: gpt-5.6-luna + text-embedding-3-small
+```
+
+Gemini is the project's recommended **free online** path. OpenAI is not documented as free.
+
+Provider-specific payloads remain in Infrastructure; Application keeps `ITextEmbeddingService` and `IChatCompletionService` provider-neutral.
+
+## Secrets/configuration
+
+API keys are supplied only through environment/configuration:
+
+```text
+GEMINI_API_KEY
+OPENAI_API_KEY
+```
+
+No real key belongs in tracked files. The selected provider validates its own required settings at startup.
+
+## Embedding invariant
+
+Default:
+
+```text
+RAG_EMBEDDING_DIMENSIONS=1024
+```
+
+If embedding provider/model/dimensions change, Member 1 coordinates a complete corpus re-index before retrieval. Same-sized vectors from different models must not be treated as compatible.
+
+## Existing multi-subject baseline
 
 Roles:
 
@@ -35,69 +84,26 @@ ManageSubjects
 ManageDocuments
 ```
 
-Admin can manage users/roles and all Subjects. Subject Leaders manage only assigned Subjects.
+Admin manages users/roles and all Subjects. Subject Leaders manage only assigned Subjects.
 
-## Multi-subject implementation
-
-Primary files:
-
-```text
-Security/AppClaimTypes.cs
-Security/ISubjectAccessService.cs
-Security/SubjectAccessService.cs
-Controllers/SubjectsController.cs
-Controllers/AdminSubjectsController.cs
-Models/Subjects/
-Models/Admin/AdminSubjectViewModels.cs
-Views/Subjects/
-Views/AdminSubjects/
-```
-
-Assignments use Identity claims rather than a new application table.
+Assignments use Identity claims:
 
 ```text
 prn222:managed-subject -> Subject Guid
 ```
 
-No EF migration is required for this feature.
+## Cross-workflow boundary
 
-PRN222 remains seeded but no longer defines workflow scope.
+Flow 1 request behavior remains Member 2-owned. Indexing/chunking/worker behavior remains Member 3-owned. Member 1's provider work supplies the concrete `ITextEmbeddingService` used by that indexing pipeline.
 
-## Cross-workflow integration performed by Member 1
+Future Flow 2 RAG behavior remains Member 4-owned. Member 4 consumes `ITextEmbeddingService` and `IChatCompletionService`; Member 1 owns provider plumbing, not RAG retrieval/grounding semantics.
 
-Flow 1 Documents/Chapters and Flow 3 Reports were changed only as necessary to carry SubjectId and enforce subject authorization.
+## Schema impact
 
-Original Flow 1/3 business behavior remains Member 2-owned; indexing remains Member 3-owned.
+The provider-backup task adds no EF model change and requires no migration.
 
-## PR #19 coordination note
-
-PR #19 is merged and establishes the current cross-app visual baseline.
-
-The UI/UX redesign is assigned to **Member 3** and is complete. It includes auth/landing/shared layout and visual refreshes across existing Admin/Subject/Chapter/Document/Report screens.
-
-Member 1 still owns Identity/RBAC rules even where PR #19 introduced public Student registration. Public registration must remain Student-only unless requirements explicitly change.
-
-Member 1 also remains the documentation integrator for Member 3's UI handoff.
-
-## Next schema coordination point
-
-Flow 2 is pending. Current `ChatSession` does not store SubjectId.
-
-Before Member 4 implements RAG retrieval, Member 1 should coordinate the minimal subject-scoped persistence/application contract, likely including session subject ownership. If that changes the EF model, Member 1 coordinates the single migration and updates all docs.
-
-Member 5 should reuse the PR #19 design system for future Flow 2 MVC screens.
+A future Flow 2 subject ownership change may still require a migration; Member 1 coordinates it separately.
 
 ## Documentation responsibility
 
-Member 1 exclusively edits:
-
-```text
-README.md
-AGENTS.md
-src/PRN222.RagAssistant/Application/AGENTS.md
-docs/*
-```
-
-After each meaningful merge, compare docs to actual `master` and update stale status/ownership/route/architecture statements before assigning the next work.
-
-Current synchronized milestone: merged PR #19, 2026-08-15.
+Member 1 exclusively edits README, AGENTS files, and `docs/*`.

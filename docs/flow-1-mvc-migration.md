@@ -1,10 +1,10 @@
 # Flow 1 MVC architecture
 
-> Synchronized with `master` after PR #19.
+> Updated for provider-neutral embedding support.
 
 ## Status
 
-Flow 1 presentation was migrated from Razor Pages to MVC and remains MVC. Functional behavior is complete.
+Flow 1 presentation remains MVC and functional behavior is complete.
 
 Current locations:
 
@@ -17,22 +17,11 @@ Views/Documents/
 Views/Chapters/
 ```
 
-Do not recreate the removed `Pages/Documents` or `Pages/Chapters` implementation.
+Do not recreate removed Razor Pages implementations.
 
 ## Multi-subject update
 
-Flow 1 is no longer scoped to `SeedData.Prn222SubjectId`.
-
-Users select a Subject first through `/subjects`. Flow 1 routes/actions carry `subjectId`, while entity-specific actions derive the trusted SubjectId from persisted Document/Chapter data.
-
-Authorization:
-
-```text
-coarse: ManageDocuments -> Admin OR SubjectLeader
-resource: ISubjectAccessService -> concrete SubjectId
-```
-
-Subject Leader can write only assigned Subjects. Admin can manage any Subject.
+Flow 1 is not scoped to `SeedData.Prn222SubjectId`. Routes/actions carry subject context and server-side authorization uses `ISubjectAccessService`.
 
 ## Request/indexing boundary
 
@@ -40,25 +29,24 @@ Subject Leader can write only assigned Subjects. Admin can manage any Subject.
 MVC action
  -> validate subject/chapter/file
  -> persist Document/Chapter
- -> enqueue Document.Id when indexing is needed
+ -> enqueue Document.Id
  -> redirect preserving subject context
+
+background indexing
+ -> parse/chunk
+ -> ITextEmbeddingService
+ -> persist DocumentChunk
 ```
 
-The MVC layer does not parse/chunk/embed/call Ollama/query pgvector.
+The MVC layer does not parse/chunk/embed/call Ollama/Gemini/OpenAI/query pgvector.
 
-## PR #19 UI/filter update
+## Provider impact
 
-Member 3 completed the current Flow 1 visual refresh as part of the cross-app UI/UX redesign.
+Flow 1 request semantics do not change when `RAG_PROVIDER` changes.
 
-PR #19 also introduced document list filtering support for:
+AI provider selection is Member 1-owned Infrastructure. Indexing remains Member 3-owned and consumes the same `ITextEmbeddingService` contract.
 
-- text search across document title/original file name;
-- indexing status;
-- existing chapter filter.
-
-Delete and re-index redirects preserve current `selectedChapterId`, `searchTerm`, and `selectedStatus` so the redesigned list does not unexpectedly lose user filter context.
-
-These presentation/filter additions do not change the subject authorization or indexing boundaries above.
+If the embedding provider/model/dimension changes, all indexed documents must be re-indexed before retrieval. Re-indexing uses the existing Flow 1 action/queue/indexing pipeline; no provider-specific controller action is added.
 
 ## Chapter deletion
 
@@ -66,8 +54,6 @@ Deleting a Chapter keeps Documents and sets affected `ChapterId` values to null.
 
 ## Ownership
 
-- Member 2 owns established Flow 1 request/business behavior.
-- Member 1 owns multi-subject/RBAC wiring around Flow 1.
-- Member 3 owns indexing and the completed PR #19 visual redesign.
-
-The UI/UX assignment does not transfer Flow 1 business semantics away from Member 2.
+- Member 2: established Flow 1 request/business behavior.
+- Member 1: multi-subject/RBAC/provider configuration.
+- Member 3: indexing and completed PR #19 visual redesign.
