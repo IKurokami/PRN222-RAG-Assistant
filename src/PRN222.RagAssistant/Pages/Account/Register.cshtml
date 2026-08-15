@@ -2,7 +2,7 @@
 @model PRN222.RagAssistant.Pages.Account.RegisterModel
 @{
     Layout = null;
-    ViewData["Title"] = "Đăng ký tài khoản - PRN222 RAG Assistant";
+    ViewData["Title"] = "Đăng ký - PRN222 RAG Assistant";
 }
 <!DOCTYPE html>
 <html lang="vi">
@@ -17,9 +17,7 @@
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
 </head>
 <body class="account-page">
-    <div id="top-loading-bar"></div>
-    <main class="account-shell page-enter">
-        <!-- Left Side: Editorial Community & Support Card -->
+    <main class="account-shell">
         <section class="account-visual" aria-label="PRN222 RAG Assistant">
             <a class="account-brand" asp-page="/Index" aria-label="Về trang chủ">
                 <span class="app-logo-mark" aria-hidden="true">
@@ -32,86 +30,61 @@
                 </span>
             </a>
             <div class="account-visual-copy">
-                <div class="account-support-card card-lift">
-                    <div class="d-flex align-items-center gap-3 mb-3">
-                        <div class="account-avatar-group d-flex">
-                            <img src="/images/avatars/support-1.png" alt="Sinh viên FPT 1" class="rounded-circle border border-2 border-white" style="width: 38px; height: 38px; object-fit: cover; margin-right: -10px;" />
-                            <img src="/images/avatars/support-2.png" alt="Sinh viên FPT 2" class="rounded-circle border border-2 border-white" style="width: 38px; height: 38px; object-fit: cover; margin-right: -10px;" />
-                            <img src="/images/avatars/support-3.png" alt="Sinh viên FPT 3" class="rounded-circle border border-2 border-white" style="width: 38px; height: 38px; object-fit: cover;" />
-                        </div>
-                        <div>
-                            <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1 small rounded-pill">
-                                <span class="pulse-badge-dot d-inline-block me-1" style="width: 6px; height: 6px; background-color: var(--color-pill-text);"></span>
-                                Hỗ trợ 24/7
-                            </span>
-                        </div>
-                    </div>
-                    <h4 class="text-white fw-bold mb-2 fs-5">Cộng đồng học thuật ĐH FPT</h4>
-                    <p class="text-white-50 small mb-0 lh-base">
-                        Gia nhập cùng hơn 1,200+ sinh viên và giảng viên ngành Kỹ thuật Phần mềm đang sử dụng trợ lý RAG để nâng cao hiệu quả học tập mỗi ngày.
-                    </p>
-                </div>
-                <div class="account-visual-bullets mt-4">
-                    <span><i class="bi bi-check-circle-fill text-success me-1"></i> Đăng ký miễn phí với email sinh viên</span>
-                    <span><i class="bi bi-check-circle-fill text-success me-1"></i> Truy cập toàn bộ môn học đang mở</span>
-                    <span><i class="bi bi-check-circle-fill text-success me-1"></i> Đối soát tri thức chuẩn đề cương FLM</span>
-                </div>
+                <p>Không gian tri thức môn học</p>
+                <h1>Bắt đầu với một tài khoản duy nhất.</h1>
+                <ul>
+                    <li>Danh mục môn học được phân quyền</li>
+                    <li>Tài liệu và báo cáo cùng một nơi</li>
+                    <li>AI local hoặc cloud theo cấu hình</li>
+                </ul>
             </div>
         </section>
 
-        <!-- Right Side: Clean Form Pane -->
         <section class="account-form-pane account-form-pane-register">
             <div class="account-form-wrap">
                 <a asp-page="/Index" class="account-back-link"><i class="bi bi-arrow-left" aria-hidden="true"></i> Trang chủ</a>
-                <p class="account-form-kicker">Tạo tài khoản mới</p>
-                <h2>Đăng ký tài khoản</h2>
-                <p class="account-form-intro">Đăng ký tài khoản Sinh viên để bắt đầu tra cứu và học tập thông minh.</p>
+                <p class="account-form-kicker">Tạo tài khoản</p>
+                <h2>Đăng ký</h2>
+                <p class="account-form-intro">Tài khoản mới được gán vai trò Sinh viên và có thể truy cập các môn học đang hoạt động.</p>
 
                 <form method="post" class="account-form">
-                    <div asp-validation-summary="ModelOnly" class="alert alert-danger small py-2 px-3 mb-3" role="alert" style="border-radius: var(--radius-md);"></div>
+                    <div asp-validation-summary="ModelOnly" class="alert alert-danger small" role="alert"></div>
 
-                    <div class="mb-3">
-                        <label asp-for="Input.DisplayName" class="form-label fw-semibold small">Họ và tên sinh viên</label>
-                        <input asp-for="Input.DisplayName" class="form-control input-focus-glow" autocomplete="name" placeholder="Nguyễn Văn A" required style="border-radius: var(--radius-md); padding: 0.65rem 0.85rem;" />
-                        <span asp-validation-for="Input.DisplayName" class="text-danger small mt-1 d-block"></span>
+                    <div>
+                        <label asp-for="Input.DisplayName">Họ và tên</label>
+                        <input asp-for="Input.DisplayName" autocomplete="name" placeholder="Nguyễn Văn A" />
+                        <span asp-validation-for="Input.DisplayName" class="text-danger small"></span>
                     </div>
 
-                    <div class="mb-3">
-                        <label asp-for="Input.Email" class="form-label fw-semibold small">Địa chỉ Email</label>
-                        <input asp-for="Input.Email" class="form-control input-focus-glow" autocomplete="username" placeholder="sinhvien@fpt.edu.vn" required style="border-radius: var(--radius-md); padding: 0.65rem 0.85rem;" />
-                        <span asp-validation-for="Input.Email" class="text-danger small mt-1 d-block"></span>
+                    <div>
+                        <label asp-for="Input.Email">Email</label>
+                        <input asp-for="Input.Email" autocomplete="username" placeholder="sinhvien@fpt.edu.vn" />
+                        <span asp-validation-for="Input.Email" class="text-danger small"></span>
                     </div>
 
-                    <div class="row g-2 mb-3">
-                        <div class="col-sm-6">
-                            <label asp-for="Input.Password" class="form-label fw-semibold small">Mật khẩu</label>
-                            <input asp-for="Input.Password" class="form-control input-focus-glow" autocomplete="new-password" placeholder="Tối thiểu 8 ký tự" required style="border-radius: var(--radius-md); padding: 0.65rem 0.85rem;" />
-                            <span asp-validation-for="Input.Password" class="text-danger small mt-1 d-block"></span>
+                    <div class="account-form-columns">
+                        <div>
+                            <label asp-for="Input.Password">Mật khẩu</label>
+                            <input asp-for="Input.Password" autocomplete="new-password" placeholder="Tối thiểu 6 ký tự" />
+                            <span asp-validation-for="Input.Password" class="text-danger small"></span>
                         </div>
-                        <div class="col-sm-6">
-                            <label asp-for="Input.ConfirmPassword" class="form-label fw-semibold small">Xác nhận mật khẩu</label>
-                            <input asp-for="Input.ConfirmPassword" class="form-control input-focus-glow" autocomplete="new-password" placeholder="Nhập lại mật khẩu" required style="border-radius: var(--radius-md); padding: 0.65rem 0.85rem;" />
-                            <span asp-validation-for="Input.ConfirmPassword" class="text-danger small mt-1 d-block"></span>
+                        <div>
+                            <label asp-for="Input.ConfirmPassword">Xác nhận mật khẩu</label>
+                            <input asp-for="Input.ConfirmPassword" autocomplete="new-password" placeholder="Nhập lại mật khẩu" />
+                            <span asp-validation-for="Input.ConfirmPassword" class="text-danger small"></span>
                         </div>
                     </div>
 
                     <input type="hidden" name="returnUrl" value="@Model.ReturnUrl" />
-                    <button type="submit" class="btn btn-dark w-100 py-2 account-submit btn-press d-flex align-items-center justify-content-center gap-2" style="background-color: var(--color-btn-dark); border-radius: var(--radius-md); font-weight: 600;">
-                        <span>Hoàn tất đăng ký</span>
-                        <i class="bi bi-arrow-right" aria-hidden="true"></i>
-                    </button>
+                    <button type="submit" class="account-submit">Tạo tài khoản <i class="bi bi-arrow-right" aria-hidden="true"></i></button>
                 </form>
 
-                <p class="account-switch mt-4 text-center text-muted small">
-                    Đã có tài khoản? <a asp-page="/Account/Login" class="fw-semibold text-decoration-none" style="color: var(--color-primary-600);">Đăng nhập</a>
-                </p>
+                <p class="account-switch">Đã có tài khoản? <a asp-page="/Account/Login">Đăng nhập</a></p>
             </div>
         </section>
     </main>
 
-    <div class="toast-container-modern"></div>
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
-    <script src="~/js/site.js" asp-append-version="true"></script>
     <partial name="_ValidationScriptsPartial" />
 </body>
 </html>
