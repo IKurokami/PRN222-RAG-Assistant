@@ -1,0 +1,286 @@
+====================================================================================================
+PRN222 RAG ASSISTANT - TÀI LIỆU KIẾN TRÚC & HƯỚNG DẪN HỆ THỐNG CHI TIẾT
+Dự án: Hệ thống Trợ lý RAG Đa môn học (PRN222 Multi-Subject RAG Assistant)
+Phiên bản: 1.0.0 (Hỗ trợ .NET 10.0 + PostgreSQL pgvector + Multi-AI Provider)
+====================================================================================================
+
+TỔNG QUAN TÀI LIỆU
+----------------------------------------------------------------------------------------------------
+Tài liệu này tổng hợp toàn bộ thông tin kiến trúc, luồng xử lý dữ liệu, mô hình cơ sở dữ liệu, 
+cơ chế phân quyền người dùng (RBAC), quy trình tích hợp nhà cung cấp trí tuệ nhân tạo (AI Provider), 
+và hướng dẫn vận hành hệ thống PRN222 RAG Assistant. 
+
+Tài liệu được xây dựng nhằm phục vụ công tác bàn giao, đánh giá báo cáo đồ án, và duy trì hệ thống
+mà không làm ảnh hưởng tới bất kỳ mã nguồn (source code) hay tiến trình thực thi trực tiếp nào của ứng dụng.
+
+
+====================================================================================================
+MỤC MỤC TÀI LIỆU
+====================================================================================================
+1. TỔNG QUAN DỰ ÁN & MỤC TIÊU HỆ THỐNG
+2. TỔNG QUAN KIẾN TRÚC HỆ THỐNG (SYSTEM ARCHITECTURE)
+3. CÔNG NGHỆ & THƯ VIỆN SỬ DỤNG (TECH STACK & DEPENDENCIES)
+4. MÔ HÌNH DỮ LIỆU & THỰC THỂ CƠ SỞ DỮ LIỆU (DATABASE SCHEMAS & ENTITIES)
+5. CƠ CHẾ BẢO MẬT & PHÂN QUYỀN (SECURITY & ROLE-BASED ACCESS CONTROL)
+6. LUỒNG 1: QUẢN LÝ TÀI LIỆU VÀ TIẾN TRÌNH INDEXING (DOCUMENT MANAGEMENT & INDEXING WORKFLOW)
+7. LUỒNG 2: HỆ THỐNG TRỢ LÝ RAG ĐA MÔN HỌC & HỎI ĐÁP (MULTI-SUBJECT RAG ASSISTANT ENGINE)
+8. LUỒNG 3: BÁO CÁO VÀ THỐNG KÊ HỌC THUẬT (ACADEMIC REPORTING & ANALYTICS)
+9. HẠ TẦNG AI PROVIDER & NGUYÊN TẮC QUẢN LÝ CHUỖI EMBEDDING VECTOR
+10. QUY TRÌNH ĐÓNG GÓI VÀ VẬN HÀNH BẰNG DOCKER COMPOSE
+11. DANH MỤC TIÊU CHUẨN KIỂM THỬ VÀ ĐẢM BẢO CHẤT LƯỢNG (TESTING & QUALITY ASSURANCE)
+12. PHÂN CÔNG TRÁCH NHIỆM & BÀN GIAO THÀNH VIÊN DỰ ÁN (TEAM WORKFLOW & OWNERSHIP)
+
+
+====================================================================================================
+1. TỔNG QUAN DỰ ÁN & MỤC TIÊU HỆ THỐNG
+====================================================================================================
+1.1. Giới thiệu dự án:
+   PRN222 RAG Assistant là ứng dụng web cho phép giảng viên và sinh viên tương tác với giáo trình, 
+   tài liệu bài giảng và đề thi của các môn học thông qua mô hình RAG (Retrieval-Augmented Generation).
+   Hệ thống không giới hạn ở một môn học cố định (như PRN222), mà được thiết kế theo kiến trúc Đa môn học 
+   (Multi-subject architecture), cho phép quản lý không giới hạn các môn học khác nhau.
+
+1.2. Mục tiêu cốt lõi:
+   - Tự động phân tích, chia nhỏ (chunking) và đánh chỉ mục vector (vector indexing) các định dạng tài liệu 
+     phổ biến bao gồm PDF, DOCX, PPTX.
+   - Truy vấn ngữ nghĩa chính xác theo phạm vi môn học cụ thể (Subject Boundary Invariant).
+   - Hỗ trợ linh hoạt các AI Provider khác nhau (Ollama local mặc định, Google Gemini Free Tier, OpenAI paid).
+   - Phân quyền chặt chẽ theo các vai trò Admin, Subject Leader (Chủ nhiệm môn), và Student (Sinh viên).
+
+
+====================================================================================================
+2. TỔNG QUAN KIẾN TRÚC HỆ THỐNG (SYSTEM ARCHITECTURE)
+====================================================================================================
+Hệ thống được thiết kế theo kiến trúc phân tầng (Clean Architecture / Layered Architecture) 
+kết hợp với mô hình ASP.NET Core MVC cho phần xử lý tương tác chính và Razor Pages cho phần Báo cáo & Xác thực.
+
+Các tầng kiến trúc chính:
+- Tầng Domain (Domain Layer):
+  Chứa các thực thể cốt lõi (Entities), Enums, và Value Objects. 
+  Quy tắc quan trọng: Không sử dụng Navigation Properties trong Domain Entities để đảm bảo ranh giới rõ ràng.
+
+- Tầng Application (Application Layer):
+  Chứa các Hợp đồng giao diện (Interfaces), DTOs, và các Dịch vụ ứng dụng như IDocumentIndexingService, 
+  ITextEmbeddingService, IChatCompletionService, IRagQueryService, ISubjectAccessService.
+
+- Tầng Infrastructure (Infrastructure Layer):
+  Chứa cấu hình Entity Framework Core (ApplicationDbContext), tích hợp PostgreSQL + pgvector, 
+  các Adapter kết nối tới AI Provider (Ollama, Gemini, OpenAI), các Worker chạy nền (DocumentIndexingWorker), 
+  và hệ thống Lưu trữ tệp (File Storage Service).
+
+- Tầng Presentation (Presentation Layer):
+  - MVC Controllers & Views: Quản lý Luồng 1 (Tài liệu, Chương), Luồng 2 (Chat RAG), Quản trị người dùng (Admin Users), Quản lý môn học (Subjects).
+  - Razor Pages: Quản lý Xác thực (Identity Login/Register/Profile), Shell UI, và Luồng 3 (Báo cáo thống kê).
+
+
+====================================================================================================
+3. CÔNG NGHỆ & THƯ VIỆN SỬ DỤNG (TECH STACK & DEPENDENCIES)
+====================================================================================================
+- Framework chính: ASP.NET Core (.NET 10.0)
+- Cơ sở dữ liệu: PostgreSQL 17 + Tiện ích mở rộng pgvector
+- ORM: Entity Framework Core 10.0 (EF Core)
+- Xác thực & Phân quyền: ASP.NET Core Identity
+- Thư viện đọc tài liệu:
+  * PdfPig: Đọc và trích xuất nội dung tệp PDF.
+  * DocumentFormat.OpenXml: Đọc và trích xuất tệp Word (.docx) và PowerPoint (.pptx).
+- Công cụ thiết kế giao diện (UI/UX):
+  * Design tokens & CSS components tự tạo (`design-tokens.css`, `components.css`).
+  * Bootstrap 5.3.3 & Bootstrap Icons 1.11.3.
+- Môi trường chạy Docker: Docker Compose v2 với tính năng Profiles (`local-ai`).
+
+
+====================================================================================================
+4. MÔ HÌNH DỮ LIỆU & THỰC THỂ CƠ SỞ DỮ LIỆU (DATABASE SCHEMAS & ENTITIES)
+====================================================================================================
+Hệ thống lưu trữ toàn bộ dữ liệu trong cơ sở dữ liệu PostgreSQL. Dưới đây là mô tả chi tiết các bảng chính:
+
+4.1. Bảng `Subjects` (Môn học):
+   - `Id` (Guid, PK): Mã định danh môn học.
+   - `Code` (string): Mã môn học (ví dụ: PRN222, PRN211).
+   - `Name` (string): Tên đầy đủ môn học.
+   - `Description` (string): Mô tả môn học.
+   - `IsActive` (bool): Trạng thái hoạt động.
+
+4.2. Bảng `Chapters` (Chương học):
+   - `Id` (Guid, PK): Mã định danh chương.
+   - `SubjectId` (Guid, FK): Thuộc môn học nào.
+   - `OrderNumber` (int): Số thứ tự chương.
+   - `Title` (string): Tiêu đề chương.
+   - `Description` (string): Mô tả chương.
+
+4.3. Bảng `Documents` (Tài liệu):
+   - `Id` (Guid, PK): Mã định danh tài liệu.
+   - `SubjectId` (Guid, FK): Thuộc môn học nào.
+   - `ChapterId` (Guid?, FK): Thuộc chương học nào (có thể null).
+   - `Title` (string): Tên tài liệu.
+   - `FileName` (string): Tên file gốc.
+   - `StoragePath` (string): Đường dẫn lưu trữ trên đĩa (`storage/uploads/...`).
+   - `ContentType` (string): Loại MIME (application/pdf, application/vnd.openxmlformats-officedocument...).
+   - `FileSize` (long): Kích thước file tính bằng byte.
+   - `IndexStatus` (enum): Trạng thái đánh chỉ mục (`Uploaded`, `Processing`, `Indexed`, `Failed`).
+   - `IndexedAt` (DateTimeOffset?): Thời điểm hoàn thành đánh chỉ mục.
+   - `ErrorMessage` (string?): Lỗi xảy ra nếu đánh chỉ mục thất bại.
+
+4.4. Bảng `DocumentChunks` (Đoạn tài liệu & Vector embedding):
+   - `Id` (Guid, PK): Mã định danh đoạn tài liệu.
+   - `DocumentId` (Guid, FK): Thuộc tài liệu nào.
+   - `ChunkIndex` (int): Thứ tự của đoạn trong tài liệu.
+   - `Content` (string): Nội dung văn bản của đoạn.
+   - `Embedding` (Vector/float[]): Chứa chuỗi Vector embedding (mặc định 1024 chiều) lưu vào cột pgvector.
+
+4.5. Bảng `ChatSessions` & `ChatMessages` (Hội thoại RAG):
+   - Lưu trữ các phiên hỏi đáp của sinh viên/người dùng với AI trợ lý theo từng môn học cụ thể (`SubjectId`).
+   - `MessageCitations`: Lưu trữ trích dẫn (Citations) tham chiếu chính xác đến đoạn tài liệu `DocumentChunkId` nào được dùng để tạo câu trả lời.
+
+
+====================================================================================================
+5. CƠ CHẾ BẢO MẬT & PHÂN QUYỀN (SECURITY & ROLE-BASED ACCESS CONTROL)
+====================================================================================================
+5.1. Các vai trò hệ thống (System Roles):
+   - `Admin` (Quản trị viên hệ thống):
+     Quản lý toàn bộ người dùng, vai trò, môn học, phân công Chủ nhiệm môn, và có quyền ghi/xóa trên tất cả tài liệu.
+   - `SubjectLeader` (Chủ nhiệm môn học):
+     Quản lý tài liệu, chương học và nội dung học thuật CHỈ đối với các môn học được phân công.
+   - `Student` (Sinh viên / Người dùng chung):
+     Xem danh sách môn học đang mở, thực hiện tra cứu/hỏi đáp RAG AI trên các môn học active. Không có quyền sửa đổi dữ liệu.
+
+5.2. Chính sách phân quyền (Authorization Policies):
+   - Policy `ManageUsers`: Yêu cầu vai trò `Admin`.
+   - Policy `ManageSubjects`: Yêu cầu vai trò `Admin`.
+   - Policy `ManageDocuments`: Yêu cầu vai trò `Admin` HOẶC `SubjectLeader`.
+
+5.3. Quy tắc Ranh giới Môn học (Subject Access Service Boundary):
+   - Đối với vai trò `SubjectLeader`, quyền truy cập môn học được lưu dưới dạng User Claim: `AppClaimTypes.ManagedSubject`.
+   - Việc kiểm tra Policy `ManageDocuments` chỉ là điều kiện cần. Điều kiện đủ là phải qua kiểm tra `ISubjectAccessService.HasAccessAsync(userId, subjectId)` 
+     để đảm bảo Chủ nhiệm môn A không thể chỉnh sửa hay xóa tài liệu của môn B.
+
+
+====================================================================================================
+6. LUỒNG 1: QUẢN LÝ TÀI LIỆU VÀ TIẾN TRÌNH INDEXING (DOCUMENT MANAGEMENT & INDEXING WORKFLOW)
+====================================================================================================
+6.1. Quy trình tải lên và tạo tài liệu:
+   1. Người dùng chọn Môn học và tải tệp lên qua MVC Controller `DocumentsController`.
+   2. Hệ thống kiểm tra quyền quản lý môn học (`ISubjectAccessService`).
+   3. Lưu tệp vật lý vào thư mục `storage/uploads/`.
+   4. Tạo bản ghi `Document` với trạng thái `IndexStatus = Uploaded`.
+   5. Đưa `Document.Id` vào hàng chờ bất đồng bộ trong bộ nhớ (`InMemoryDocumentIndexingQueue`).
+
+6.2. Tiến trình xử lý ngầm (Background Worker - DocumentIndexingWorker):
+   1. Worker lắng nghe hàng chờ `IDocumentIndexingQueue`.
+   2. Khi nhận được `Document.Id`, Worker chuyển trạng thái tài liệu sang `Processing`.
+   3. Gọi `IDocumentIndexingService`:
+      - Đọc nội dung tệp bằng parser tương ứng (PdfPig cho PDF, OpenXml cho DOCX/PPTX).
+      - Chia nhỏ văn bản thành các đoạn (chunks) có kích thước phù hợp (overlap windowing).
+      - Gọi `ITextEmbeddingService` để tính toán ma trận vector embedding cho từng đoạn (1024 dimensions).
+      - Lưu danh sách `DocumentChunk` cùng vector vào PostgreSQL pgvector.
+   4. Cập nhật trạng thái tài liệu thành `Indexed` (hoặc `Failed` nếu phát sinh lỗi).
+
+6.3. Nguyên tắc phục hồi khi khởi động (Startup Recovery):
+   Khi ứng dụng khởi động lại, `DocumentIndexingWorker` sẽ tự động quét cơ sở dữ liệu tìm các tài liệu 
+   đang ở trạng thái `Uploaded` hoặc `Processing` để đưa lại vào hàng chờ xử lý, đảm bảo không bỏ sót tệp nào.
+
+
+====================================================================================================
+7. LUỒNG 2: HỆ THỐNG TRỢ LÝ RAG ĐA MÔN HỌC & HỎI ĐÁP (MULTI-SUBJECT RAG ASSISTANT ENGINE)
+====================================================================================================
+7.1. Nguyên tắc cốt lõi của RAG theo Môn học:
+   Truy vấn RAG chỉ được phép tìm kiếm vector trên các tài liệu thuộc môn học được chọn (`selectedSubjectId`).
+   Không bao giờ tìm kiếm chồng chéo sang tài liệu của môn học khác.
+
+7.2. Quy trình truy vấn (Query Pipeline):
+   1. Người dùng gửi câu hỏi từ giao diện Chat kèm `subjectId`.
+   2. Gọi `ITextEmbeddingService.GenerateEmbeddingAsync(userQuery)` để chuyển câu hỏi thành vector query.
+   3. Thực hiện truy vấn khoảng cách cosine vector trên PostgreSQL pgvector:
+      `SELECT chunks FROM DocumentChunks WHERE Document.SubjectId = selectedSubjectId ORDER BY embedding <=> query_vector LIMIT K`
+   4. Tổng hợp K đoạn tài liệu liên quan nhất làm ngữ cảnh (Context).
+   5. Đưa ngữ cảnh và câu hỏi vào `IChatCompletionService.CompleteAsync(prompt)` để AI tạo câu trả lời.
+   6. Trả về câu trả lời kèm thông tin trích dẫn (Citations) dẫn link chính xác tới tài liệu nguồn.
+
+
+====================================================================================================
+8. LUỒNG 3: BÁO CÁO VÀ THỐNG KÊ HỌC THUẬT (ACADEMIC REPORTING & ANALYTICS)
+====================================================================================================
+8.1. Thiết kế Razor Pages:
+   Luồng 3 được triển khai hoàn toàn bằng Razor Pages đặt tại `Pages/Reports/`.
+
+8.2. Chức năng báo cáo:
+   - Thống kê tổng số tài liệu, tổng số chương, số lượng tài liệu đã đánh chỉ mục (`Indexed`) vs thất bại (`Failed`).
+   - Thống kê tỷ lệ hoàn thành đánh chỉ mục tài liệu theo từng môn học cụ thể.
+   - Báo cáo mang tính chất chỉ đọc (Read-only), không thực hiện ghi dữ liệu hay gọi trực tiếp tới AI Provider.
+
+
+====================================================================================================
+9. HẠ TẦNG AI PROVIDER & NGUYÊN TẮC QUẢN LÝ CHUỖI EMBEDDING VECTOR
+====================================================================================================
+9.1. Cấu hình AI Provider linh hoạt:
+   Hệ thống hỗ trợ 3 AI Provider chính thông qua cấu hình `Rag:Provider`:
+   - `Ollama`: Mặc định chạy Local AI (không mất phí, tự cung cấp phần cứng).
+     * Chat model: `qwen3:4b`
+     * Embedding model: `qwen3-embedding:0.6b`
+   - `Gemini`: Cấu hình sao lưu Online Free Tier của Google.
+     * Chat model: `gemini-3.6-flash`
+     * Embedding model: `gemini-embedding-2`
+   - `OpenAI`: Cấu hình Online Paid API tùy chọn.
+     * Chat model: `gpt-5.6-luna`
+     * Embedding model: `text-embedding-3-small`
+
+9.2. Quy tắc kích thước Vector (Embedding Dimension Invariant):
+   - Kích thước Vector mặc định hệ thống được quy định là `1024` chiều (`Rag:EmbeddingDimensions = 1024`).
+   - Các Provider online (Gemini/OpenAI) được cấu hình tham số đầu ra vector đúng 1024 dimensions.
+
+9.3. Quy tắc bất biến Không gian Vector (Vector Space Invariant):
+   Mặc dù kích thước vector của các model có thể cùng bằng 1024, không gian ngữ nghĩa (Vector Space) 
+   của hai model khác nhau hoàn toàn KHÔNG THỂ trộn lẫn với nhau.
+   NGUYÊN TẮC: Khi thay đổi AI Provider hoặc Embedding Model, toàn bộ kho dữ liệu tài liệu hiện có 
+   phải được đánh chỉ mục lại (Re-index) từ đầu để đảm bảo tính đồng nhất không gian vector.
+
+
+====================================================================================================
+10. QUY TRÌNH ĐÓNG GÓI VÀ VẬN HÀNH BẰNG DOCKER COMPOSE
+====================================================================================================
+10.1. Cấu trúc Docker Compose:
+   File `docker-compose.yml` định nghĩa 3 dịch vụ chính:
+   - `app`: Ứng dụng ASP.NET Core (chạy port 8080).
+   - `postgres`: Cơ sở dữ liệu PostgreSQL 17 + pgvector (chạy port 5432).
+   - `ollama`: Chạy mô hình AI local (chạy port 11434), thuộc profile `local-ai`.
+
+10.2. Các lệnh vận hành thông dụng:
+   - Khởi chạy chế độ Local AI hoàn chỉnh (bao gồm Ollama):
+     `docker compose --profile local-ai up -d --build`
+
+   - Khởi chạy chế độ Online AI (Gemini / OpenAI, không khởi động container Ollama):
+     `docker compose up -d --build`
+
+   - Rebuild riêng ứng dụng `app`:
+     `docker compose --profile local-ai up -d --build app`
+
+   - Kiểm tra trạng thái các container:
+     `docker ps`
+
+   - Xem log của ứng dụng:
+     `docker logs prn222-app --tail 100 -f`
+
+
+====================================================================================================
+11. DANH MỤC TIÊU CHUẨN KIỂM THỬ VÀ ĐẢM BẢO CHẤT LƯỢNG (TESTING & QUALITY ASSURANCE)
+====================================================================================================
+Trước khi thực hiện hợp nhất mã nguồn (Merge PR), dự án bắt buộc phải vượt qua chuỗi kiểm thử sau:
+1. `dotnet tool restore` & `dotnet libman restore`
+2. `dotnet build` (Không được chứa lỗi biên dịch)
+3. `dotnet test` (Tất cả unit tests và architecture tests phải PASS)
+4. Kiểm tra cấu hình Docker Compose: `docker compose config`
+5. Kiểm tra tính tương thích của EF Core Model Changes: `dotnet ef migrations has-pending-model-changes`
+
+
+====================================================================================================
+12. PHÂN CÔNG TRÁCH NHIỆM & BÀN GIAO THÀNH VIÊN DỰ ÁN (TEAM WORKFLOW & OWNERSHIP)
+====================================================================================================
+- Member 1: Core / Data / RBAC / Multi-subject / AI Provider foundation / Hệ thống Tài liệu Docs.
+- Member 2: Luồng 1 Request Behavior (Controllers/Views) & Luồng 3 Reporting Behavior (Razor Pages).
+- Member 3: Tiến trình chia đoạn & đánh chỉ mục (Chunking & Indexing Pipeline), cùng Thiết kế lại UI/UX.
+- Member 4: Luồng 2 RAG Backend Service & Tích hợp truy vấn pgvector.
+- Member 5: Luồng 2 MVC Presentation, Giao diện Chat & Bộ công cụ đánh giá RAG Evaluation.
+
+====================================================================================================
+KẾT THÚC TÀI LIỆU
+====================================================================================================
