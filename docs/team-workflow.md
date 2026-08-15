@@ -1,67 +1,121 @@
 # Team workflow and ownership
 
-> Member 1 is the sole documentation owner.
+> Provider-routing/fallback coordination baseline. Member 1 is the sole documentation owner.
 
 ## Current milestone
 
 - Member 1 Core/Data/Identity/RBAC: complete.
 - Member 1 multi-subject management/subject scoping: complete.
-- **Member 1 AI provider routing/fallback: implemented in the current PR.**
+- **Member 1 AI provider foundation + OpenRouter fallback routing: implemented in current PR.**
 - Member 2 Flow 1 request/business behavior: complete.
-- Member 3 Flow 1 indexing: complete.
-- Member 2 Flow 3 reporting behavior: complete.
-- Member 3 cross-app UI/UX redesign: complete / PR #19.
+- Member 3 Flow 1 indexing: complete / merged through PR #9.
+- Member 2 Flow 3 reporting behavior: complete / merged through PR #12.
+- Member 3 cross-app UI/UX redesign: complete / merged through PR #19.
 - Member 4 Flow 2 backend: pending.
 - Member 5 Flow 2 MVC/history/citations/evaluation: pending.
 
 ## Member 1 - Core/Data/RBAC/multi-subject/provider/docs
 
-Owns shared infrastructure, Identity/RBAC, subject management/authorization, provider selection/configuration, Ollama/Gemini/OpenAI/OpenRouter adapters, OpenRouter free chat fallback, API-key/env wiring, embedding compatibility/re-index coordination, provider tests, and all README/AGENTS/docs edits.
+Owns:
 
-Provider plumbing does not transfer indexing ownership from Member 3 or RAG business behavior from Member 4.
+- domain/data/security baseline;
+- shared contracts and EF migration coordination;
+- Identity configuration/seeding and RBAC rules;
+- Admin/SubjectLeader/Student roles/policies;
+- Subject management/assignment and `ISubjectAccessService`;
+- cross-workflow subject-context integration;
+- **AI provider selection/configuration**;
+- **Gemini/OpenAI/Ollama/OpenRouter concrete AI adapters behind Application interfaces**;
+- **OpenRouter free chat-model routing/fallback**;
+- **online API-key/env wiring**;
+- **embedding dimension/vector-space/re-index compatibility rule**;
+- provider regression tests;
+- all README/AGENTS/docs edits.
 
-## Member 2
+The provider task is cross-cutting infrastructure. It does not move parsing/chunking/indexing workflow ownership from Member 3 or RAG business behavior from Member 4.
 
-Retains established Chapter/Document request semantics and read-only reporting behavior. Controllers/Pages do not call concrete providers.
+## Member 2 - Flow 1 request behavior + Flow 3 reporting
 
-## Member 3
+Member 2 retains established Chapter/Document request semantics and read-only reporting behavior.
 
-Owns parser/chunker/indexing service/worker/startup recovery and completed UI/UX redesign. Indexing consumes `ITextEmbeddingService`; no provider-specific worker exists.
+Controllers/Pages must not call a concrete AI provider.
 
-## Member 4
+## Member 3 - indexing + UI/UX redesign
 
-Pending Flow 2 backend responsibilities: subject-scoped question embedding, pgvector retrieval, grounding, completion through `IChatCompletionService`, session validation, messages/citations persistence.
+### Indexing - complete
 
-Do not call Ollama/Gemini/OpenAI/OpenRouter directly.
+Member 3 owns parsers, chunker, indexing service/worker, state transitions, chunk replacement, and startup recovery.
 
-## Member 5
+The pipeline consumes `ITextEmbeddingService`; Member 1 owns which concrete embedding provider implements that interface at startup.
 
-Owns future Chat MVC/session/history/citation UI and evaluation tooling. Do not call provider APIs in controllers/views.
+No provider-specific worker is created.
+
+### Cross-app UI/UX redesign - complete
+
+Member 3 retains the PR #19 design system/presentation ownership. Provider-routing changes may update factual provider/privacy copy, but this does not transfer visual ownership.
+
+## Member 4 - Flow 2 backend
+
+Pending responsibilities:
+
+- subject-scoped RAG query design;
+- question embeddings through `ITextEmbeddingService`;
+- pgvector retrieval over only the selected subject;
+- grounding/no-evidence behavior;
+- completion through `IChatCompletionService`;
+- session ownership validation;
+- messages/citations persistence.
+
+Do not call Ollama, Gemini, OpenAI, or OpenRouter directly.
+
+## Member 5 - Flow 2 MVC/evaluation
+
+Owns Chat MVC actions/views, subject-aware session navigation/history/citations, and evaluation tooling.
+
+Do not call provider APIs in controllers/views.
 
 ## Provider integration map
 
 ```text
-RAG_PROVIDER [legacy/default]
-  |
-  +--> RAG_CHAT_PROVIDER override ------> IChatCompletionService
-  |       +--> OpenRouter ordered free-model fallback
-  |
-  \--> RAG_EMBEDDING_PROVIDER override -> ITextEmbeddingService
-          \--> exactly one embedding model per corpus
+RAG_PROVIDER [backward-compatible default]
+   |
+   +--> RAG_CHAT_PROVIDER override
+   |       +--> Ollama / Gemini / OpenAI
+   |       \--> OpenRouter -> ordered free-model fallback
+   |
+   \--> RAG_EMBEDDING_PROVIDER override
+           +--> Ollama / Gemini / OpenAI / OpenRouter
+           \--> exactly one embedding model per corpus
+                    |
+                    +--> ITextEmbeddingService
+                    \--> IChatCompletionService
+                               |
+                     +---------+---------+
+                     |                   |
+                Flow 1 indexing     future Flow 2 RAG
+                [Member 3]          [Member 4]
 ```
 
 ## Provider change procedure
 
-If only chat provider/model/order changes, no document re-index is required.
+If only chat provider/model/fallback order changes, no existing document vectors need re-indexing.
 
 If embedding provider/model/dimension changes:
 
 1. Member 1 records the configuration change;
-2. treat existing vectors as stale;
+2. existing stored embeddings are treated as stale;
 3. re-index the entire searchable corpus;
-4. do not mix old/new vectors;
-5. validate retrieval before considering the switch complete.
+4. do not mix old/new vectors during retrieval;
+5. validate indexing/retrieval before considering the provider switch complete.
+
+Embedding-model rotation is explicitly prohibited because it would mix semantic vector spaces.
 
 ## Secrets
 
-Real API keys live only in local/deployment secret environments. Never put them in PR text, screenshots, tracked appsettings, browser JS, logs, or docs.
+Real API keys live only in local/deployment secret environments. `.env.example` contains blank placeholders.
+
+Members must never put API keys into PR descriptions, screenshots, test fixtures using real credentials, browser JavaScript, tracked appsettings, logs, or docs.
+
+## Documentation workflow
+
+Members 2-5 report code/status/doc impacts to Member 1. Member 1 reconciles docs with actual code after integration.
