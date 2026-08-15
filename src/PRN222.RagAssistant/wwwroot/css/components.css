@@ -1930,6 +1930,51 @@
     background: var(--color-bg-warm);
 }
 
+.showcase-window {
+    position: relative;
+    width: 100%;
+    margin: 0 auto;
+    overflow: hidden;
+}
+
+.showcase-slider-track {
+    display: flex;
+    width: 100%;
+    transition: transform var(--transition-smooth);
+}
+
+.showcase-slide {
+    flex: 0 0 100%;
+    min-width: 100%;
+}
+
+.showcase-slide img {
+    display: block;
+    width: 100%;
+    height: auto;
+}
+
+.showcase-indicators {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+.showcase-dot {
+    width: 0.65rem;
+    padding: 0;
+    border: 0;
+    background: var(--color-border-warm);
+    cursor: pointer;
+    transition: width var(--transition-fast), background-color var(--transition-fast);
+}
+
+.showcase-dot.active {
+    width: 2rem;
+    background: var(--color-btn-dark);
+}
+
 .landing-showcase-window {
     max-width: 68rem;
     background: #ffffff;
