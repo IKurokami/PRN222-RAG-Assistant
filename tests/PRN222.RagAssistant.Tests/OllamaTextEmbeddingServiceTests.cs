@@ -24,12 +24,7 @@ public sealed class OllamaTextEmbeddingServiceTests
             };
         });
         var client = new HttpClient(handler) { BaseAddress = new Uri("http://localhost:11434/") };
-        var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                ["Rag:Ollama:EmbeddingModel"] = "test-embedding-model"
-            })
-            .Build();
+        var configuration = CreateConfiguration();
         var service = new OllamaTextEmbeddingService(
             new StubHttpClientFactory(client),
             configuration,
@@ -55,15 +50,9 @@ public sealed class OllamaTextEmbeddingServiceTests
                 "application/json")
         }));
         var client = new HttpClient(handler) { BaseAddress = new Uri("http://localhost:11434/") };
-        var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                ["Rag:Ollama:EmbeddingModel"] = "test-embedding-model"
-            })
-            .Build();
         var service = new OllamaTextEmbeddingService(
             new StubHttpClientFactory(client),
-            configuration,
+            CreateConfiguration(),
             NullLogger<OllamaTextEmbeddingService>.Instance);
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(
@@ -71,6 +60,37 @@ public sealed class OllamaTextEmbeddingServiceTests
 
         Assert.Contains("1 embeddings for 2 inputs", exception.Message);
     }
+
+    [Fact]
+    public async Task EmbedBatchAsync_RejectsUnexpectedEmbeddingDimensions()
+    {
+        var handler = new StubHttpMessageHandler(_ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(
+                "{\"embeddings\":[[1.0,2.0,3.0]]}",
+                Encoding.UTF8,
+                "application/json")
+        }));
+        var client = new HttpClient(handler) { BaseAddress = new Uri("http://localhost:11434/") };
+        var service = new OllamaTextEmbeddingService(
+            new StubHttpClientFactory(client),
+            CreateConfiguration(),
+            NullLogger<OllamaTextEmbeddingService>.Instance);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.EmbedBatchAsync(["first"]));
+
+        Assert.Contains("Rag:EmbeddingDimensions=2", exception.Message);
+    }
+
+    private static IConfiguration CreateConfiguration() =>
+        new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Rag:EmbeddingDimensions"] = "2",
+                ["Rag:Ollama:EmbeddingModel"] = "test-embedding-model"
+            })
+            .Build();
 
     private sealed class StubHttpClientFactory(HttpClient client) : IHttpClientFactory
     {

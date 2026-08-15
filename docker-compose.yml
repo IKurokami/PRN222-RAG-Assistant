@@ -20,9 +20,19 @@ services:
       Auth__SeedUsers__Student__Email: ${AUTH_STUDENT_EMAIL:-}
       Auth__SeedUsers__Student__Password: ${AUTH_STUDENT_PASSWORD:-}
       Auth__SeedUsers__Student__DisplayName: ${AUTH_STUDENT_DISPLAY_NAME:-Student}
+      Rag__Provider: ${RAG_PROVIDER:-Ollama}
+      Rag__EmbeddingDimensions: ${RAG_EMBEDDING_DIMENSIONS:-1024}
       Rag__Ollama__BaseUrl: http://ollama:11434
       Rag__Ollama__ChatModel: ${OLLAMA_CHAT_MODEL:-qwen3:4b}
       Rag__Ollama__EmbeddingModel: ${OLLAMA_EMBEDDING_MODEL:-qwen3-embedding:0.6b}
+      Rag__OpenAI__BaseUrl: ${OPENAI_BASE_URL:-https://api.openai.com/v1/}
+      Rag__OpenAI__ApiKey: ${OPENAI_API_KEY:-}
+      Rag__OpenAI__ChatModel: ${OPENAI_CHAT_MODEL:-gpt-5.6-luna}
+      Rag__OpenAI__EmbeddingModel: ${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
+      Rag__Gemini__BaseUrl: ${GEMINI_BASE_URL:-https://generativelanguage.googleapis.com/}
+      Rag__Gemini__ApiKey: ${GEMINI_API_KEY:-}
+      Rag__Gemini__ChatModel: ${GEMINI_CHAT_MODEL:-gemini-3.6-flash}
+      Rag__Gemini__EmbeddingModel: ${GEMINI_EMBEDDING_MODEL:-gemini-embedding-2}
       Rag__Storage__UploadsPath: /app/storage/uploads
     ports:
       - "${APP_PORT:-8080}:8080"
@@ -30,8 +40,6 @@ services:
       - ./storage/uploads:/app/storage/uploads
     depends_on:
       postgres:
-        condition: service_healthy
-      ollama:
         condition: service_healthy
 
   postgres:
@@ -55,6 +63,7 @@ services:
       start_period: 10s
 
   ollama:
+    profiles: ["local-ai"]
     image: ${OLLAMA_IMAGE:-ollama/ollama:0.32.5}
     container_name: prn222-ollama
     restart: unless-stopped
