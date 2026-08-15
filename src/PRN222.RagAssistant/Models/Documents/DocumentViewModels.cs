@@ -120,6 +120,7 @@ public sealed class DocumentDetailsViewModel
 {
     public DocumentDetailViewModel Document { get; set; } = new();
     public bool CanManageDocuments { get; set; }
+    public DocumentChunkPreviewPageViewModel ChunkPreview { get; set; } = new();
 }
 
 public sealed class DocumentDetailViewModel
@@ -141,7 +142,6 @@ public sealed class DocumentDetailViewModel
     public string? IndexError { get; set; }
     public DateTime UploadedAtUtc { get; set; }
     public DateTime? IndexedAtUtc { get; set; }
-    public int ChunkCount { get; set; }
 
     public string FormattedSize => FileSizeBytes switch
     {
@@ -149,4 +149,28 @@ public sealed class DocumentDetailViewModel
         < 1024 * 1024 => $"{FileSizeBytes / 1024.0:F1} KB",
         _ => $"{FileSizeBytes / (1024.0 * 1024.0):F1} MB"
     };
+}
+
+public sealed class DocumentChunkPreviewPageViewModel
+{
+    public List<DocumentChunkPreviewItemViewModel> Items { get; set; } = [];
+    public int TotalCount { get; set; }
+    public int EmbeddedCount { get; set; }
+    public int CurrentPage { get; set; } = 1;
+    public int TotalPages { get; set; }
+
+    public bool AllChunksEmbedded => TotalCount > 0 && EmbeddedCount == TotalCount;
+    public bool HasPreviousPage => CurrentPage > 1;
+    public bool HasNextPage => CurrentPage < TotalPages;
+}
+
+public sealed class DocumentChunkPreviewItemViewModel
+{
+    public int ChunkIndex { get; set; }
+    public string Content { get; set; } = string.Empty;
+    public int? PageNumber { get; set; }
+    public int? SlideNumber { get; set; }
+    public bool HasEmbedding { get; set; }
+
+    public int CharacterCount => Content.Length;
 }
