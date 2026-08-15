@@ -4,12 +4,13 @@ internal static class EmbeddingServiceGuard
 {
     public static int GetExpectedDimensions(IConfiguration configuration)
     {
-        var rawValue = configuration["Rag:EmbeddingDimensions"];
+        var rawValue = configuration["Rag:EmbeddingDimensions"]
+            ?? configuration["RAG_EMBEDDING_DIMENSIONS"];
 
         if (!int.TryParse(rawValue, out var dimensions) || dimensions <= 0)
         {
             throw new InvalidOperationException(
-                "Rag:EmbeddingDimensions must be configured as a positive integer.");
+                "Rag:EmbeddingDimensions / RAG_EMBEDDING_DIMENSIONS must be configured as a positive integer.");
         }
 
         return dimensions;
