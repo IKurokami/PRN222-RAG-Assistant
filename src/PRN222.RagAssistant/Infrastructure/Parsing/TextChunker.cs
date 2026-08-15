@@ -7,6 +7,16 @@ public sealed class TextChunker
 
     public TextChunker(int maxChunkSize = 500, int overlapSize = 100)
     {
+        if (maxChunkSize <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(maxChunkSize));
+        }
+
+        if (overlapSize < 0 || overlapSize >= maxChunkSize)
+        {
+            throw new ArgumentOutOfRangeException(nameof(overlapSize));
+        }
+
         _maxChunkSize = maxChunkSize;
         _overlapSize = overlapSize;
     }
@@ -18,70 +28,205 @@ public sealed class TextChunker
 
         foreach (var page in pages)
         {
-            var text = page.Text;
-
-            if (string.IsNullOrWhiteSpace(text))
+            var text = NormalizeWhitespace(page.Text);
+            if (text.Length == 0)
             {
-                continue;
-            }
-
-            if (text.Length <= _maxChunkSize)
-            {
-                chunks.Add(new ChunkedText(chunkIndex++, text, page.PageNumber, page.SlideNumber));
                 continue;
             }
 
             var position = 0;
-
             while (position < text.Length)
             {
-                var remaining = text.Length - position;
-                var length = Math.Min(_maxChunkSize, remaining);
-                var segment = text.Substring(position, length);
-
-                var isEnd = position + length >= text.Length;
-
-                // Try to break at a sentence boundary if we're not at the end
-                if (!isEnd)
-                {
-                    var lastSentenceEnd = FindLastSentenceEnd(segment);
-
-                    if (lastSentenceEnd > _maxChunkSize / 3)
-                    {
-                        segment = segment[..lastSentenceEnd].TrimEnd();
-                        length = lastSentenceEnd;
-                    }
-                }
-
-                if (!string.IsNullOrWhiteSpace(segment))
-                {
-                    chunks.Add(new ChunkedText(chunkIndex++, segment.Trim(), page.PageNumber, page.SlideNumber));
-                }
-
-                if (isEnd)
+                position = SkipWhitespace(text, position, text.Length);
+                if (position >= text.Length)
                 {
                     break;
                 }
 
-                // Move forward, applying overlap
-                var advance = Math.Max(length - _overlapSize, 1);
-                position += advance;
+                var maxEnd = Math.Min(position + _maxChunkSize, text.Length);
+                var end = maxEnd == text.Length
+                    ? text.Length
+                    : FindChunkEnd(text, position, maxEnd);
+
+                if (end <= position)
+                {
+                    end = maxEnd;
+                }
+
+                var content = text[position..end].Trim();
+                if (content.Length > 0)
+                {
+                    chunks.Add(new ChunkedText(
+                        chunkIndex++,
+                        content,
+                        page.PageNumber,
+                        page.SlideNumber));
+                }
+
+                if (end >= text.Length)
+                {
+                    break;
+                }
+
+                var nextPosition = FindOverlapStart(text, position, end);
+                position = nextPosition > position ? nextPosition : end;
             }
         }
 
         return chunks;
     }
 
-    private static int FindLastSentenceEnd(string text)
+    private int FindChunkEnd(string text, int start, int maxEnd)
     {
-        var lastPeriod = text.LastIndexOf(". ", StringComparison.Ordinal);
-        var lastQuestion = text.LastIndexOf("? ", StringComparison.Ordinal);
-        var lastExclamation = text.LastIndexOf("! ", StringComparison.Ordinal);
-        var lastNewline = text.LastIndexOf('\n');
+        var minimumBoundary = start + Math.Max(_maxChunkSize / 3, 1);
 
-        var best = Math.Max(Math.Max(lastPeriod, lastQuestion), Math.Max(lastExclamation, lastNewline));
+        for (var index = maxEnd - 1; index >= minimumBoundary; index--)
+        {
+            if (text[index] == '\n'
+                && index + 1 < text.Length
+                && text[index + 1] == '\n')
+            {
+                return index;
+            }
+        }
 
-        return best > 0 ? best + 1 : -1;
+        for (var index = maxEnd - 1; index >= minimumBoundary; index--)
+        {
+            if (IsSentenceEnd(text, index))
+            {
+                return index + 1;
+            }
+        }
+
+        for (var index = maxEnd - 1; index >= minimumBoundary; index--)
+        {
+            if (text[index] == '\n')
+            {
+                return index;
+            }
+        }
+
+        for (var index = maxEnd - 1; index >= minimumBoundary; index--)
+        {
+            if (char.IsWhiteSpace(text[index]))
+            {
+                return index;
+            }
+        }
+
+        return maxEnd;
+    }
+
+    private int FindOverlapStart(string text, int chunkStart, int chunkEnd)
+    {
+        if (_overlapSize == 0)
+        {
+            return SkipWhitespace(text, chunkEnd, text.Length);
+        }
+
+        var desiredStart = Math.Max(chunkStart + 1, chunkEnd - _overlapSize);
+
+        for (var index = desiredStart - 1; index > chunkStart; index--)
+        {
+            if (IsSentenceEnd(text, index) || text[index] == '\n')
+            {
+                var sentenceStart = SkipWhitespace(text, index + 1, chunkEnd);
+                if (sentenceStart > chunkStart && sentenceStart < chunkEnd)
+                {
+                    return sentenceStart;
+                }
+            }
+        }
+
+        var wordStart = desiredStart;
+        if (wordStart > chunkStart
+            && wordStart < chunkEnd
+            && !char.IsWhiteSpace(text[wordStart - 1])
+            && !char.IsWhiteSpace(text[wordStart]))
+        {
+            while (wordStart < chunkEnd && !char.IsWhiteSpace(text[wordStart]))
+            {
+                wordStart++;
+            }
+        }
+
+        wordStart = SkipWhitespace(text, wordStart, chunkEnd);
+        return wordStart < chunkEnd ? wordStart : desiredStart;
+    }
+
+    private static bool IsSentenceEnd(string text, int index)
+    {
+        if (text[index] is not ('.' or '?' or '!'))
+        {
+            return false;
+        }
+
+        return index + 1 >= text.Length || char.IsWhiteSpace(text[index + 1]);
+    }
+
+    private static int SkipWhitespace(string text, int position, int limit)
+    {
+        while (position < limit && char.IsWhiteSpace(text[position]))
+        {
+            position++;
+        }
+
+        return position;
+    }
+
+    private static string NormalizeWhitespace(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return string.Empty;
+        }
+
+        var normalized = new System.Text.StringBuilder(text.Length);
+        var pendingSpace = false;
+        var pendingNewlines = 0;
+
+        foreach (var character in text)
+        {
+            if (character == '\r')
+            {
+                continue;
+            }
+
+            if (character == '\n')
+            {
+                pendingSpace = false;
+                pendingNewlines = Math.Min(pendingNewlines + 1, 2);
+                continue;
+            }
+
+            if (char.IsWhiteSpace(character))
+            {
+                if (pendingNewlines == 0)
+                {
+                    pendingSpace = true;
+                }
+
+                continue;
+            }
+
+            if (normalized.Length > 0)
+            {
+                if (pendingNewlines > 0)
+                {
+                    normalized.Append('\n', pendingNewlines);
+                }
+                else if (pendingSpace)
+                {
+                    normalized.Append(' ');
+                }
+            }
+
+            normalized.Append(character);
+            pendingSpace = false;
+            pendingNewlines = 0;
+        }
+
+        return normalized.ToString();
     }
 }
 
