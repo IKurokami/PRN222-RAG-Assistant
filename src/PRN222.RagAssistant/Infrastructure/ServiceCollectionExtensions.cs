@@ -84,12 +84,10 @@ public static class ServiceCollectionExtensions
         IServiceCollection services,
         IConfiguration configuration)
     {
-        var provider = configuration["Rag:Provider"]?.Trim();
-
-        if (string.IsNullOrWhiteSpace(provider))
-        {
-            provider = "Ollama";
-        }
+        var provider = FirstNonEmpty(
+            configuration["Rag:Provider"],
+            configuration["RAG_PROVIDER"],
+            "Ollama");
 
         switch (provider.ToUpperInvariant())
         {
@@ -122,8 +120,8 @@ public static class ServiceCollectionExtensions
         IConfiguration configuration)
     {
         var baseUri = GetRequiredAbsoluteUri(
-            configuration,
-            "Rag:Ollama:BaseUrl",
+            FirstNonEmpty(configuration["Rag:Ollama:BaseUrl"], configuration["OLLAMA_BASE_URL"]),
+            "Rag:Ollama:BaseUrl / OLLAMA_BASE_URL",
             "http://localhost:11434");
 
         services.AddHttpClient("Ollama", client =>
@@ -138,10 +136,12 @@ public static class ServiceCollectionExtensions
         IConfiguration configuration)
     {
         var baseUri = GetRequiredAbsoluteUri(
-            configuration,
-            "Rag:OpenAI:BaseUrl",
+            FirstNonEmpty(configuration["Rag:OpenAI:BaseUrl"], configuration["OPENAI_BASE_URL"]),
+            "Rag:OpenAI:BaseUrl / OPENAI_BASE_URL",
             "https://api.openai.com/v1/");
-        var apiKey = GetRequiredValue(configuration, "Rag:OpenAI:ApiKey");
+        var apiKey = GetRequiredValue(
+            FirstNonEmpty(configuration["Rag:OpenAI:ApiKey"], configuration["OPENAI_API_KEY"]),
+            "Rag:OpenAI:ApiKey / OPENAI_API_KEY");
 
         services.AddHttpClient("OpenAI", client =>
         {
@@ -157,10 +157,12 @@ public static class ServiceCollectionExtensions
         IConfiguration configuration)
     {
         var baseUri = GetRequiredAbsoluteUri(
-            configuration,
-            "Rag:Gemini:BaseUrl",
+            FirstNonEmpty(configuration["Rag:Gemini:BaseUrl"], configuration["GEMINI_BASE_URL"]),
+            "Rag:Gemini:BaseUrl / GEMINI_BASE_URL",
             "https://generativelanguage.googleapis.com/");
-        var apiKey = GetRequiredValue(configuration, "Rag:Gemini:ApiKey");
+        var apiKey = GetRequiredValue(
+            FirstNonEmpty(configuration["Rag:Gemini:ApiKey"], configuration["GEMINI_API_KEY"]),
+            "Rag:Gemini:ApiKey / GEMINI_API_KEY");
 
         services.AddHttpClient("Gemini", client =>
         {
@@ -171,16 +173,15 @@ public static class ServiceCollectionExtensions
     }
 
     private static Uri GetRequiredAbsoluteUri(
-        IConfiguration configuration,
-        string key,
+        string? rawValue,
+        string settingName,
         string example)
     {
-        var rawValue = configuration[key];
-
-        if (!Uri.TryCreate(rawValue, UriKind.Absolute, out var uri))
+        if (string.IsNullOrWhiteSpace(rawValue)
+            || !Uri.TryCreate(rawValue, UriKind.Absolute, out var uri))
         {
             throw new InvalidOperationException(
-                $"{key} must be configured with an absolute URL, for example {example}.");
+                $"{settingName} must be configured with an absolute URL, for example {example}.");
         }
 
         return rawValue.EndsWith("/", StringComparison.Ordinal)
@@ -189,14 +190,17 @@ public static class ServiceCollectionExtensions
     }
 
     private static string GetRequiredValue(
-        IConfiguration configuration,
-        string key)
+        string? value,
+        string settingName)
     {
-        var value = configuration[key];
-
         return !string.IsNullOrWhiteSpace(value)
             ? value
             : throw new InvalidOperationException(
-                $"{key} is required when its AI provider is selected.");
+                $"{settingName} is required when its AI provider is selected.");
+    }
+
+    private static string FirstNonEmpty(params string?[] values)
+    {
+        return values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim() ?? string.Empty;
     }
 }
