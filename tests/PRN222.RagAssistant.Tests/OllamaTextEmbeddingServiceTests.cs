@@ -2,7 +2,7 @@ using System.Net;
 using System.Text;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
-using PRN222.RagAssistant.Infrastructure.Services;
+using PRN222.RagAssistant.Infrastructure.Rag;
 
 namespace PRN222.RagAssistant.Tests;
 

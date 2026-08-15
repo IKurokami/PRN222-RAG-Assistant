@@ -32,7 +32,117 @@ Provider-backup work is based on `master` after merged PR #20 on 2026-08-15.
 - AI runtime: provider-neutral; Ollama local default, OpenAI/Gemini online backups
 - Source storage: `storage/uploads/`
 
+<<<<<<< Updated upstream
 Presentation/workflow state:
+=======
+The demo is scoped to PRN222. Subject Leaders curate/upload course documents. Chapters are runtime-managed data. Students consume successfully indexed content through Flow 2 chat. Automatic FLM crawling is not authoritative ingestion.
+
+## Product workflows
+
+1. **Flow 1 - Document Management & Indexing** - COMPLETE - Razor Pages
+2. **Flow 2 - RAG Question & Answer & Conversation Management** - PENDING - **ASP.NET Core MVC**
+3. **Flow 3 - Report & Statistics** - COMPLETE - Razor Pages
+
+Conversation History belongs to Flow 2 and is not counted as Flow 3.
+
+## Current merged milestone
+
+Latest synchronized baseline after PR #12:
+
+Latest synchronized baseline after PR #12 (Member 2 Flow 3 Report & Statistics). Main remaining product work is Flow 2 RAG Q&A, now fixed to ASP.NET Core MVC Controllers + Views.
+
+PR #9 completed the Member 2 -> Member 3 Flow 1 handoff. PR #12 completed Member 2's independent Flow 3 reporting assignment. The main unfinished product work is now Flow 2, and its presentation model is fixed to ASP.NET Core MVC rather than Razor Pages.
+
+When status is unclear, latest merged code on `master` is the source of truth; synchronize docs afterward.
+
+## Team ownership and integration boundaries
+
+### Member 1 - Core/Data Lead - COMPLETE BASELINE
+
+Owns:
+
+- `Domain/Entities/`
+- `Domain/Enums/`
+- `Data/`
+- `Security/`
+- cross-workflow `Application/` contracts/models
+- schema/migration conventions
+- architecture/convention tests
+- coordination for genuine EF model/migration changes
+
+Do not move later workflow business logic into Member 1 simply because shared contracts live under `Application/`.
+
+### Member 2 - Document Management + Report & Statistics - COMPLETE CURRENT ASSIGNMENT
+
+#### Flow 1 request/presentation - COMPLETE
+
+Merged behavior includes:
+
+- runtime PRN222 Chapter list/create/edit/delete
+- Document list/filter/upload/details/edit/delete/re-index request
+- PDF/DOCX/PPTX upload validation
+- 50 MB limit
+- source-file persistence
+- document metadata persistence
+- PRN222 chapter validation
+- `AppPolicies.ManageDocuments` server-side enforcement
+- queue handoff after document persistence
+- safe chapter deletion that unassigns referenced documents first
+
+Flow 1 request handlers must not parse, chunk, embed, query pgvector, or call Ollama.
+
+#### Flow 3 Report & Statistics - COMPLETE
+
+PR #12 merged a read-only Subject Leader reporting dashboard under `Pages/Reports/`.
+
+Implemented reporting includes:
+
+- total PRN222 chapters/documents
+- documents by indexing state
+- documents by chapter/unassigned
+- total PRN222 `DocumentChunk` count
+- indexing completion percentage
+- recent indexing failures / `IndexError`
+- recently indexed documents with chunk counts/timestamps
+- total chat sessions/messages/citations
+- graceful empty/zero states before Flow 2 data exists
+
+The Reports page uses `AppPolicies.ManageDocuments` and is server-side restricted to `SubjectLeader`.
+
+Flow 3 must remain read-only and must not:
+
+- enqueue/re-index documents as part of reporting
+- alter parser/chunker/embedding/worker behavior
+- mutate workflow data
+- run pgvector similarity retrieval
+- call Ollama
+- duplicate Member 5 Conversation History UI
+- add speculative analytics entities/migrations
+- change shared contracts solely for dashboard convenience
+
+If reporting exposes a genuine persistence gap, coordinate through Member 1.
+
+Do not recreate `feature/report-statistics` as a competing implementation; Flow 3 is already merged.
+
+### Member 3 - Document Indexing / Ingestion - COMPLETE
+
+PR #9 merged:
+
+- `DocumentParserFactory`
+- PDF parser via PdfPig
+- DOCX/PPTX parsers via OpenXml
+- `TextChunker`
+- `TextEmbeddingBatcher`
+- `OllamaTextEmbeddingService`
+- single and ordered-batch `ITextEmbeddingService` support
+- `DocumentIndexingService`
+- `DocumentIndexingWorker`
+- coherent `DocumentChunk` replacement
+- index state/error/timestamp persistence
+- startup rehydration of `Uploaded`/`Processing` documents
+
+Implemented state flow:
+>>>>>>> Stashed changes
 
 ```text
 Flow 1 -> MVC Controllers + Views [COMPLETE]
