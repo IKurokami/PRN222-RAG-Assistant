@@ -1,21 +1,137 @@
 // PRN222 RAG Assistant - Interactive Script (Humata Inspired Engine)
 
 document.addEventListener('DOMContentLoaded', () => {
-    // 1. Typewriter Animation for Hero Title
+    // 1. Top Loading Bar on Navigation
+    initTopLoadingBar();
+
+    // 2. Typewriter Animation for Hero Title
     initTypewriter();
 
-    // 2. Showcase Auto-Slider Carousel (4.5s)
+    // 3. Showcase Auto-Slider Carousel (4.5s)
     initShowcaseSlider();
 
-    // 3. FAQ Accordion Toggle
+    // 4. FAQ Accordion Toggle
     initFaqAccordion();
 
-    // 4. Testimonials Auto-Slider (5.0s)
+    // 5. Testimonials Auto-Slider (5.0s)
     initTestimonialsSlider();
+
+    // 6. Form Submission Buttons & Interactive Micro-Interactions
+    initFormInteractions();
+
+    // 7. Clipboard Copy Helper
+    initClipboardHelper();
 });
 
 /* ==========================================================================
-   1. Typewriter Engine
+   1. Top Navigation Loading Bar (Facebook / YouTube / Linear Style)
+   ========================================================================== */
+function initTopLoadingBar() {
+    let bar = document.getElementById('top-loading-bar');
+    if (!bar) {
+        bar = document.createElement('div');
+        bar.id = 'top-loading-bar';
+        document.body.prepend(bar);
+    }
+
+    // Complete on initial DOM ready
+    bar.style.width = '100%';
+    bar.classList.add('active');
+    setTimeout(() => {
+        bar.style.opacity = '0';
+        setTimeout(() => {
+            bar.style.width = '0%';
+            bar.classList.remove('active');
+        }, 250);
+    }, 200);
+
+    // Animate on clicking internal navigation links
+    document.addEventListener('click', (e) => {
+        const link = e.target.closest('a');
+        if (!link) return;
+
+        const href = link.getAttribute('href');
+        const target = link.getAttribute('target');
+
+        // Only trigger for normal same-origin internal links
+        if (href && !href.startsWith('#') && !href.startsWith('javascript:') && (!target || target === '_self')) {
+            const url = new URL(link.href, window.location.origin);
+            if (url.origin === window.location.origin && url.pathname !== window.location.pathname) {
+                bar.classList.add('active');
+                bar.style.opacity = '1';
+                bar.style.width = '30%';
+                setTimeout(() => { bar.style.width = '70%'; }, 150);
+            }
+        }
+    });
+
+    // Animate on form submits
+    document.addEventListener('submit', (e) => {
+        const form = e.target;
+        if (form && !e.defaultPrevented) {
+            bar.classList.add('active');
+            bar.style.opacity = '1';
+            bar.style.width = '45%';
+            setTimeout(() => { bar.style.width = '85%'; }, 200);
+        }
+    });
+}
+
+/* ==========================================================================
+   2. Modern Toast Notification System
+   ========================================================================== */
+window.Toast = {
+    show(message, type = 'info', duration = 3500) {
+        let container = document.querySelector('.toast-container-modern');
+        if (!container) {
+            container = document.createElement('div');
+            container.className = 'toast-container-modern';
+            document.body.appendChild(container);
+        }
+
+        const toast = document.createElement('div');
+        toast.className = `toast-item toast-${type}`;
+
+        let iconSvg = '';
+        if (type === 'success') {
+            iconSvg = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+        } else if (type === 'error') {
+            iconSvg = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>';
+        } else {
+            iconSvg = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>';
+        }
+
+        toast.innerHTML = `
+            <span class="toast-item-icon">${iconSvg}</span>
+            <span class="toast-item-msg">${escapeHtml(message)}</span>
+        `;
+
+        container.appendChild(toast);
+
+        // Entrance animation
+        requestAnimationFrame(() => {
+            toast.classList.add('show');
+        });
+
+        // Auto dismiss
+        setTimeout(() => {
+            toast.classList.remove('show');
+            toast.classList.add('hiding');
+            setTimeout(() => {
+                toast.remove();
+            }, 250);
+        }, duration);
+    }
+};
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+/* ==========================================================================
+   3. Typewriter Engine
    ========================================================================== */
 function initTypewriter() {
     const dynamicElem = document.getElementById('typewriterDynamic');
@@ -48,11 +164,9 @@ function initTypewriter() {
         }
 
         if (!isDeleting && charIndex === currentPhrase.length) {
-            // Finished typing, pause before deleting
             typingSpeed = 2200;
             isDeleting = true;
         } else if (isDeleting && charIndex === 0) {
-            // Finished deleting, move to next phrase
             isDeleting = false;
             phraseIndex = (phraseIndex + 1) % phrases.length;
             typingSpeed = 400;
@@ -65,7 +179,7 @@ function initTypewriter() {
 }
 
 /* ==========================================================================
-   2. Showcase Auto-Slider Carousel
+   4. Showcase Auto-Slider Carousel
    ========================================================================== */
 function initShowcaseSlider() {
     const track = document.getElementById('showcaseSliderTrack');
@@ -90,13 +204,13 @@ function initShowcaseSlider() {
         timer = setInterval(() => {
             let nextIndex = (currentIndex + 1) % totalSlides;
             goToSlide(nextIndex);
-        }, 4500); // 4.5s auto transition
+        }, 4500);
     }
 
     dots.forEach((dot, i) => {
         dot.addEventListener('click', () => {
             goToSlide(i);
-            startAutoSlide(); // Reset timer on manual click
+            startAutoSlide();
         });
     });
 
@@ -114,7 +228,7 @@ function initShowcaseSlider() {
 }
 
 /* ==========================================================================
-   3. FAQ Accordion Toggle
+   5. FAQ Accordion Toggle
    ========================================================================== */
 function initFaqAccordion() {
     const faqItems = document.querySelectorAll('.faq-item');
@@ -127,12 +241,10 @@ function initFaqAccordion() {
         questionBtn.addEventListener('click', () => {
             const isActive = item.classList.contains('active');
             
-            // Close other items
             faqItems.forEach(other => {
                 if (other !== item) other.classList.remove('active');
             });
 
-            // Toggle current
             if (isActive) {
                 item.classList.remove('active');
             } else {
@@ -143,7 +255,7 @@ function initFaqAccordion() {
 }
 
 /* ==========================================================================
-   4. Testimonials Auto-Slider
+   6. Testimonials Auto-Slider
    ========================================================================== */
 function initTestimonialsSlider() {
     const quoteElem = document.getElementById('testiQuote');
@@ -213,4 +325,41 @@ function initTestimonialsSlider() {
     });
 
     startAuto();
+}
+
+/* ==========================================================================
+   7. Form Interactions & Button Loading States
+   ========================================================================== */
+function initFormInteractions() {
+    document.querySelectorAll('form').forEach(form => {
+        form.addEventListener('submit', (e) => {
+            if (form.checkValidity && !form.checkValidity()) {
+                return;
+            }
+            const submitBtn = form.querySelector('button[type="submit"]');
+            if (submitBtn && !submitBtn.disabled) {
+                submitBtn.classList.add('loading');
+            }
+        });
+    });
+}
+
+/* ==========================================================================
+   8. Clipboard Copy Helper with Toast
+   ========================================================================== */
+function initClipboardHelper() {
+    document.addEventListener('click', (e) => {
+        const copyTrigger = e.target.closest('[data-copy]');
+        if (!copyTrigger) return;
+
+        const textToCopy = copyTrigger.getAttribute('data-copy');
+        if (textToCopy && navigator.clipboard) {
+            navigator.clipboard.writeText(textToCopy).then(() => {
+                const label = copyTrigger.getAttribute('data-copy-label') || 'Đã sao chép vào bộ nhớ tạm!';
+                window.Toast.show(label, 'success', 2500);
+            }).catch(() => {
+                window.Toast.show('Không thể sao chép!', 'error', 2500);
+            });
+        }
+    });
 }

@@ -4,23 +4,42 @@
     var activeSubjectCount = Model.Subjects.Count(subject => subject.IsActive);
     var manageableSubjectCount = Model.Subjects.Count(subject => subject.CanManage);
     var totalDocuments = Model.Subjects.Sum(subject => subject.DocumentCount);
+    var isAdmin = User.IsInRole(PRN222.RagAssistant.Security.AppRoles.Admin);
 }
 
 <div class="subjects-page">
     <div class="container py-4 py-lg-5">
-        <div class="academic-breadcrumb mb-4">
-            <a asp-page="/Index"><i class="bi bi-house-door"></i> Trang chủ</a>
-            <span class="academic-breadcrumb-separator">/</span>
-            <span>Danh mục môn học</span>
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+            <div class="academic-breadcrumb m-0">
+                <a asp-page="/Index"><i class="bi bi-house-door"></i> Trang chủ</a>
+                <span class="academic-breadcrumb-separator">/</span>
+                <span class="fw-semibold">Danh mục môn học</span>
+            </div>
+            @if (isAdmin)
+            {
+                <div class="d-flex align-items-center gap-2">
+                    <a asp-controller="AdminSubjects" asp-action="Index" class="btn btn-sm btn-outline-secondary btn-press d-inline-flex align-items-center gap-1" style="border-radius: var(--radius-md); font-size: 0.82rem; font-weight: 600;">
+                        <i class="bi bi-gear"></i> Quản trị môn học
+                    </a>
+                    <a asp-controller="AdminUsers" asp-action="Index" class="btn btn-sm btn-outline-secondary btn-press d-inline-flex align-items-center gap-1" style="border-radius: var(--radius-md); font-size: 0.82rem; font-weight: 600;">
+                        <i class="bi bi-people"></i> Quản lý người dùng
+                    </a>
+                </div>
+            }
         </div>
 
         <div class="subjects-heading mb-4">
-            <h1>Danh mục môn học</h1>
-            <span class="subjects-count">@Model.Subjects.Count môn học</span>
+            <div>
+                <h1 class="h2 fw-bold text-dark mb-1">Danh Mục Môn Học</h1>
+                <p class="text-muted small m-0">Chọn môn học để tra cứu giáo trình, bài giảng và tài liệu học thuật theo phân quyền FLM.</p>
+            </div>
+            <span class="badge bg-white text-dark border px-3 py-2 rounded-pill shadow-sm small fw-semibold">
+                @Model.Subjects.Count môn học
+            </span>
         </div>
 
         <section class="subjects-summary mb-4" aria-label="Tổng quan môn học">
-            <div class="subjects-summary-item">
+            <div class="subjects-summary-item card-lift">
                 <span class="subjects-summary-icon subjects-summary-icon-primary">
                     <i class="bi bi-collection-fill"></i>
                 </span>
@@ -29,7 +48,7 @@
                     <span>Môn đang hoạt động</span>
                 </div>
             </div>
-            <div class="subjects-summary-item">
+            <div class="subjects-summary-item card-lift">
                 <span class="subjects-summary-icon subjects-summary-icon-violet">
                     <i class="bi bi-file-earmark-text-fill"></i>
                 </span>
@@ -38,7 +57,7 @@
                     <span>Tài liệu có thể tra cứu</span>
                 </div>
             </div>
-            <div class="subjects-summary-item">
+            <div class="subjects-summary-item card-lift">
                 <span class="subjects-summary-icon subjects-summary-icon-amber">
                     <i class="bi bi-shield-check"></i>
                 </span>
@@ -49,22 +68,24 @@
             </div>
         </section>
 
-
         @if (Model.Subjects.Count == 0)
         {
-            <div class="subjects-empty">
-                <span class="subjects-empty-icon"><i class="bi bi-journal-x"></i></span>
-                <h3>Chưa có môn học để hiển thị</h3>
-                <p>Liên hệ Quản trị viên để được cấp quyền truy cập môn học phù hợp.</p>
+            <div class="subjects-empty py-5 text-center bg-white border rounded-4 shadow-sm p-4">
+                <div class="d-inline-flex align-items-center justify-content-center bg-light rounded-circle mb-3 text-muted" style="width: 64px; height: 64px; font-size: 1.75rem;">
+                    <i class="bi bi-journal-x"></i>
+                </div>
+                <h3 class="h5 fw-bold text-dark">Chưa có môn học để hiển thị</h3>
+                <p class="text-muted small mb-0">Liên hệ Quản trị viên để được cấp quyền truy cập môn học phù hợp.</p>
             </div>
         }
         else
         {
             <div class="row g-4">
-                @foreach (var subject in Model.Subjects)
+                @for (var i = 0; i < Model.Subjects.Count; i++)
                 {
-                    <div class="col-md-6 col-xl-4">
-                        <article class="subject-card h-100 @(subject.IsActive ? string.Empty : "subject-card-inactive")">
+                    var subject = Model.Subjects[i];
+                    <div class="col-md-6 col-xl-4 stagger-row" style="animation-delay: @(i * 60)ms;">
+                        <article class="subject-card h-100 card-lift @(subject.IsActive ? string.Empty : "subject-card-inactive")">
                             <div class="subject-card-top">
                                 <span class="subject-card-icon" aria-hidden="true">@(string.IsNullOrEmpty(subject.Code) ? "?" : subject.Code[..1])</span>
                                 <div class="d-flex flex-column align-items-end gap-2">
@@ -74,7 +95,14 @@
                                             <i class="bi bi-shield-check"></i> Có quyền quản lý
                                         </span>
                                     }
-                                    @if (!subject.IsActive)
+                                    @if (subject.IsActive)
+                                    {
+                                        <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1 rounded-pill small">
+                                            <span class="pulse-badge-dot d-inline-block me-1" style="width: 6px; height: 6px;"></span>
+                                            Đang hoạt động
+                                        </span>
+                                    }
+                                    else
                                     {
                                         <span class="subject-inactive-label">
                                             <i class="bi bi-pause-circle"></i> Tạm ngưng
@@ -88,27 +116,27 @@
                                 <h3>@subject.Name</h3>
                                 <div class="subject-card-metrics">
                                     <span>
-                                        <i class="bi bi-list-nested"></i>
+                                        <i class="bi bi-list-nested text-muted"></i>
                                         <strong>@subject.ChapterCount</strong> chương
                                     </span>
                                     <span>
-                                        <i class="bi bi-files"></i>
+                                        <i class="bi bi-files text-muted"></i>
                                         <strong>@subject.DocumentCount</strong> tài liệu
                                     </span>
                                 </div>
                             </div>
 
                             <div class="subject-card-actions">
-                                <a asp-controller="Documents" asp-action="Index" asp-route-subjectId="@subject.Id" class="subject-primary-action">
-                                    Mở kho tài liệu <i class="bi bi-arrow-right"></i>
+                                <a asp-controller="Documents" asp-action="Index" asp-route-subjectId="@subject.Id" class="subject-primary-action btn-press">
+                                    <span>Kho tài liệu</span> <i class="bi bi-arrow-right"></i>
                                 </a>
                                 @if (subject.CanManage)
                                 {
                                     <div class="subject-management-actions">
-                                        <a asp-controller="Chapters" asp-action="Index" asp-route-subjectId="@subject.Id" title="Quản lý chương học">
+                                        <a asp-controller="Chapters" asp-action="Index" asp-route-subjectId="@subject.Id" class="btn-press" title="Quản lý chương học">
                                             <i class="bi bi-list-nested"></i> Chương
                                         </a>
-                                        <a asp-page="/Reports/Index" asp-route-subjectId="@subject.Id" title="Xem báo cáo thống kê">
+                                        <a asp-page="/Reports/Index" asp-route-subjectId="@subject.Id" class="btn-press" title="Xem báo cáo thống kê">
                                             <i class="bi bi-bar-chart-line"></i> Báo cáo
                                         </a>
                                     </div>

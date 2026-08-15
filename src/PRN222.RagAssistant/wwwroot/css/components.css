@@ -2531,3 +2531,228 @@
         margin: 2rem 0 3rem;
     }
 }
+
+/* ==========================================================================
+   Production-Grade UI/UX Motion & Component Enhancements
+   ========================================================================== */
+
+/* 1. Top Navigation Loading Bar (Facebook / YouTube / Linear Style) */
+#top-loading-bar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 0%;
+    height: var(--loading-bar-height, 3px);
+    background: var(--loading-bar-gradient);
+    background-size: 200% 100%;
+    z-index: 99999;
+    pointer-events: none;
+    opacity: 0;
+    transition: width 350ms cubic-bezier(0.16, 1, 0.3, 1), opacity 200ms ease;
+    box-shadow: 0 0 10px rgba(37, 99, 235, 0.5), 0 0 4px rgba(234, 88, 12, 0.4);
+}
+
+#top-loading-bar.active {
+    opacity: 1;
+    animation: loadingBarGradient 1.5s linear infinite;
+}
+
+@keyframes loadingBarGradient {
+    0% { background-position: 100% 0; }
+    100% { background-position: -100% 0; }
+}
+
+/* 2. Page Entrance Animation (Smooth & Zero Layout Shift) */
+.page-enter {
+    animation: pageFadeEnter 280ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes pageFadeEnter {
+    from {
+        opacity: 0;
+        transform: translateY(6px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* 3. Skeleton Shimmer Loading States */
+.skeleton-box {
+    position: relative;
+    overflow: hidden;
+    background-color: var(--color-bg-secondary);
+    border-radius: var(--radius-md);
+}
+
+.skeleton-box::after {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    transform: translateX(-100%);
+    background-image: var(--skeleton-shimmer);
+    animation: skeletonShimmer 1.6s infinite;
+    content: '';
+}
+
+@keyframes skeletonShimmer {
+    100% {
+        transform: translateX(100%);
+    }
+}
+
+/* 4. Modern Toast Notification Stack */
+.toast-container-modern {
+    position: fixed;
+    bottom: 1.75rem;
+    right: 1.75rem;
+    z-index: 99999;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    pointer-events: none;
+    max-width: 24rem;
+    width: calc(100% - 3.5rem);
+}
+
+.toast-item {
+    pointer-events: auto;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.85rem 1.15rem;
+    background: #ffffff;
+    border: 1px solid var(--color-border-warm);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-toast);
+    color: var(--color-text-main);
+    font-size: 0.88rem;
+    font-family: var(--font-body);
+    font-weight: 500;
+    line-height: 1.4;
+    opacity: 0;
+    transform: translateY(12px) scale(0.96);
+    transition: all 250ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.toast-item.show {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+}
+
+.toast-item.hiding {
+    opacity: 0;
+    transform: translateY(8px) scale(0.96);
+}
+
+.toast-item-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    border-radius: var(--radius-full);
+    flex-shrink: 0;
+}
+
+.toast-item.toast-success .toast-item-icon {
+    background: var(--color-success-bg);
+    color: var(--color-success-text);
+}
+
+.toast-item.toast-error .toast-item-icon {
+    background: var(--color-danger-bg);
+    color: var(--color-danger-text);
+}
+
+.toast-item.toast-info .toast-item-icon {
+    background: var(--color-primary-50);
+    color: var(--color-primary-600);
+}
+
+/* 5. Interactive Micro-Interactions & Elevation */
+.card-lift {
+    transition: transform var(--transition-smooth), box-shadow var(--transition-smooth), border-color var(--transition-smooth) !important;
+}
+
+.card-lift:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--shadow-hover) !important;
+    border-color: rgba(35, 31, 32, 0.16) !important;
+}
+
+.btn-press {
+    transition: transform var(--transition-fast), filter var(--transition-fast), background var(--transition-fast) !important;
+}
+
+.btn-press:active {
+    transform: scale(0.97) !important;
+}
+
+/* 6. Form Input Focus Polish */
+.input-focus-glow {
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast), background var(--transition-fast) !important;
+}
+
+.input-focus-glow:focus {
+    border-color: var(--color-primary-600) !important;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.14) !important;
+    outline: none !important;
+    background-color: #ffffff !important;
+}
+
+/* 7. Live Indicator Pulse */
+.pulse-badge {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+}
+
+.pulse-badge-dot {
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: var(--radius-full);
+    background-color: var(--color-pill-text);
+    position: relative;
+}
+
+.pulse-badge-dot::after {
+    position: absolute;
+    top: -2px;
+    left: -2px;
+    right: -2px;
+    bottom: -2px;
+    border-radius: var(--radius-full);
+    border: 1.5px solid var(--color-pill-text);
+    content: '';
+    animation: pulseRing 1.8s cubic-bezier(0.24, 0, 0.38, 1) infinite;
+}
+
+@keyframes pulseRing {
+    0% { transform: scale(0.95); opacity: 0.8; }
+    70% { transform: scale(2); opacity: 0; }
+    100% { transform: scale(2); opacity: 0; }
+}
+
+/* 8. Staggered Row Transitions */
+.stagger-row {
+    opacity: 0;
+    animation: staggerFadeIn 300ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes staggerFadeIn {
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.stagger-row:nth-child(1) { animation-delay: 30ms; }
+.stagger-row:nth-child(2) { animation-delay: 60ms; }
+.stagger-row:nth-child(3) { animation-delay: 90ms; }
+.stagger-row:nth-child(4) { animation-delay: 120ms; }
+.stagger-row:nth-child(5) { animation-delay: 150ms; }
+.stagger-row:nth-child(6) { animation-delay: 180ms; }
+.stagger-row:nth-child(7) { animation-delay: 210ms; }
+.stagger-row:nth-child(8) { animation-delay: 240ms; }
