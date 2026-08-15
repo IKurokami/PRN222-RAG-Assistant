@@ -1,216 +1,205 @@
-# AI provider backup - Ollama, Gemini, OpenAI
+# AI provider routing, free fallback, and backup strategy
 
-> Added by Member 1 on 2026-08-15. This document is the canonical runtime/provider configuration guide.
+> Canonical provider/runtime guide. Owned by Member 1. Research snapshot: **2026-08-15**.
 
 ## Goal
 
-The application can run with one explicitly selected AI provider:
+The project supports local, direct-cloud, and routed-cloud AI without provider-specific branches in Flow 1/Flow 2.
+
+Supported providers:
 
 ```text
+Ollama | Gemini | OpenAI | OpenRouter
+```
+
+`RAG_PROVIDER` is backward compatible. Two optional overrides allow chat and embeddings to be configured independently:
+
+```env
 RAG_PROVIDER=Ollama
-RAG_PROVIDER=Gemini
-RAG_PROVIDER=OpenAI
+RAG_CHAT_PROVIDER=
+RAG_EMBEDDING_PROVIDER=
 ```
 
-The provider supplies both existing provider-neutral contracts:
+Blank overrides inherit `RAG_PROVIDER`.
 
-```text
-ITextEmbeddingService
-IChatCompletionService
-```
+## Why the split was added
 
-There is deliberately **no silent automatic failover** between local and cloud providers. Sending academic documents or prompts to an external API must be an explicit operator decision because it changes data egress, availability, and potentially cost.
+Chat free-model availability can be volatile. It is safe for a chat request to fall back to another LLM because generated text is not part of the persistent vector space.
 
-## Cost decision
+Embedding models are not interchangeable. Changing an embedding model changes the semantic coordinate system stored in pgvector. Therefore:
 
-Research snapshot: **2026-08-15**.
+- **chat may rotate/fallback between models**;
+- **embedding uses one fixed configured model**;
+- changing embedding provider/model/dimension requires a complete corpus re-index.
 
-| Provider | Chat model | Embedding model | Cost position |
+## Cost/free matrix
+
+| Provider | Chat | Embedding | Cost position |
 |---|---|---|---|
-| Ollama | `qwen3:4b` | `qwen3-embedding:0.6b` | **Local / $0 provider fee**; uses your own hardware |
-| Google Gemini | `gemini-3.6-flash` | `gemini-embedding-2` | **Recommended online FREE TIER backup**; rate limits apply |
-| OpenAI | `gpt-5.6-luna` | `text-embedding-3-small` | **Optional PAID API**, not the free fallback |
+| Ollama | `qwen3:4b` | `qwen3-embedding:0.6b` | local / $0 provider fee; own hardware |
+| Gemini | `gemini-3.6-flash` | `gemini-embedding-2` | direct online Free Tier available; limits/data terms apply |
+| OpenRouter | ordered free chain | `nvidia/llama-nemotron-embed-vl-1b-v2:free` | free-first routing; low limits/availability can vary |
+| OpenAI | `gpt-5.6-luna` | `text-embedding-3-small` | optional paid API |
 
-Google's official pricing currently lists Standard Free Tier input/output for `gemini-3.6-flash` and free-of-charge Standard Free Tier inputs for `gemini-embedding-2`. Google's Free Tier is rate-limited and its pricing page states Free Tier content may be used to improve Google products.
+OpenRouter documents `:free` variants and the `openrouter/free` router as zero-cost inference options. Its Free plan/free-model API limits are low and are not a production SLA. As of this snapshot, the documented baseline is 50 free-model API requests/day unless the account has purchased at least 10 credits, in which case the free-model limit is 1000 requests/day.
 
-OpenAI API usage is not treated as free for this project. The current GPT-5.6 Luna API rate table has no general Free tier; `text-embedding-3-small` is also usage-priced. OpenAI remains available only as an optional paid provider for future deployment flexibility.
+The default OpenRouter free embedding model is explicitly a trial/free endpoint whose provider page says prompts/output are logged to improve the provider's model/products and warns against personal/confidential/sensitive data. Treat this as a development/demo option, not a privacy-equivalent replacement for local Ollama.
 
-Official references used for this decision:
+## OpenRouter chat fallback
 
-- Google Gemini API pricing: <https://ai.google.dev/gemini-api/docs/pricing>
-- Google Gemini API rate limits: <https://ai.google.dev/gemini-api/docs/rate-limits>
-- Google Gemini Embeddings API: <https://ai.google.dev/api/embeddings>
-- OpenAI GPT-5.6 Luna: <https://developers.openai.com/api/docs/models/gpt-5.6-luna>
-- OpenAI `text-embedding-3-small`: <https://developers.openai.com/api/docs/models/text-embedding-3-small>
-- OpenAI API pricing: <https://openai.com/api/pricing/>
-- Ollama pricing: <https://ollama.com/pricing>
-- Ollama `qwen3-embedding`: <https://ollama.com/library/qwen3-embedding>
+Default:
 
-Cloud pricing/models can change. Re-check these official pages before production deployment.
+```env
+OPENROUTER_CHAT_MODELS=google/gemma-4-26b-a4b-it:free,nvidia/nemotron-3-ultra-550b-a55b:free,openrouter/free
+```
 
-## Embedding compatibility invariant
+The adapter sends this ordered array as OpenRouter's `models` parameter. OpenRouter automatically tries the next model when the current one returns an error such as rate limiting or downtime. Provider routing also keeps `allow_fallbacks=true`.
 
-The default corpus dimension is:
+`openrouter/free` remains last because it randomly selects from the currently available free pool and free availability changes frequently.
 
-```text
+Operators may replace the model list in `.env` without code changes.
+
+## OpenRouter embeddings
+
+Default:
+
+```env
+OPENROUTER_EMBEDDING_MODEL=nvidia/llama-nemotron-embed-vl-1b-v2:free
 RAG_EMBEDDING_DIMENSIONS=1024
 ```
 
-This matches the default Ollama `qwen3-embedding:0.6b` output. OpenAI `text-embedding-3-small` accepts a requested output dimension, and Gemini Embedding 2 supports configurable output dimensions, so both online adapters request the same configured dimension.
+The adapter sends **one `model`**, never a `models` array. This is intentional.
 
-**Dimension equality alone does not make embeddings interchangeable.** Different embedding models use different vector spaces.
+`nvidia/nemotron-3-embed-1b:free` was researched but not selected as this project's default because NVIDIA's hosted API documentation specifies native 2048-dimensional output and rejects `dimensions=1024`. The current database/corpus contract is 1024 dimensions.
 
-Whenever any of the following changes:
+If the OpenRouter embedding model changes, re-index all searchable documents before retrieval.
 
-```text
-RAG_PROVIDER
-*_EMBEDDING_MODEL
-RAG_EMBEDDING_DIMENSIONS
+## Recommended configurations
+
+### 1. Fully local
+
+```env
+RAG_PROVIDER=Ollama
 ```
 
-treat all existing `DocumentChunk.Embedding` values as stale and re-index the entire document corpus before using similarity retrieval.
+Run:
 
-Do not partially re-index a corpus with one embedding model and leave older chunks from another model.
+```bash
+docker compose --profile local-ai up -d --build
+```
+
+### 2. Recommended free-first hybrid
+
+Use OpenRouter for resilient free chat and Gemini for a stable direct embedding model:
+
+```env
+RAG_PROVIDER=Ollama
+RAG_CHAT_PROVIDER=OpenRouter
+RAG_EMBEDDING_PROVIDER=Gemini
+OPENROUTER_API_KEY=<server-side key>
+GEMINI_API_KEY=<server-side key>
+RAG_EMBEDDING_DIMENSIONS=1024
+```
+
+Run:
+
+```bash
+docker compose up -d --build
+```
+
+### 3. OpenRouter for chat and embedding
+
+```env
+RAG_PROVIDER=OpenRouter
+OPENROUTER_API_KEY=<server-side key>
+RAG_EMBEDDING_DIMENSIONS=1024
+```
+
+If documents were previously indexed with Ollama/Gemini/OpenAI, perform a complete re-index before using RAG retrieval.
+
+### 4. Direct Gemini
+
+```env
+RAG_PROVIDER=Gemini
+GEMINI_API_KEY=<server-side key>
+```
+
+### 5. Optional OpenAI paid
+
+```env
+RAG_PROVIDER=OpenAI
+OPENAI_API_KEY=<server-side key>
+```
 
 ## Environment variables
-
-Copy `.env.example` to `.env` for Docker Compose. Real API keys belong only in the untracked `.env`/deployment secret environment.
 
 Shared:
 
 ```text
-RAG_PROVIDER=Ollama
-RAG_EMBEDDING_DIMENSIONS=1024
+RAG_PROVIDER
+RAG_CHAT_PROVIDER
+RAG_EMBEDDING_PROVIDER
+RAG_EMBEDDING_DIMENSIONS
 ```
 
-### Gemini - online Free Tier backup
+OpenRouter:
 
 ```text
-RAG_PROVIDER=Gemini
-GEMINI_API_KEY=<server-side key>
-GEMINI_BASE_URL=https://generativelanguage.googleapis.com/
-GEMINI_CHAT_MODEL=gemini-3.6-flash
-GEMINI_EMBEDDING_MODEL=gemini-embedding-2
+OPENROUTER_API_KEY
+OPENROUTER_BASE_URL
+OPENROUTER_CHAT_MODELS
+OPENROUTER_EMBEDDING_MODEL
+OPENROUTER_HTTP_REFERER
+OPENROUTER_APP_TITLE
 ```
 
-### Ollama - local/default
-
-```text
-RAG_PROVIDER=Ollama
-OLLAMA_BASE_URL=http://localhost:11434
-OLLAMA_CHAT_MODEL=qwen3:4b
-OLLAMA_EMBEDDING_MODEL=qwen3-embedding:0.6b
-```
-
-### OpenAI - optional paid
-
-```text
-RAG_PROVIDER=OpenAI
-OPENAI_API_KEY=<server-side key>
-OPENAI_BASE_URL=https://api.openai.com/v1/
-OPENAI_CHAT_MODEL=gpt-5.6-luna
-OPENAI_EMBEDDING_MODEL=text-embedding-3-small
-```
-
-Docker Compose maps these flat `.env` values to ASP.NET Core `Rag__...` configuration.
-
-For direct `dotnet run`, the infrastructure also recognizes standard flat environment variables for the provider choice/API keys/dimension (`RAG_PROVIDER`, `GEMINI_API_KEY`, `OPENAI_API_KEY`, `RAG_EMBEDDING_DIMENSIONS`) in addition to normal ASP.NET Core `Rag__...` environment names. The application does not automatically parse a `.env` file outside Docker Compose.
-
-## Docker usage
-
-### Local Ollama
-
-Ollama is under the `local-ai` Compose profile so cloud-only runs do not consume local model resources.
-
-```bash
-# .env
-RAG_PROVIDER=Ollama
-
-docker compose --profile local-ai up -d --build
-```
-
-Pull the configured Ollama models if they are not already present.
-
-### Gemini Free Tier
-
-```bash
-# .env
-RAG_PROVIDER=Gemini
-GEMINI_API_KEY=<server-side key>
-
-docker compose up -d --build
-```
-
-The Ollama container is not required.
-
-### OpenAI paid
-
-```bash
-# .env
-RAG_PROVIDER=OpenAI
-OPENAI_API_KEY=<server-side key>
-
-docker compose up -d --build
-```
+`HTTP-Referer` and `X-Title` attribution are optional. API keys remain server-side only.
 
 ## Startup validation
 
-`ServiceCollectionExtensions` validates only the selected provider:
+- unsupported chat/embedding provider values fail fast;
+- only providers actually selected by chat or embedding are configured/validated;
+- selected cloud providers require their API key;
+- unselected provider keys are not required;
+- selected base URLs must be absolute;
+- legacy `RAG_PROVIDER` continues to work for both contracts.
 
-- unsupported providers fail fast;
-- the selected provider must have an absolute base URL;
-- Gemini/OpenAI require their API key;
-- API keys for unselected providers are not required.
+## Embedding compatibility invariant
 
-Concrete adapters are registered behind the same Application interfaces, so Flow 1 indexing and future Flow 2 RAG code do not need provider-specific branches.
-
-## Provider HTTP behavior
-
-Gemini:
+Default:
 
 ```text
-POST /v1beta/models/{model}:batchEmbedContents
-POST /v1beta/models/{model}:generateContent
-x-goog-api-key: <GEMINI_API_KEY>
+RAG_EMBEDDING_DIMENSIONS=1024
 ```
 
-Ollama:
+Any change to embedding provider/model/dimension invalidates the previously stored semantic vector space:
 
 ```text
-POST /api/embed
-POST /api/chat
+change embedding provider/model/dimension
+ -> treat stored DocumentChunk.Embedding values as stale
+ -> re-index the complete corpus
+ -> then enable similarity retrieval
 ```
 
-OpenAI:
+Do not partially mix vectors from two embedding models.
 
-```text
-POST /v1/embeddings
-POST /v1/chat/completions
-Authorization: Bearer <OPENAI_API_KEY>
-```
+## Official references
 
-No API key value is logged or committed.
+- OpenRouter model fallback: <https://openrouter.ai/docs/guides/routing/model-fallbacks>
+- OpenRouter Free Models Router: <https://openrouter.ai/docs/guides/routing/routers/free-router>
+- OpenRouter FAQ/rate limits: <https://openrouter.ai/docs/faq>
+- OpenRouter embeddings API: <https://openrouter.ai/docs/api/reference/embeddings>
+- OpenRouter free embedding model: <https://openrouter.ai/nvidia/llama-nemotron-embed-vl-1b-v2:free>
+- NVIDIA embedding dimensions reference: <https://docs.nvidia.com/nim/nemo-retriever/text-embedding/latest/reference.html>
+- Google Gemini pricing: <https://ai.google.dev/gemini-api/docs/pricing>
+- Google Gemini rate limits: <https://ai.google.dev/gemini-api/docs/rate-limits>
+- OpenAI API pricing: <https://openai.com/api/pricing/>
+- Ollama pricing: <https://ollama.com/pricing>
+
+Cloud models, free availability, rate limits, and data policies can change. Re-check official pages before production use.
 
 ## Ownership
 
-This backup/provider foundation is assigned to **Member 1**.
+This provider routing/fallback foundation is **Member 1** work. Member 1 owns provider configuration/adapters/tests/docs and re-index coordination.
 
-Member 1 owns:
-
-- provider selection/configuration;
-- online API-key/env wiring;
-- concrete provider adapters and provider-registration tests;
-- embedding-dimension invariant and full re-index coordination;
-- provider documentation.
-
-Existing ownership remains:
-
-- Member 3 owns indexing/chunking/worker behavior consuming `ITextEmbeddingService`;
-- Member 4 owns future subject-scoped Flow 2 retrieval/grounding/persistence behavior consuming the provider-neutral contracts;
-- Member 5 owns future Flow 2 MVC/evaluation presentation.
-
-## Cloud-data boundary
-
-`Ollama` keeps inference local to the configured Ollama runtime.
-
-`Gemini` and `OpenAI` are external APIs. When a cloud provider is selected, text submitted for embeddings and later chat prompts/context leaves the application runtime and is processed by that provider. Operators must choose cloud mode intentionally and follow the provider/account data-handling requirements that apply to their deployment.
+Member 3 still owns indexing/chunking/worker behavior. Member 4 owns future Flow 2 retrieval/grounding/persistence. Member 5 owns future Flow 2 MVC/evaluation.

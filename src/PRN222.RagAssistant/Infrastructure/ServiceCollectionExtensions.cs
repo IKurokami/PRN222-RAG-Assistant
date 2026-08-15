@@ -14,6 +14,8 @@ namespace PRN222.RagAssistant.Infrastructure;
 
 public static class ServiceCollectionExtensions
 {
+    private static readonly string[] SupportedAiProviders = ["Ollama", "OpenAI", "Gemini", "OpenRouter"];
+
     public static IServiceCollection AddInfrastructure(
         this IServiceCollection services,
         IConfiguration configuration)
@@ -67,7 +69,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ISubjectAccessRepository, SubjectAccessRepository>();
         services.AddScoped<ISubjectAccessService, SubjectAccessService>();
 
-        AddAiProvider(services, configuration);
+        AddAiProviders(services, configuration);
 
         // Member 3: Document Indexing & Ingestion Services.
         services.AddSingleton<IDocumentIndexingQueue, InMemoryDocumentIndexingQueue>();
@@ -80,38 +82,102 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
-    private static void AddAiProvider(
+    private static void AddAiProviders(
         IServiceCollection services,
         IConfiguration configuration)
     {
-        var provider = FirstNonEmpty(
+        var legacyProvider = FirstNonEmpty(
             configuration["Rag:Provider"],
             configuration["RAG_PROVIDER"],
             "Ollama");
+        var chatProvider = FirstNonEmpty(
+            configuration["Rag:ChatProvider"],
+            configuration["RAG_CHAT_PROVIDER"],
+            legacyProvider);
+        var embeddingProvider = FirstNonEmpty(
+            configuration["Rag:EmbeddingProvider"],
+            configuration["RAG_EMBEDDING_PROVIDER"],
+            legacyProvider);
 
+        ValidateProvider(chatProvider, "Rag:ChatProvider / RAG_CHAT_PROVIDER");
+        ValidateProvider(embeddingProvider, "Rag:EmbeddingProvider / RAG_EMBEDDING_PROVIDER");
+
+        foreach (var provider in new[] { chatProvider, embeddingProvider }
+                     .Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            AddProviderHttpClient(services, configuration, provider);
+        }
+
+        AddEmbeddingService(services, embeddingProvider);
+        AddChatService(services, chatProvider);
+    }
+
+    private static void AddProviderHttpClient(
+        IServiceCollection services,
+        IConfiguration configuration,
+        string provider)
+    {
         switch (provider.ToUpperInvariant())
         {
             case "OLLAMA":
                 AddOllama(services, configuration);
-                services.AddScoped<ITextEmbeddingService, OllamaTextEmbeddingService>();
-                services.AddScoped<IChatCompletionService, OllamaChatCompletionService>();
                 break;
-
             case "OPENAI":
                 AddOpenAi(services, configuration);
-                services.AddScoped<ITextEmbeddingService, OpenAiTextEmbeddingService>();
-                services.AddScoped<IChatCompletionService, OpenAiChatCompletionService>();
                 break;
-
             case "GEMINI":
                 AddGemini(services, configuration);
+                break;
+            case "OPENROUTER":
+                AddOpenRouter(services, configuration);
+                break;
+        }
+    }
+
+    private static void AddEmbeddingService(IServiceCollection services, string provider)
+    {
+        switch (provider.ToUpperInvariant())
+        {
+            case "OLLAMA":
+                services.AddScoped<ITextEmbeddingService, OllamaTextEmbeddingService>();
+                break;
+            case "OPENAI":
+                services.AddScoped<ITextEmbeddingService, OpenAiTextEmbeddingService>();
+                break;
+            case "GEMINI":
                 services.AddScoped<ITextEmbeddingService, GeminiTextEmbeddingService>();
+                break;
+            case "OPENROUTER":
+                services.AddScoped<ITextEmbeddingService, OpenRouterTextEmbeddingService>();
+                break;
+        }
+    }
+
+    private static void AddChatService(IServiceCollection services, string provider)
+    {
+        switch (provider.ToUpperInvariant())
+        {
+            case "OLLAMA":
+                services.AddScoped<IChatCompletionService, OllamaChatCompletionService>();
+                break;
+            case "OPENAI":
+                services.AddScoped<IChatCompletionService, OpenAiChatCompletionService>();
+                break;
+            case "GEMINI":
                 services.AddScoped<IChatCompletionService, GeminiChatCompletionService>();
                 break;
+            case "OPENROUTER":
+                services.AddScoped<IChatCompletionService, OpenRouterChatCompletionService>();
+                break;
+        }
+    }
 
-            default:
-                throw new InvalidOperationException(
-                    $"Unsupported Rag:Provider '{provider}'. Supported values: Ollama, OpenAI, Gemini.");
+    private static void ValidateProvider(string provider, string settingName)
+    {
+        if (!SupportedAiProviders.Contains(provider, StringComparer.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"Unsupported {settingName} value '{provider}'. Supported values: {string.Join(", ", SupportedAiProviders)}.");
         }
     }
 
@@ -169,6 +235,44 @@ public static class ServiceCollectionExtensions
             client.BaseAddress = baseUri;
             client.Timeout = TimeSpan.FromMinutes(2);
             client.DefaultRequestHeaders.Add("x-goog-api-key", apiKey);
+        });
+    }
+
+    private static void AddOpenRouter(
+        IServiceCollection services,
+        IConfiguration configuration)
+    {
+        var baseUri = GetRequiredAbsoluteUri(
+            FirstNonEmpty(configuration["Rag:OpenRouter:BaseUrl"], configuration["OPENROUTER_BASE_URL"]),
+            "Rag:OpenRouter:BaseUrl / OPENROUTER_BASE_URL",
+            "https://openrouter.ai/api/v1/");
+        var apiKey = GetRequiredValue(
+            FirstNonEmpty(configuration["Rag:OpenRouter:ApiKey"], configuration["OPENROUTER_API_KEY"]),
+            "Rag:OpenRouter:ApiKey / OPENROUTER_API_KEY");
+        var httpReferer = FirstNonEmpty(
+            configuration["Rag:OpenRouter:HttpReferer"],
+            configuration["OPENROUTER_HTTP_REFERER"]);
+        var appTitle = FirstNonEmpty(
+            configuration["Rag:OpenRouter:AppTitle"],
+            configuration["OPENROUTER_APP_TITLE"],
+            "PRN222 RAG Assistant");
+
+        services.AddHttpClient("OpenRouter", client =>
+        {
+            client.BaseAddress = baseUri;
+            client.Timeout = TimeSpan.FromMinutes(3);
+            client.DefaultRequestHeaders.Authorization =
+                new AuthenticationHeaderValue("Bearer", apiKey);
+
+            if (!string.IsNullOrWhiteSpace(httpReferer))
+            {
+                client.DefaultRequestHeaders.TryAddWithoutValidation("HTTP-Referer", httpReferer);
+            }
+
+            if (!string.IsNullOrWhiteSpace(appTitle))
+            {
+                client.DefaultRequestHeaders.TryAddWithoutValidation("X-Title", appTitle);
+            }
         });
     }
 

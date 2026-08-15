@@ -1,6 +1,6 @@
 # Infrastructure baseline
 
-> Updated for AI-provider backup work based on `master` after PR #20.
+> Updated for OpenRouter free-model routing/fallback on top of the merged provider-backup foundation.
 
 ## Runtime stack
 
@@ -10,7 +10,8 @@
 - pgvector for embeddings.
 - provider-neutral AI interfaces with:
   - Ollama local/default runtime;
-  - Google Gemini Developer API online Free Tier backup;
+  - Google Gemini Developer API direct online Free Tier path;
+  - OpenRouter free-first routed provider;
   - optional paid OpenAI API provider.
 - runtime source storage under `storage/uploads/`.
 - Bootstrap + Bootstrap Icons for presentation dependencies.
@@ -20,29 +21,40 @@ PRN222 is the seeded demo subject; the runtime application is multi-subject.
 
 ## AI provider selection
 
-Exactly one provider is selected at application startup:
+`Rag:Provider` remains the backward-compatible default for both contracts:
 
 ```text
-Rag:Provider = Ollama | Gemini | OpenAI
+Rag:Provider = Ollama | Gemini | OpenAI | OpenRouter
+```
+
+Purpose-specific overrides may be configured independently:
+
+```text
+Rag:ChatProvider      = Ollama | Gemini | OpenAI | OpenRouter
+Rag:EmbeddingProvider = Ollama | Gemini | OpenAI | OpenRouter
 ```
 
 Docker `.env` mapping:
 
 ```text
 RAG_PROVIDER=Ollama
+RAG_CHAT_PROVIDER=
+RAG_EMBEDDING_PROVIDER=
 RAG_EMBEDDING_DIMENSIONS=1024
 ```
 
-The provider supplies both:
+Blank overrides inherit `RAG_PROVIDER`.
+
+Infrastructure still registers exactly one implementation of each:
 
 ```text
 ITextEmbeddingService
 IChatCompletionService
 ```
 
-Concrete adapters live in Infrastructure. Flow 1 indexing and future Flow 2 RAG behavior must not branch on provider names.
+The two implementations may come from different providers. Flow 1 indexing and future Flow 2 RAG behavior must not branch on provider names.
 
-There is intentionally no automatic local-to-cloud failover. An operator must explicitly choose cloud mode because external providers change data egress and may introduce billing.
+There is intentionally no hidden application-level local-to-cloud failover. An operator explicitly chooses cloud mode. OpenRouter model/provider fallback is allowed only after OpenRouter itself has been selected for the relevant contract.
 
 ## Provider matrix
 
@@ -51,10 +63,25 @@ Research snapshot: 2026-08-15.
 | Runtime | Chat | Embedding | Cost position |
 |---|---|---|---|
 | Ollama | `qwen3:4b` | `qwen3-embedding:0.6b` | local provider fee $0; own compute |
-| Gemini | `gemini-3.6-flash` | `gemini-embedding-2` | **online Standard Free Tier available**; rate limited |
-| OpenAI | `gpt-5.6-luna` | `text-embedding-3-small` | **paid API / optional** |
+| Gemini | `gemini-3.6-flash` | `gemini-embedding-2` | direct online Standard Free Tier available; rate limited |
+| OpenRouter | ordered free fallback chain | `nvidia/llama-nemotron-embed-vl-1b-v2:free` | free-first routing; low limits/availability can vary |
+| OpenAI | `gpt-5.6-luna` | `text-embedding-3-small` | paid API / optional |
 
 Canonical official-source notes and setup: `docs/ai-provider-backup.md`.
+
+## OpenRouter chat routing
+
+Default ordered chat list:
+
+```text
+google/gemma-4-26b-a4b-it:free
+ -> nvidia/nemotron-3-ultra-550b-a55b:free
+ -> openrouter/free
+```
+
+The Infrastructure adapter sends the list through OpenRouter's `models` field and explicitly allows provider fallback. An error/rate-limit/downtime on an earlier model can move the request to the next configured model.
+
+`openrouter/free` is last because it is a catch-all router whose free model selection/availability can change.
 
 ## Embedding dimension/vector-space invariant
 
@@ -62,9 +89,9 @@ Canonical official-source notes and setup: `docs/ai-provider-backup.md`.
 Rag:EmbeddingDimensions = 1024
 ```
 
-All adapters validate the configured output dimension. OpenAI/Gemini requests include the configured reduced output dimension.
+All embedding adapters validate the configured output dimension. OpenAI/Gemini/OpenRouter requests include the configured output dimension.
 
-Matching dimensions do **not** make two embedding models compatible. Changing provider/model/dimensions invalidates the semantic vector space already stored in `DocumentChunk.Embedding`.
+Matching dimensions do **not** make two embedding models compatible. Changing embedding provider/model/dimensions invalidates the semantic vector space already stored in `DocumentChunk.Embedding`.
 
 Operational rule:
 
@@ -75,7 +102,7 @@ change embedding provider/model/dimension
         -> only then enable similarity retrieval
 ```
 
-Do not mix old/new embedding models in one searchable corpus.
+Do not rotate embedding models or mix old/new embedding models in one searchable corpus. Chat model/provider changes alone do not require re-indexing.
 
 ## Docker modes
 
@@ -87,13 +114,13 @@ Local:
 docker compose --profile local-ai up -d --build
 ```
 
-Online Gemini/OpenAI:
+Online/hybrid Gemini/OpenAI/OpenRouter:
 
 ```bash
 docker compose up -d --build
 ```
 
-This prevents a cloud-only deployment from starting/downloading Ollama unnecessarily.
+This prevents a cloud-only deployment from starting/downloading Ollama unnecessarily. If one purpose-specific provider is Ollama, use the `local-ai` profile.
 
 ## API key handling
 
@@ -102,6 +129,7 @@ Online keys are server-side environment configuration only:
 ```text
 GEMINI_API_KEY
 OPENAI_API_KEY
+OPENROUTER_API_KEY
 ```
 
 Docker Compose maps them to:
@@ -109,9 +137,10 @@ Docker Compose maps them to:
 ```text
 Rag__Gemini__ApiKey
 Rag__OpenAI__ApiKey
+Rag__OpenRouter__ApiKey
 ```
 
-The selected cloud provider fails fast when its key is missing. Unselected provider keys are not required.
+Only providers selected by chat or embedding are validated. Unselected provider keys are not required.
 
 Never commit keys to `.env.example`, appsettings, documentation examples, tests, or source code. Never log them or render them to HTML/JavaScript.
 
@@ -119,9 +148,11 @@ Never commit keys to `.env.example`, appsettings, documentation examples, tests,
 
 Ollama local mode keeps inference in the configured local Ollama runtime.
 
-Gemini/OpenAI modes submit embedding text and future chat prompt/context to the configured external provider. Operators must treat provider selection as a privacy/deployment choice, not merely a performance switch.
+Gemini/OpenAI/OpenRouter modes submit embedding text and/or future chat prompt/context to the configured external provider. Operators must treat provider selection as a privacy/deployment choice, not merely a performance switch.
 
-Google's Gemini Developer API Free Tier is useful for development/demo cost control, but it is rate-limited and Google's pricing page states Free Tier content may be used to improve products. Re-check current provider terms before real deployment.
+Google's Gemini Developer API Free Tier is useful for development/demo cost control, but it is rate-limited and Google's pricing page states Free Tier content may be used to improve products.
+
+OpenRouter free models also have low limits and provider-specific data policies. The default free OpenRouter embedding endpoint currently warns that prompts/output are logged for provider improvement and should not receive personal/confidential/sensitive data. Re-check current terms before real deployment.
 
 ## Authentication/authorization
 
@@ -156,7 +187,7 @@ PostgreSQL persists:
 - ChatSessions/ChatMessages;
 - MessageCitations.
 
-Provider backup requires no schema migration. `DocumentChunk.Embedding` remains provider-neutral vector storage.
+Provider routing requires no schema migration. `DocumentChunk.Embedding` remains provider-neutral vector storage.
 
 ## MVC/Razor allocation
 
@@ -182,7 +213,7 @@ subject-aware HTTP request
  -> DocumentIndexingWorker
  -> IDocumentIndexingService
  -> parse/chunk
- -> ITextEmbeddingService [selected provider]
+ -> ITextEmbeddingService [selected embedding provider]
  -> persist chunks/status
 ```
 
@@ -204,7 +235,7 @@ subject/session boundary
  -> ITextEmbeddingService
  -> pgvector retrieval restricted by Document.SubjectId
  -> grounded prompt
- -> IChatCompletionService
+ -> IChatCompletionService [selected chat provider]
  -> same-subject message/citation persistence
 ```
 
@@ -212,7 +243,7 @@ Member 4 must not call a concrete provider API directly.
 
 ## Ownership
 
-**Member 1** owns provider selection/configuration, online API-key wiring, concrete provider adapters, provider tests, dimension/re-index coordination, and provider docs.
+**Member 1** owns provider selection/configuration, OpenRouter routing/fallback, online API-key wiring, concrete provider adapters, provider tests, dimension/re-index coordination, and provider docs.
 
 Existing ownership is preserved:
 
@@ -222,7 +253,8 @@ Existing ownership is preserved:
 
 ## Intentionally not added
 
-- silent cloud failover;
+- hidden application-level local-to-cloud failover;
+- embedding-model rotation;
 - Redis/RabbitMQ/external broker;
 - another vector DB;
 - RAGFlow/LangChain service;
