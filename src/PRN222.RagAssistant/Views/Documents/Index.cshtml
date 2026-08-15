@@ -2,6 +2,9 @@
 @model DocumentIndexViewModel
 @{
     ViewData["Title"] = $"Kho tài liệu - {Model.SubjectCode}";
+    var hasActiveFilters = Model.SelectedChapterId.HasValue
+        || Model.SelectedStatus.HasValue
+        || !string.IsNullOrWhiteSpace(Model.SearchTerm);
 }
 
 <div class="container py-4">
@@ -51,44 +54,93 @@
         </div>
     }
 
-    <!-- Filter Card -->
-    <div class="academic-card mb-4">
-        <form method="get" asp-controller="Documents" asp-action="Index" class="row g-3 align-items-center">
+    <!-- Search and filters -->
+    <div class="document-filter-panel mb-4">
+        <form method="get" asp-controller="Documents" asp-action="Index">
             <input asp-for="SubjectId" type="hidden" />
-            <div class="col-md-6 col-lg-5">
-                <label asp-for="SelectedChapterId" class="form-label mb-1 fw-bold text-slate-700 small">
-                    <i class="bi bi-funnel text-primary me-1"></i>Lọc theo chương học:
-                </label>
-                <select asp-for="SelectedChapterId" asp-items="Model.ChapterOptions" class="form-select" onchange="this.form.submit()">
-                    <option value="">-- Tất cả các chương học (Hiển thị toàn bộ) --</option>
-                </select>
-            </div>
-            @if (Model.SelectedChapterId.HasValue)
-            {
-                <div class="col-md-auto align-self-end">
-                    <a asp-controller="Documents" asp-action="Index" asp-route-subjectId="@Model.SubjectId" class="btn btn-academic-outline">
-                        <i class="bi bi-x-circle"></i> Xóa bộ lọc
-                    </a>
+            <div class="row g-3 align-items-end">
+                <div class="col-lg-5">
+                    <label asp-for="SearchTerm" class="document-filter-label">
+                        <i class="bi bi-search"></i> Tìm kiếm tài liệu
+                    </label>
+                    <div class="document-search-box">
+                        <i class="bi bi-search" aria-hidden="true"></i>
+                        <input asp-for="SearchTerm"
+                               class="form-control"
+                               placeholder="Nhập tiêu đề hoặc tên file..."
+                               autocomplete="off" />
+                    </div>
                 </div>
-            }
+                <div class="col-md-6 col-lg-3">
+                    <label asp-for="SelectedChapterId" class="document-filter-label">
+                        <i class="bi bi-bookmarks"></i> Chương học
+                    </label>
+                    <select asp-for="SelectedChapterId" asp-items="Model.ChapterOptions" class="form-select">
+                        <option value="">Tất cả chương học</option>
+                    </select>
+                </div>
+                <div class="col-md-6 col-lg-2">
+                    <label asp-for="SelectedStatus" class="document-filter-label">
+                        <i class="bi bi-activity"></i> Trạng thái
+                    </label>
+                    <select asp-for="SelectedStatus" class="form-select">
+                        <option value="">Tất cả trạng thái</option>
+                        <option value="@DocumentIndexStatus.Uploaded">Chờ Index</option>
+                        <option value="@DocumentIndexStatus.Processing">Đang xử lý</option>
+                        <option value="@DocumentIndexStatus.Indexed">Đã Index</option>
+                        <option value="@DocumentIndexStatus.Failed">Lỗi Index</option>
+                    </select>
+                </div>
+                <div class="col-lg-2">
+                    <button type="submit" class="btn-document-filter w-100">
+                        <i class="bi bi-funnel-fill"></i> Áp dụng
+                    </button>
+                </div>
+            </div>
         </form>
+
+        <div class="document-filter-summary">
+            <span>
+                Hiển thị <strong>@Model.Documents.Count</strong> trong
+                <strong>@Model.TotalDocumentCount</strong> tài liệu
+            </span>
+            @if (hasActiveFilters)
+            {
+                <a asp-controller="Documents" asp-action="Index" asp-route-subjectId="@Model.SubjectId">
+                    <i class="bi bi-x-circle"></i> Xóa tất cả bộ lọc
+                </a>
+            }
+        </div>
     </div>
 
     @if (Model.Documents.Count == 0)
     {
         <div class="academic-card text-center py-5">
             <div class="text-slate-400 mb-3">
-                <i class="bi bi-file-earmark-x" style="font-size: 3rem;"></i>
+                <i class="bi @(hasActiveFilters ? "bi-search" : "bi-file-earmark-x")" style="font-size: 3rem;"></i>
             </div>
-            <h5 class="fw-bold text-slate-700">Chưa có tài liệu nào trong môn học này</h5>
-            <p class="text-slate-500 small max-w-md mx-auto mb-3">
-                Các tài liệu sau khi tải lên sẽ được hệ thống trích xuất văn bản và tạo vector nhúng tự động.
-            </p>
-            @if (Model.CanManageDocuments)
+            @if (hasActiveFilters)
             {
-                <a asp-controller="Documents" asp-action="Upload" asp-route-subjectId="@Model.SubjectId" class="btn-academic-primary text-decoration-none">
-                    <i class="bi bi-cloud-arrow-up"></i> Tải lên tài liệu ngay
+                <h5 class="fw-bold text-slate-700">Không tìm thấy tài liệu phù hợp</h5>
+                <p class="text-slate-500 small max-w-md mx-auto mb-3">
+                    Thử thay đổi từ khóa, chương học hoặc trạng thái Index.
+                </p>
+                <a asp-controller="Documents" asp-action="Index" asp-route-subjectId="@Model.SubjectId" class="btn btn-academic-outline">
+                    <i class="bi bi-arrow-counterclockwise"></i> Đặt lại bộ lọc
                 </a>
+            }
+            else
+            {
+                <h5 class="fw-bold text-slate-700">Chưa có tài liệu nào trong môn học này</h5>
+                <p class="text-slate-500 small max-w-md mx-auto mb-3">
+                    Các tài liệu sau khi tải lên sẽ được hệ thống trích xuất văn bản và tạo vector nhúng tự động.
+                </p>
+                @if (Model.CanManageDocuments)
+                {
+                    <a asp-controller="Documents" asp-action="Upload" asp-route-subjectId="@Model.SubjectId" class="btn-academic-primary text-decoration-none">
+                        <i class="bi bi-cloud-arrow-up"></i> Tải lên tài liệu ngay
+                    </a>
+                }
             }
         </div>
     }
@@ -143,13 +195,16 @@
                                 <td>
                                     @if (doc.ChapterNumber.HasValue)
                                     {
-                                        <span class="badge bg-light text-slate-700 border fw-medium px-2.5 py-1">
-                                            <i class="bi bi-bookmark-fill text-primary me-1"></i>Chương @doc.ChapterNumber
+                                        <span class="chapter-badge" title="@doc.ChapterTitle">
+                                            <i class="bi bi-bookmark-fill"></i>
+                                            Chương @doc.ChapterNumber
                                         </span>
                                     }
                                     else
                                     {
-                                        <span class="badge bg-light text-slate-500 border px-2.5 py-1">Chung</span>
+                                        <span class="chapter-badge chapter-badge-unassigned">
+                                            <i class="bi bi-inboxes"></i> Chưa gán chương
+                                        </span>
                                     }
                                 </td>
                                 <td class="font-monospace small text-slate-600">@doc.FormattedSize</td>
@@ -191,7 +246,12 @@
 
                                         @if (Model.CanManageDocuments)
                                         {
-                                            <form method="post" asp-controller="Documents" asp-action="Reindex" asp-route-id="@doc.Id" asp-route-selectedChapterId="@Model.SelectedChapterId" class="m-0"
+                                            <form method="post" asp-controller="Documents" asp-action="Reindex"
+                                                  asp-route-id="@doc.Id"
+                                                  asp-route-selectedChapterId="@Model.SelectedChapterId"
+                                                  asp-route-searchTerm="@Model.SearchTerm"
+                                                  asp-route-selectedStatus="@Model.SelectedStatus"
+                                                  class="m-0"
                                                   onsubmit="return confirm('Yêu cầu index lại tài liệu này?');">
                                                 <button type="submit"
                                                         class="btn btn-sm btn-outline-warning text-dark d-inline-flex align-items-center gap-1"
@@ -200,7 +260,12 @@
                                                 </button>
                                             </form>
 
-                                            <form method="post" asp-controller="Documents" asp-action="Delete" asp-route-id="@doc.Id" asp-route-selectedChapterId="@Model.SelectedChapterId" class="m-0"
+                                            <form method="post" asp-controller="Documents" asp-action="Delete"
+                                                  asp-route-id="@doc.Id"
+                                                  asp-route-selectedChapterId="@Model.SelectedChapterId"
+                                                  asp-route-searchTerm="@Model.SearchTerm"
+                                                  asp-route-selectedStatus="@Model.SelectedStatus"
+                                                  class="m-0"
                                                   onsubmit="return confirm('Xóa tài liệu này? Thao tác không thể hoàn tác.');">
                                                 <button type="submit"
                                                         class="btn btn-sm btn-outline-danger d-inline-flex align-items-center gap-1"

@@ -2,29 +2,18 @@
 @using Microsoft.AspNetCore.Authorization
 @attribute [AllowAnonymous]
 @{
-    ViewData["Title"] = "Từ Chối Truy Cập - PRN222";
+    ViewData["Title"] = "Không có quyền truy cập";
 }
 
-<div class="container py-5">
-    <div class="row justify-content-center">
-        <div class="col-md-6 text-center">
-            <div class="academic-card shadow-sm py-5">
-                <div class="mb-3 text-danger">
-                    <i class="bi bi-shield-lock-fill" style="font-size: 3.5rem;"></i>
-                </div>
-                <h1 class="fw-bold fs-3 text-slate-900 mb-2">Truy Cập Bị Từ Chối (403 Forbidden)</h1>
-                <p class="text-slate-600 mb-4 px-3">
-                    Bạn không có thẩm quyền thực hiện thao tác này. Tính năng quản lý chương học và tải lên tài liệu chỉ dành riêng cho tài khoản <strong>Trưởng môn (Subject Leader)</strong>.
-                </p>
-                <div class="d-flex justify-content-center gap-2">
-                    <a asp-page="/Index" class="btn btn-academic-primary">
-                        <i class="bi bi-house-door"></i> Về trang chủ
-                    </a>
-                    <a asp-controller="Documents" asp-action="Index" class="btn btn-academic-outline">
-                        <i class="bi bi-journal-bookmark"></i> Xem kho tài liệu
-                    </a>
-                </div>
-            </div>
-        </div>
+<div class="container system-message-page">
+    <div class="system-message-code">403</div>
+    <p class="system-message-kicker">Yêu cầu đã bị từ chối</p>
+    <h1>Bạn không có quyền truy cập nội dung này.</h1>
+    <p>Quyền quản lý được kiểm tra theo vai trò và môn học cụ thể. Hãy quay lại danh mục môn học để tiếp tục với phạm vi được cấp.</p>
+    <div class="system-message-actions">
+        <a asp-controller="Subjects" asp-action="Index" class="btn-academic-primary">
+            Danh mục môn học <i class="bi bi-arrow-right" aria-hidden="true"></i>
+        </a>
+        <a asp-page="/Index" class="btn-academic-outline">Trang chủ</a>
     </div>
 </div>

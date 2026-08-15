@@ -2,7 +2,7 @@
 @model PRN222.RagAssistant.Pages.Account.RegisterModel
 @{
     Layout = null;
-    ViewData["Title"] = "Đăng Ký - PRN222 RAG Assistant";
+    ViewData["Title"] = "Đăng ký - PRN222 RAG Assistant";
 }
 <!DOCTYPE html>
 <html lang="vi">
@@ -16,188 +16,75 @@
     <link rel="stylesheet" href="~/css/components.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
 </head>
-<body style="background-color: #ffffff; margin: 0; padding: 0;">
-    <div class="auth-split-wrapper">
-        <!-- Left Column: Humata Warm Testimonials Showcase -->
-        <div class="auth-split-left">
-            <!-- Top Logo -->
-            <a class="auth-brand-logo" asp-page="/Index">
-                <span class="brand-icon-humata" style="background-color: rgba(35, 31, 32, 0.08); border-color: rgba(35, 31, 32, 0.15); color: #231f20;">
-                    <i class="bi bi-mortarboard-fill"></i>
+<body class="account-page">
+    <main class="account-shell">
+        <section class="account-visual" aria-label="PRN222 RAG Assistant">
+            <a class="account-brand" asp-page="/Index" aria-label="Về trang chủ">
+                <span class="app-logo-mark" aria-hidden="true">
+                    <span class="app-logo-letter">R</span>
+                    <span class="app-logo-accent"></span>
                 </span>
-                <span>PRN222 RAG</span>
+                <span class="app-brand-copy">
+                    <span class="app-brand-name">PRN222</span>
+                    <span class="app-brand-product">RAG Assistant</span>
+                </span>
             </a>
-
-            <!-- Middle Testimonials Auto-Carousel -->
-            <div class="auth-testimonial-content">
-                <blockquote id="authTestiQuote" class="auth-testimonial-quote">
-                    “Tôi rất thích PRN222 RAG Assistant bởi vì đây là công cụ vô cùng đắc lực cho sinh viên và giảng viên cần phân tích nhanh tài liệu phức tạp, tra cứu chính xác từng đề cương môn học.”
-                </blockquote>
-
-                <div class="d-flex flex-column align-items-center">
-                    <img id="authTestiAvatar" src="~/images/avatars/avatar-1.png" alt="Avatar" class="testimonial-avatar mb-2" />
-                    <div id="authTestiName" class="testimonial-name">Trần Minh Hoàng</div>
-                    <div id="authTestiRole" class="testimonial-role mb-2">Thủ khoa K18 Ngành Kỹ thuật Phần mềm — ĐH FPT</div>
-                    
-                    <div class="testimonial-stars mb-3">
-                        <i class="bi bi-star-fill"></i>
-                        <i class="bi bi-star-fill"></i>
-                        <i class="bi bi-star-fill"></i>
-                        <i class="bi bi-star-fill"></i>
-                        <i class="bi bi-star-fill"></i>
-                    </div>
-
-                    <div class="testimonial-indicators">
-                        <button type="button" class="testimonial-dot active" aria-label="Đánh giá 1"></button>
-                        <button type="button" class="testimonial-dot" aria-label="Đánh giá 2"></button>
-                        <button type="button" class="testimonial-dot" aria-label="Đánh giá 3"></button>
-                    </div>
-                </div>
+            <div class="account-visual-copy">
+                <p>Không gian tri thức môn học</p>
+                <h1>Bắt đầu với một tài khoản duy nhất.</h1>
+                <ul>
+                    <li>Danh mục môn học được phân quyền</li>
+                    <li>Tài liệu và báo cáo cùng một nơi</li>
+                    <li>Dữ liệu được xử lý cục bộ</li>
+                </ul>
             </div>
+        </section>
 
-            <!-- Bottom Copyright -->
-            <div class="small text-slate-500">
-                &copy; 2026 PRN222 RAG Assistant — Đại Học FPT. Toàn bộ quyền được bảo lưu.
-            </div>
-        </div>
+        <section class="account-form-pane account-form-pane-register">
+            <div class="account-form-wrap">
+                <a asp-page="/Index" class="account-back-link"><i class="bi bi-arrow-left" aria-hidden="true"></i> Trang chủ</a>
+                <p class="account-form-kicker">Tạo tài khoản</p>
+                <h2>Đăng ký</h2>
+                <p class="account-form-intro">Tài khoản mới được gán vai trò Sinh viên và có thể truy cập các môn học đang hoạt động.</p>
 
-        <!-- Right Column: Sign Up Form -->
-        <div class="auth-split-right">
-            <div class="auth-form-container">
-                <h1 class="auth-form-title">Đăng ký tài khoản</h1>
-                <p class="auth-form-subtitle">Bắt đầu trải nghiệm học tập cùng PRN222 RAG ngay hôm nay.</p>
+                <form method="post" class="account-form">
+                    <div asp-validation-summary="ModelOnly" class="alert alert-danger small" role="alert"></div>
 
-                <!-- Social Sign-up Button (Google FPT) -->
-                <button type="button" class="btn-social-google" onclick="document.getElementById('nameInput').value='Nguyễn Văn An'; document.getElementById('emailInput').value='an_nv@@fpt.edu.vn'; document.getElementById('passInput').value='Student@123'; document.getElementById('confirmPassInput').value='Student@123';">
-                    <svg width="18" height="18" viewBox="0 0 24 24">
-                        <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.66-5.17 3.66-9.17Z"/>
-                        <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.35 24 12 24Z"/>
-                        <path fill="#FBBC05" d="M5.28 14.27a7.2 7.2 0 0 1 0-4.54V6.58H1.25a11.97 11.97 0 0 0 0 10.84l4.03-3.15Z"/>
-                        <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.35 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98Z"/>
-                    </svg>
-                    <span>Đăng ký với Google FPT</span>
-                </button>
-
-                <div class="auth-divider">
-                    <span>Hoặc</span>
-                </div>
-
-                <form method="post">
-                    <div asp-validation-summary="ModelOnly" class="alert alert-danger small py-2 mb-3" role="alert"></div>
-
-                    <div class="mb-3">
-                        <label asp-for="Input.DisplayName" class="auth-input-label">Họ và tên</label>
-                        <input id="nameInput" asp-for="Input.DisplayName" class="auth-input-control" placeholder="Nguyễn Văn A" />
-                        <span asp-validation-for="Input.DisplayName" class="text-danger small mt-1 d-block"></span>
+                    <div>
+                        <label asp-for="Input.DisplayName">Họ và tên</label>
+                        <input asp-for="Input.DisplayName" autocomplete="name" placeholder="Nguyễn Văn A" />
+                        <span asp-validation-for="Input.DisplayName" class="text-danger small"></span>
                     </div>
 
-                    <div class="mb-3">
-                        <label asp-for="Input.Email" class="auth-input-label">Email học tập (@@fpt.edu.vn)</label>
-                        <input id="emailInput" asp-for="Input.Email" class="auth-input-control" autocomplete="username" placeholder="sinhvien@fpt.edu.vn" />
-                        <span asp-validation-for="Input.Email" class="text-danger small mt-1 d-block"></span>
+                    <div>
+                        <label asp-for="Input.Email">Email</label>
+                        <input asp-for="Input.Email" autocomplete="username" placeholder="sinhvien@fpt.edu.vn" />
+                        <span asp-validation-for="Input.Email" class="text-danger small"></span>
                     </div>
 
-                    <div class="mb-3">
-                        <label asp-for="Input.Password" class="auth-input-label">Mật khẩu</label>
-                        <input id="passInput" asp-for="Input.Password" class="auth-input-control" autocomplete="new-password" placeholder="Tối thiểu 6 ký tự" />
-                        <span asp-validation-for="Input.Password" class="text-danger small mt-1 d-block"></span>
-                    </div>
-
-                    <div class="mb-4">
-                        <label asp-for="Input.ConfirmPassword" class="auth-input-label">Xác nhận mật khẩu</label>
-                        <input id="confirmPassInput" asp-for="Input.ConfirmPassword" class="auth-input-control" autocomplete="new-password" placeholder="Nhập lại mật khẩu" />
-                        <span asp-validation-for="Input.ConfirmPassword" class="text-danger small mt-1 d-block"></span>
+                    <div class="account-form-columns">
+                        <div>
+                            <label asp-for="Input.Password">Mật khẩu</label>
+                            <input asp-for="Input.Password" autocomplete="new-password" placeholder="Tối thiểu 6 ký tự" />
+                            <span asp-validation-for="Input.Password" class="text-danger small"></span>
+                        </div>
+                        <div>
+                            <label asp-for="Input.ConfirmPassword">Xác nhận mật khẩu</label>
+                            <input asp-for="Input.ConfirmPassword" autocomplete="new-password" placeholder="Nhập lại mật khẩu" />
+                            <span asp-validation-for="Input.ConfirmPassword" class="text-danger small"></span>
+                        </div>
                     </div>
 
                     <input type="hidden" name="returnUrl" value="@Model.ReturnUrl" />
-                    <button type="submit" class="btn-auth-submit">
-                        Tiếp tục
-                    </button>
+                    <button type="submit" class="account-submit">Tạo tài khoản <i class="bi bi-arrow-right" aria-hidden="true"></i></button>
                 </form>
 
-                <!-- Footer Navigation -->
-                <div class="text-center mt-4 pt-2 small text-slate-600">
-                    Đã có tài khoản? 
-                    <a asp-page="/Account/Login" class="fw-bold text-slate-900 text-decoration-none ms-1">Đăng nhập</a>
-                </div>
+                <p class="account-switch">Đã có tài khoản? <a asp-page="/Account/Login">Đăng nhập</a></p>
             </div>
-        </div>
-    </div>
+        </section>
+    </main>
 
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
-    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="~/js/site.js" asp-append-version="true"></script>
-    <script>
-        // Initialize Left Split Carousel on Auth Page
-        document.addEventListener('DOMContentLoaded', () => {
-            const quoteElem = document.getElementById('authTestiQuote');
-            const nameElem = document.getElementById('authTestiName');
-            const roleElem = document.getElementById('authTestiRole');
-            const avatarElem = document.getElementById('authTestiAvatar');
-            const dots = document.querySelectorAll('.auth-split-left .testimonial-dot');
-
-            if (!quoteElem || dots.length === 0) return;
-
-            const authTestimonials = [
-                {
-                    quote: "“Tôi rất thích PRN222 RAG Assistant bởi vì đây là công cụ vô cùng đắc lực cho sinh viên và giảng viên cần phân tích nhanh tài liệu phức tạp, tra cứu chính xác từng đề cương môn học.”",
-                    name: "Trần Minh Hoàng",
-                    role: "Thủ khoa K18 Ngành Kỹ thuật Phần mềm — ĐH FPT",
-                    avatar: "/images/avatars/avatar-1.png"
-                },
-                {
-                    quote: "“Tính năng RAG đối soát trích dẫn số trang chính xác giúp giảng viên chấm bài tập và sinh viên ôn thi chuẩn xác tuyệt đối, không còn nỗi lo AI chém gió mơ hồ.”",
-                    name: "Đỗ Hoàng Long",
-                    role: "Trưởng Bộ môn Phát triển Ứng dụng .NET — ĐH FPT",
-                    avatar: "/images/avatars/avatar-2.png"
-                },
-                {
-                    quote: "“Tìm kiếm ngữ nghĩa với vector pgvector giúp mình hiểu sâu toàn bộ kiến thức C# 12, Async/Await và Entity Framework Core chỉ trong vài cú nhấp chuột.”",
-                    name: "Nguyễn Hà My",
-                    role: "Sinh viên K17 ĐH FPT — Đạt điểm A môn PRN222",
-                    avatar: "/images/avatars/avatar-3.png"
-                }
-            ];
-
-            let current = 0;
-            let timer = null;
-
-            function renderTestimonial(index) {
-                current = index;
-                const data = authTestimonials[current];
-                
-                quoteElem.style.opacity = 0;
-                setTimeout(() => {
-                    quoteElem.textContent = data.quote;
-                    nameElem.textContent = data.name;
-                    roleElem.textContent = data.role;
-                    if (avatarElem) avatarElem.src = data.avatar;
-                    quoteElem.style.opacity = 1;
-                }, 150);
-
-                dots.forEach((d, i) => {
-                    if (i === current) d.classList.add('active');
-                    else d.classList.remove('active');
-                });
-            }
-
-            function startAuto() {
-                if (timer) clearInterval(timer);
-                timer = setInterval(() => {
-                    let next = (current + 1) % authTestimonials.length;
-                    renderTestimonial(next);
-                }, 4500);
-            }
-
-            dots.forEach((dot, i) => {
-                dot.addEventListener('click', () => {
-                    renderTestimonial(i);
-                    startAuto();
-                });
-            });
-
-            startAuto();
-        });
-    </script>
+    <partial name="_ValidationScriptsPartial" />
 </body>
 </html>

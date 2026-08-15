@@ -6,6 +6,10 @@
     var isHomePage = string.Equals(currentPage, "/Index", StringComparison.OrdinalIgnoreCase) && string.IsNullOrEmpty(currentController);
     var isAdmin = User.IsInRole(AppRoles.Admin);
     var isSubjectLeader = User.IsInRole(AppRoles.SubjectLeader);
+    var isSubjectWorkspace = currentController is "Subjects" or "Documents" or "Chapters"
+        || currentPage.StartsWith("/Reports", StringComparison.OrdinalIgnoreCase);
+    var isSubjectAdminArea = string.Equals(currentController, "AdminSubjects", StringComparison.OrdinalIgnoreCase);
+    var isUserAdminArea = string.Equals(currentController, "AdminUsers", StringComparison.OrdinalIgnoreCase);
 }
 <!DOCTYPE html>
 <html lang="vi">
@@ -21,69 +25,78 @@
 </head>
 <body class="d-flex flex-column min-vh-100 @(isHomePage ? "page-home" : "page-subpage")" style="background-color: var(--color-bg-warm);">
     <header>
-        <nav class="navbar navbar-expand-lg @(isHomePage ? "navbar-humata" : "navbar-humata-solid")">
-            <div class="container">
-                <a class="brand-humata" asp-area="" asp-page="/Index">
-                    <span class="brand-icon-humata">
-                        <i class="bi bi-mortarboard-fill"></i>
+        <nav class="navbar navbar-expand-xl @(isHomePage ? "navbar-humata" : "navbar-humata-solid")">
+            <div class="container navbar-humata-layout">
+                <a class="brand-humata" asp-area="" asp-page="/Index" aria-label="PRN222 RAG Assistant - Trang chủ">
+                    <span class="app-logo-mark" aria-hidden="true">
+                        <span class="app-logo-letter">R</span>
+                        <span class="app-logo-accent"></span>
                     </span>
-                    <span>PRN222 RAG</span>
+                    <span class="app-brand-copy">
+                        <span class="app-brand-name">PRN222</span>
+                        <span class="app-brand-product">RAG Assistant</span>
+                    </span>
                 </a>
 
-                <button class="navbar-toggler border-0 shadow-none text-white" type="button" data-bs-toggle="collapse" data-bs-target="#navbarHumataMain" aria-controls="navbarHumataMain" aria-expanded="false" aria-label="Toggle navigation">
-                    <i class="bi bi-list fs-2"></i>
+                <button class="navbar-toggler navbar-humata-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarHumataMain" aria-controls="navbarHumataMain" aria-expanded="false" aria-label="Mở menu điều hướng">
+                    <i class="bi bi-list" aria-hidden="true"></i>
                 </button>
 
                 <div class="collapse navbar-collapse" id="navbarHumataMain">
-                    <ul class="navbar-nav mx-auto gap-1">
+                    <ul class="navbar-nav navbar-humata-links mx-xl-auto">
                         <li class="nav-item">
-                            <a class="nav-link-humata" asp-area="" asp-page="/Index">Trang chủ</a>
+                            <a class="nav-link-humata @(isHomePage ? "is-active" : null)" asp-area="" asp-page="/Index">Trang chủ</a>
                         </li>
                         @if (User.Identity?.IsAuthenticated == true)
                         {
                             <li class="nav-item">
-                                <a class="nav-link-humata" asp-area="" asp-controller="Subjects" asp-action="Index">Danh Mục Môn Học</a>
+                                <a class="nav-link-humata @(isSubjectWorkspace ? "is-active" : null)" asp-area="" asp-controller="Subjects" asp-action="Index">Môn học</a>
                             </li>
                         }
                         @if (isAdmin)
                         {
                             <li class="nav-item">
-                                <a class="nav-link-humata" asp-area="" asp-controller="AdminSubjects" asp-action="Index">Quản Trị Môn Học</a>
+                                <a class="nav-link-humata @(isSubjectAdminArea ? "is-active" : null)" asp-area="" asp-controller="AdminSubjects" asp-action="Index">Quản trị môn học</a>
                             </li>
                             <li class="nav-item">
-                                <a class="nav-link-humata" asp-area="" asp-controller="AdminUsers" asp-action="Index">Người Dùng</a>
+                                <a class="nav-link-humata @(isUserAdminArea ? "is-active" : null)" asp-area="" asp-controller="AdminUsers" asp-action="Index">Người dùng</a>
                             </li>
                         }
                         <li class="nav-item">
-                            <a class="nav-link-humata" href="/#pricing">Bảng giá</a>
+                            <a class="nav-link-humata" href="/#features">Tính năng</a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link-humata" href="/#faq">Hỏi đáp (FAQ)</a>
+                            <a class="nav-link-humata" href="/#faq">Hỏi đáp</a>
                         </li>
                     </ul>
 
-                    <div class="d-flex align-items-center gap-2 mt-3 mt-lg-0">
+                    <div class="navbar-humata-actions">
                         @if (User.Identity?.IsAuthenticated == true)
                         {
-                            <div class="d-flex align-items-center gap-2 bg-white bg-opacity-10 text-white px-3 py-1.5 rounded-pill border border-white border-opacity-25">
-                                <i class="bi bi-person-circle"></i>
-                                <span class="fw-semibold small">@User.Identity.Name</span>
-                                @if (isAdmin)
-                                {
-                                    <span class="badge bg-danger rounded-pill px-2">Admin</span>
-                                }
-                                else if (isSubjectLeader)
-                                {
-                                    <span class="badge bg-warning text-dark rounded-pill px-2">Trưởng Môn</span>
-                                }
-                                else
-                                {
-                                    <span class="badge bg-primary text-white rounded-pill px-2">Sinh Viên</span>
-                                }
+                            <div class="nav-session">
+                                <i class="bi bi-person" aria-hidden="true"></i>
+                                <span class="nav-session-copy">
+                                    <span class="nav-session-name">@User.Identity.Name</span>
+                                    <span class="nav-session-role">
+                                        @if (isAdmin)
+                                        {
+                                            @:Quản trị viên
+                                        }
+                                        else if (isSubjectLeader)
+                                        {
+                                            @:Trưởng môn
+                                        }
+                                        else
+                                        {
+                                            @:Sinh viên
+                                        }
+                                    </span>
+                                </span>
                             </div>
                             <form method="post" asp-page="/Account/Logout" class="m-0">
-                                <button type="submit" class="btn btn-sm btn-outline-light rounded-pill px-3">
-                                    <i class="bi bi-box-arrow-right"></i> Đăng xuất
+                                <button type="submit" class="nav-logout">
+                                    <i class="bi bi-box-arrow-right" aria-hidden="true"></i>
+                                    <span>Đăng xuất</span>
                                 </button>
                             </form>
                         }
@@ -106,8 +119,9 @@
         <div class="container">
             <!-- Centered Brand Logo -->
             <a class="footer-brand-logo" asp-area="" asp-page="/Index">
-                <span class="brand-icon-humata" style="width: 1.75rem; height: 1.75rem; font-size: 0.875rem;">
-                    <i class="bi bi-mortarboard-fill"></i>
+                <span class="app-logo-mark app-logo-mark-footer" aria-hidden="true">
+                    <span class="app-logo-letter">R</span>
+                    <span class="app-logo-accent"></span>
                 </span>
                 <span>PRN222 RAG</span>
             </a>
@@ -119,17 +133,11 @@
                 {
                     <li><a asp-area="" asp-controller="Subjects" asp-action="Index">Danh mục môn học</a></li>
                 }
-                <li><a href="/#pricing">Bảng giá</a></li>
+                <li><a href="/#features">Tính năng</a></li>
                 <li><a href="https://flm.fpt.edu.vn/gui/role/teacher/SyllabusDetails?sylID=13892" target="_blank" rel="noopener noreferrer">Đề cương FLM</a></li>
                 <li><a asp-page="/Privacy">Điều khoản &amp; Bảo mật</a></li>
             </ul>
 
-            <!-- Centered Social Icons -->
-            <div class="footer-socials">
-                <a href="#" aria-label="X (Twitter)"><i class="bi bi-twitter-x"></i></a>
-                <a href="https://github.com" target="_blank" rel="noopener noreferrer" aria-label="GitHub"><i class="bi bi-github"></i></a>
-                <a href="https://youtube.com" target="_blank" rel="noopener noreferrer" aria-label="YouTube"><i class="bi bi-youtube"></i></a>
-            </div>
 
             <!-- Centered Copyright -->
             <div class="footer-copyright">
