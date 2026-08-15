@@ -1,5 +1,7 @@
 # Application-layer instructions
 
+> Synchronized with `master` after PR #19.
+
 This subtree contains stable cross-workflow contracts/models. Keep it independent from MVC/Razor/Ollama/PostgreSQL-specific presentation details.
 
 ## Current workflow state
@@ -7,12 +9,15 @@ This subtree contains stable cross-workflow contracts/models. Keep it independen
 1. Flow 1 - Document Management & Indexing - complete - MVC.
 2. Flow 2 - RAG Q&A + Conversation Management - pending - MVC.
 3. Flow 3 - Report & Statistics - complete - Razor Pages.
+4. Cross-app UI/UX redesign - complete in PR #19 - Member 3.
+
+The PR #19 UI work does not move presentation-specific dependencies into this Application layer.
 
 ## Subject boundary
 
 The application is multi-subject. PRN222 is only the seeded demo subject.
 
-`Document` and `Chapter` already persist `SubjectId`. Flow 1 and Flow 3 now carry a concrete subject context and authorize via `ISubjectAccessService` in the Security layer.
+`Document` and `Chapter` persist `SubjectId`. Flow 1 and Flow 3 carry a concrete subject context and authorize via `ISubjectAccessService` in the Security layer.
 
 Do not add a contract that allows retrieval or persistence to silently omit subject context once Flow 2 implementation begins.
 
@@ -30,6 +35,8 @@ ManageDocuments -> Admin OR SubjectLeader
 
 `ManageDocuments` is a coarse role gate. Resource/subject permission is separate and cannot be represented by role membership alone.
 
+Public registration introduced in PR #19 creates `Student` accounts only. That presentation/registration implementation must not leak elevated-role selection into Application contracts.
+
 Do not duplicate role strings, managed-subject claim types, or authorization rules inside application services.
 
 ## Current integration boundaries
@@ -46,6 +53,8 @@ subject-aware MVC action
 
 Indexing remains subject-agnostic at service invocation because the persisted `Document` supplies `SubjectId`.
 
+PR #19 adds UI/filter behavior in the presentation layer only; it does not move parsing/indexing into MVC or Application contracts.
+
 ### Flow 2
 
 Required direction:
@@ -59,11 +68,15 @@ MVC subject/session context
    -> message/citation persistence bound to the same Subject/session
 ```
 
-Member 4 owns the backend implementation. Member 5 owns MVC presentation. Member 1 coordinates shared contract/entity/migration changes needed to establish subject ownership.
+Member 4 owns backend implementation. Member 5 owns MVC presentation/evaluation. Member 1 coordinates shared contract/entity/migration changes needed to establish subject ownership.
+
+Member 5 should reuse Member 3's PR #19 visual system, but that visual system remains outside the Application layer.
 
 ### Flow 3
 
 No reporting-specific shared contract is required. Flow 3 reads persistence directly with aggregate EF queries and is subject-scoped for document/index metrics.
+
+PR #19 report redesign remains presentation-only.
 
 ## Shared contracts
 
@@ -80,15 +93,15 @@ Prefer additive changes. If a signature must change, update all affected produce
 
 - Member 1: shared contracts, Core/Data/Identity/RBAC/multi-subject, schema coordination, all docs.
 - Member 2: Flow 1 request/business behavior + Flow 3 reporting behavior.
-- Member 3: indexing implementation.
-- Member 4: Flow 2 backend.
-- Member 5: Flow 2 MVC/history/citations/evaluation.
+- Member 3: indexing implementation + completed cross-app UI/UX redesign from PR #19.
+- Member 4: pending Flow 2 backend.
+- Member 5: pending Flow 2 MVC/history/citations/evaluation.
 
 Members 2-5 do not independently edit README/AGENTS/docs.
 
 ## Dependency rules
 
-- Application abstractions do not depend on MVC Controller, Razor PageModel, HttpContext, Ollama DTOs, or Npgsql query types.
+- Application abstractions do not depend on MVC Controller, Razor PageModel, HttpContext, Ollama DTOs, Npgsql query types, CSS, JS, or front-end component libraries.
 - Infrastructure may implement Application abstractions.
 - Flow 1 controllers do not parse/chunk/embed/call providers.
 - Flow 2 MVC does not call Ollama or pgvector directly.

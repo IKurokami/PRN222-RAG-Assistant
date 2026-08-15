@@ -1,5 +1,7 @@
 # Infrastructure baseline
 
+> Synchronized with `master` after PR #19.
+
 ## Runtime stack
 
 - ASP.NET Core .NET 10 host with MVC + Razor Pages.
@@ -8,6 +10,8 @@
 - pgvector for embeddings.
 - Ollama for local chat/embedding models.
 - runtime source storage under `storage/uploads/`.
+- Bootstrap + Bootstrap Icons for presentation dependencies.
+- shared UI design system through `wwwroot/css/design-tokens.css` and `wwwroot/css/components.css`.
 
 PRN222 is the seeded demo subject; the runtime application is multi-subject.
 
@@ -38,7 +42,9 @@ Claim type  = prn222:managed-subject
 Claim value = Subject Guid
 ```
 
-`AspNetUserClaims` already exists, so this feature adds no EF migration.
+`AspNetUserClaims` already exists, so this assignment model adds no EF migration.
+
+Public registration introduced in PR #19 creates `Student` accounts only. Elevated roles remain Admin-managed.
 
 ## PostgreSQL system of record
 
@@ -83,7 +89,33 @@ Razor Pages:
   Flow 3 Reports
 ```
 
+PR #19 changes presentation only; it does not change this MVC/Razor allocation.
+
 Global Documents/Chapters/Reports navigation is avoided because those screens need a selected Subject.
+
+## Front-end baseline after PR #19
+
+Member 3 completed the current cross-app UI/UX baseline.
+
+Key assets/integration:
+
+```text
+wwwroot/css/design-tokens.css
+wwwroot/css/components.css
+wwwroot/css/site.css
+wwwroot/js/site.js
+libman.json -> bootstrap-icons@1.11.3
+wwwroot/images/*
+wwwroot/videos/*
+```
+
+Rules:
+
+- reuse shared tokens/components before adding one-off CSS;
+- keep LibMan-managed vendor dependencies out of source control according to `.gitignore`;
+- preserve responsive/accessibility behavior;
+- UI visibility never replaces server-side authorization;
+- future Flow 2 MVC screens should integrate with this design system.
 
 ## Flow 1 indexing pipeline
 
@@ -153,13 +185,16 @@ Never commit real credentials.
 - automatic FLM crawling;
 - subject hard delete;
 - public elevated-role self-selection;
-- duplicate Flow 1/Flow 2 Razor Pages.
+- duplicate Flow 1/Flow 2 Razor Pages;
+- a second competing front-end design system.
 
 ## Validation
 
 Before merge run:
 
 ```text
+dotnet tool restore
+dotnet libman restore
 dotnet restore
 dotnet build
 dotnet test

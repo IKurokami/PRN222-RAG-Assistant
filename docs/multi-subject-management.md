@@ -1,14 +1,16 @@
 # Multi-subject management
 
+> Synchronized with `master` after PR #19.
+
 ## Goal
 
 Remove PRN222 as a hard-coded application scope while keeping it as the seeded demo subject.
 
-The application must support runtime Subjects such as PRN222, PRJ301, SWT301, SWP391, or future courses without changing source code for each course.
+The application supports runtime Subjects such as PRN222, PRJ301, SWT301, SWP391, or future courses without changing source code for each course.
 
 ## Existing foundation
 
-Before this feature, the domain already contained:
+The domain contains:
 
 ```text
 Subject(Id, Code, Name, IsActive)
@@ -16,7 +18,7 @@ Chapter(..., SubjectId)
 Document(..., SubjectId)
 ```
 
-The missing pieces were runtime Subject management, Subject Leader assignment, subject-first navigation, and subject-specific authorization. Flow 1/3 controllers still referenced `SeedData.Prn222SubjectId`.
+The completed multi-subject work added runtime Subject management, Subject Leader assignment, subject-first navigation, and subject-specific authorization. Flow 1/3 no longer use `SeedData.Prn222SubjectId` as active workflow scope.
 
 ## Implemented design
 
@@ -29,6 +31,8 @@ GET /subjects
 ```
 
 This gives a concrete subject context before opening Documents, Chapters, or Reports.
+
+The catalogue received the shared UI/UX refresh in PR #19 by Member 3, but visibility/authorization rules remain Member 1-owned.
 
 ### Admin subject management
 
@@ -45,6 +49,8 @@ POST /admin/subjects/{id}/leaders
 Admin can create/edit subjects, toggle `IsActive`, and assign Subject Leaders.
 
 Hard delete is intentionally omitted.
+
+These screens were visually refreshed in PR #19 without changing their authorization model.
 
 ### Assignment model
 
@@ -85,6 +91,8 @@ Subject context is preserved across:
 
 An entity action authorizes against the persisted entity SubjectId so callers cannot move across subject boundaries by modifying query/form values.
 
+PR #19 added document search/status filtering and preserves those filters across delete/re-index redirects. These additions remain inside the selected subject context.
+
 ### Flow 3 changes
 
 Reports require `subjectId` and subject-specific manage permission.
@@ -99,19 +107,29 @@ Subject-scoped metrics:
 - recently indexed documents;
 - document distribution by chapter.
 
+PR #19 refreshed report presentation without changing this boundary.
+
 Chat metrics remain global until Flow 2 persists subject ownership.
 
-## Why no migration now
+## Public Student registration
 
-The current feature only changes authorization/assignment persistence using an Identity table that already exists. `Subject`, `Chapter.SubjectId`, and `Document.SubjectId` also already existed.
+PR #19 introduced public registration as part of the redesigned auth UI.
 
-Therefore `dotnet ef migrations has-pending-model-changes` should remain clean.
+A public registration creates only a `Student` account. It does not create Subject Leader assignments and does not allow elevated-role selection.
+
+## Why no migration for current subject/RBAC work
+
+The current multi-subject assignment feature uses an Identity table that already exists. `Subject`, `Chapter.SubjectId`, and `Document.SubjectId` also already existed.
+
+Public registration also uses existing Identity persistence.
+
+Therefore these features do not by themselves require a new application schema migration.
 
 ## Flow 2 contract
 
-Flow 2 is the remaining place where subject isolation does not yet exist because it is not implemented.
+Flow 2 is the remaining place where subject isolation is not yet complete because the workflow is pending.
 
-Before RAG backend work:
+Before RAG backend work is complete:
 
 1. establish a selected Subject in the chat/session boundary;
 2. persist Subject ownership for each chat session;
@@ -126,12 +144,14 @@ Do not implement a global retrieval query and plan to filter later.
 
 Member 1 owns this feature end-to-end:
 
-- Subject management;
+- Subject management behavior;
 - Subject Leader assignment;
 - subject authorization service;
-- cross-workflow subject-context UI/wiring;
+- cross-workflow subject-context wiring;
 - tests;
 - schema coordination;
 - all documentation.
 
-Member 2 retains ownership of established Flow 1/Flow 3 business behavior; Member 1 owns the cross-cutting changes needed to make those workflows multi-subject.
+Member 2 retains established Flow 1/Flow 3 business behavior.
+
+Member 3 owns the completed PR #19 visual redesign of these screens, not their RBAC/business rules.

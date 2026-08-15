@@ -1,5 +1,7 @@
 # Role-based access control
 
+> Synchronized with `master` after PR #19.
+
 ## Roles
 
 The application uses three ASP.NET Core Identity roles:
@@ -36,6 +38,7 @@ For Flow 1/3, satisfying `ManageDocuments` does **not** by itself authorize a Su
 
 | Capability | Admin | Subject Leader | Student |
 |---|:---:|:---:|:---:|
+| Public self-registration | No elevated role selection | No elevated role selection | Yes, Student only |
 | View active subject catalogue | Yes | Yes | Yes |
 | Create/edit/activate/deactivate subjects | Yes | No | No |
 | Assign Subject Leaders | Yes | No | No |
@@ -45,6 +48,20 @@ For Flow 1/3, satisfying `ManageDocuments` does **not** by itself authorize a Su
 | View subject reports | Any subject | Assigned subjects only | No |
 | View active document catalogue/details | Yes | Yes | Yes |
 | Pending Flow 2 chat | Yes | Yes | Yes |
+
+## Public registration after PR #19
+
+PR #19 introduced `/Account/Register` as part of the redesigned auth experience.
+
+Server-side rule:
+
+- a successful public registration creates an `ApplicationUser`;
+- the user is assigned the `Student` role;
+- the user is signed in after successful creation;
+- local `returnUrl` is honored;
+- Admin/SubjectLeader roles are never selectable by the registrant.
+
+Member 3 implemented this PR #19 registration experience. Member 1 retains ownership of Identity/RBAC policy and any future security changes.
 
 ## Admin
 
@@ -82,7 +99,7 @@ They cannot create subjects, assign leaders, or manage user roles.
 
 ## Student
 
-Student is a learning consumer. Students can view active subjects/document catalogue/details but have no academic-content or identity administration permission.
+Student is a learning consumer. Students can self-register, view active subjects/document catalogue/details, but have no academic-content or identity administration permission.
 
 Flow 2 must restrict each student's chat/session/history/citations to the selected subject and their own authorized sessions.
 
@@ -123,7 +140,18 @@ Every subject-specific write/report path must derive or accept a SubjectId and v
 
 Document/chapter edit/delete/re-index actions should authorize against the persisted entity's SubjectId, not trust a posted hidden SubjectId.
 
+The PR #19 redesign by Member 3 must not be used as a reason to move authorization into CSS/visibility checks.
+
 ## Routes
+
+Auth:
+
+```text
+/Account/Login
+/Account/Register
+/Account/Logout
+/Account/AccessDenied
+```
 
 Admin identity:
 
@@ -148,10 +176,15 @@ Authenticated subject selection:
 
 ## Persistence/migration impact
 
-This feature does not add an application table/column. Identity already provides `AspNetUserClaims`, so no EF migration is required.
+The current managed-subject assignment feature does not add an application table/column. Identity already provides `AspNetUserClaims`, so no EF migration is required for that feature.
+
+Public Student registration also uses the existing Identity schema.
 
 Future Flow 2 subject-scoped chat persistence may require a real model migration because `ChatSession` currently has no SubjectId. Member 1 coordinates that schema change.
 
 ## Ownership
 
-Member 1 owns all RBAC/multi-subject code, subject-aware shared UI, regression tests, schema coordination, and all repository documentation.
+- Member 1 owns RBAC/multi-subject code, authorization rules, regression tests, schema coordination, and all repository documentation.
+- Member 3 owns the completed PR #19 UI/UX/auth presentation implementation.
+
+Presentation ownership never overrides RBAC ownership.
