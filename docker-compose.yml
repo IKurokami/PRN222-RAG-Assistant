@@ -21,6 +21,8 @@ services:
       Auth__SeedUsers__Student__Password: ${AUTH_STUDENT_PASSWORD:-}
       Auth__SeedUsers__Student__DisplayName: ${AUTH_STUDENT_DISPLAY_NAME:-Student}
       Rag__Provider: ${RAG_PROVIDER:-Ollama}
+      Rag__ChatProvider: ${RAG_CHAT_PROVIDER:-}
+      Rag__EmbeddingProvider: ${RAG_EMBEDDING_PROVIDER:-}
       Rag__EmbeddingDimensions: ${RAG_EMBEDDING_DIMENSIONS:-1024}
       Rag__Ollama__BaseUrl: http://ollama:11434
       Rag__Ollama__ChatModel: ${OLLAMA_CHAT_MODEL:-qwen3:4b}
@@ -33,6 +35,12 @@ services:
       Rag__Gemini__ApiKey: ${GEMINI_API_KEY:-}
       Rag__Gemini__ChatModel: ${GEMINI_CHAT_MODEL:-gemini-3.6-flash}
       Rag__Gemini__EmbeddingModel: ${GEMINI_EMBEDDING_MODEL:-gemini-embedding-2}
+      Rag__OpenRouter__BaseUrl: ${OPENROUTER_BASE_URL:-https://openrouter.ai/api/v1/}
+      Rag__OpenRouter__ApiKey: ${OPENROUTER_API_KEY:-}
+      Rag__OpenRouter__ChatModels: "${OPENROUTER_CHAT_MODELS:-google/gemma-4-26b-a4b-it:free,nvidia/nemotron-3-ultra-550b-a55b:free,openrouter/free}"
+      Rag__OpenRouter__EmbeddingModel: ${OPENROUTER_EMBEDDING_MODEL:-nvidia/llama-nemotron-embed-vl-1b-v2:free}
+      Rag__OpenRouter__HttpReferer: ${OPENROUTER_HTTP_REFERER:-}
+      Rag__OpenRouter__AppTitle: ${OPENROUTER_APP_TITLE:-PRN222 RAG Assistant}
       Rag__Storage__UploadsPath: /app/storage/uploads
     ports:
       - "${APP_PORT:-8080}:8080"
