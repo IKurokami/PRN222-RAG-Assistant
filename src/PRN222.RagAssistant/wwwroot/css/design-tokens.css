@@ -1,0 +1,53 @@
+/* PRN222 RAG Assistant - Warm Editorial Design System Tokens (Humata Inspired) */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap');
+
+:root {
+    /* Humata Warm Editorial Color Palette */
+    --color-bg-warm:       #fbf9f5;
+    --color-bg-card:       #ffffff;
+    --color-bg-secondary:  #f4efe6;
+    --color-bg-dark:       #1a1512;
+
+    /* Text & Ink Colors */
+    --color-text-main:     #231f20;
+    --color-text-muted:    #5c534e;
+    --color-text-subtle:   #8c827a;
+    --color-text-light:    #f5f0e8;
+
+    /* Buttons & Brand Accents */
+    --color-btn-dark:      #463327;
+    --color-btn-dark-hover:#332319;
+    --color-btn-accent:    #ea580c;
+    
+    /* Academic Semantic Accents */
+    --color-pill-bg:       #ecfdf5;
+    --color-pill-border:   #a7f3d0;
+    --color-pill-text:     #065f46;
+
+    --color-primary-800:   #1e3a8a;
+    --color-primary-600:   #2563eb;
+    
+    /* Borders & Shadows */
+    --color-border-warm:   #e8e1d5;
+    --color-border-subtle: #f0ebe1;
+
+    --shadow-soft:         0 10px 30px -10px rgba(35, 31, 32, 0.08);
+    --shadow-card:         0 4px 20px -2px rgba(35, 31, 32, 0.06);
+    --shadow-hover:        0 15px 35px -5px rgba(35, 31, 32, 0.12);
+
+    /* Typography */
+    --font-heading: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --font-body:    'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --font-mono:    'JetBrains Mono', SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+    /* Border Radii */
+    --radius-sm: 0.375rem;
+    --radius-md: 0.625rem;
+    --radius-lg: 1rem;
+    --radius-xl: 1.5rem;
+    --radius-full: 9999px;
+
+    /* Transitions */
+    --transition-smooth: 300ms cubic-bezier(0.16, 1, 0.3, 1);
+    --transition-fast:   150ms ease;
+}

@@ -1,8 +1,15 @@
 @page
 @model PRN222.RagAssistant.Pages.Account.LogoutModel
 @{
-    ViewData["Title"] = "Logout";
+    ViewData["Title"] = "Đăng xuất";
 }
 
-<h1 class="h3">Logout</h1>
-<p>Use the navigation bar to sign out of the current account.</p>
+<div class="container system-message-page">
+    <div class="system-message-code"><i class="bi bi-box-arrow-right" aria-hidden="true"></i></div>
+    <p class="system-message-kicker">Phiên đăng nhập</p>
+    <h1>Đăng xuất khỏi tài khoản.</h1>
+    <p>Sử dụng nút Đăng xuất trên thanh điều hướng để kết thúc phiên hiện tại một cách an toàn.</p>
+    <div class="system-message-actions">
+        <a asp-page="/Index" class="btn-academic-primary">Về trang chủ</a>
+    </div>
+</div>

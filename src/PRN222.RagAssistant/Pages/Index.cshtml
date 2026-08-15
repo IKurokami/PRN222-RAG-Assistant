@@ -1,10 +1,282 @@
-﻿@page
+@page
 @model IndexModel
 @{
-    ViewData["Title"] = "Home page";
+    ViewData["Title"] = "Nền tảng tri thức môn học";
 }
 
-<div class="text-center">
-    <h1 class="display-4">Welcome</h1>
-    <p>Learn about <a href="https://learn.microsoft.com/aspnet/core">building Web apps with ASP.NET Core</a>.</p>
+<div class="landing-page">
+    <section class="landing-hero">
+        <div class="container">
+            <div class="landing-hero-grid">
+                <div class="landing-hero-copy">
+                    <p class="landing-eyebrow">
+                        <span></span>
+                        Không gian tri thức dành cho môn học
+                    </p>
+                    <h1>
+                        Biến tài liệu môn học thành
+                        <span>tri thức có cấu trúc.</span>
+                    </h1>
+                    <p class="landing-hero-lead">
+                        Tập trung giáo trình, slide và tài liệu tham khảo theo từng môn học. Theo dõi quá trình index, quản lý chương và xem báo cáo trong một không gian được phân quyền rõ ràng.
+                    </p>
+
+                    <div class="landing-hero-actions">
+                        @if (User.Identity?.IsAuthenticated == true)
+                        {
+                            <a asp-controller="Subjects" asp-action="Index" class="landing-btn landing-btn-primary">
+                                Mở danh mục môn học
+                                <i class="bi bi-arrow-right" aria-hidden="true"></i>
+                            </a>
+                        }
+                        else
+                        {
+                            <a asp-page="/Account/Login" class="landing-btn landing-btn-primary">
+                                Đăng nhập để bắt đầu
+                                <i class="bi bi-arrow-right" aria-hidden="true"></i>
+                            </a>
+                            <a asp-page="/Account/Register" class="landing-btn landing-btn-secondary">Tạo tài khoản</a>
+                        }
+                        <a href="#features" class="landing-text-link">Khám phá tính năng</a>
+                    </div>
+
+                    <ul class="landing-hero-facts" aria-label="Các điểm nổi bật">
+                        <li><i class="bi bi-check2" aria-hidden="true"></i> Phạm vi theo môn học</li>
+                        <li><i class="bi bi-check2" aria-hidden="true"></i> AI chạy cục bộ</li>
+                        <li><i class="bi bi-check2" aria-hidden="true"></i> Báo cáo minh bạch</li>
+                    </ul>
+                </div>
+
+                <div class="landing-media-preview">
+                    <video class="landing-hero-video" autoplay muted loop playsinline poster="/images/hero-laptop-typing.jpg">
+                        <source src="/videos/hero-typing.webm" type="video/webm" />
+                        <source src="/videos/hero-document-ambient.mp4" type="video/mp4" />
+                    </video>
+                    <div class="landing-media-overlay"></div>
+                    <div class="landing-media-label">
+                        <span><i class="bi bi-lock-fill" aria-hidden="true"></i> Xử lý cục bộ</span>
+                        <strong>Tri thức môn học luôn ở đúng phạm vi.</strong>
+                    </div>
+                    <div class="landing-media-formats" aria-label="Định dạng được hỗ trợ">
+                        <span>PDF</span>
+                        <span>DOCX</span>
+                        <span>PPTX</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="landing-tech-strip" aria-label="Nền tảng công nghệ">
+        <div class="container">
+            <div class="landing-tech-list">
+                <span>PDF · DOCX · PPTX</span>
+                <span>PostgreSQL + pgvector</span>
+                <span>Ollama cục bộ</span>
+                <span>ASP.NET Core Identity</span>
+            </div>
+        </div>
+    </section>
+
+    <section id="features" class="landing-section landing-features">
+        <div class="container">
+            <div class="landing-section-heading">
+                <div>
+                    <p class="landing-section-kicker">Tập trung vào công việc học thuật</p>
+                    <h2>Một nơi cho toàn bộ vòng đời tài liệu.</h2>
+                </div>
+                <p>Từ lúc tải tài liệu lên đến khi dữ liệu sẵn sàng cho tra cứu, mỗi bước đều có trạng thái rõ ràng và luôn nằm trong đúng phạm vi môn học.</p>
+            </div>
+
+            <div class="landing-feature-grid">
+                <article class="landing-feature landing-feature-warm">
+                    <span class="landing-feature-number">01</span>
+                    <i class="bi bi-folder2-open" aria-hidden="true"></i>
+                    <h3>Kho tài liệu theo môn học</h3>
+                    <p>Phân loại PDF, DOCX và PPTX theo chương. Tìm kiếm, lọc trạng thái và quản lý tài liệu mà không trộn dữ liệu giữa các môn.</p>
+                </article>
+                <article class="landing-feature landing-feature-blue">
+                    <span class="landing-feature-number">02</span>
+                    <i class="bi bi-cpu" aria-hidden="true"></i>
+                    <h3>Index có thể theo dõi</h3>
+                    <p>Quan sát trạng thái chờ, đang xử lý, hoàn tất hoặc lỗi. Chủ động re-index khi nội dung tài liệu thay đổi.</p>
+                </article>
+                <article class="landing-feature landing-feature-green">
+                    <span class="landing-feature-number">03</span>
+                    <i class="bi bi-bar-chart-line" aria-hidden="true"></i>
+                    <h3>Báo cáo sẵn sàng sử dụng</h3>
+                    <p>Theo dõi số chương, tài liệu, chunks và tiến độ index trong báo cáo chỉ đọc dành riêng cho từng môn học.</p>
+                </article>
+            </div>
+        </div>
+    </section>
+
+    <section class="landing-section landing-product">
+        <div class="container">
+            <div class="landing-section-heading">
+                <div>
+                    <p class="landing-section-kicker">Giao diện làm việc thực tế</p>
+                    <h2>Dữ liệu phức tạp, trình bày dễ theo dõi.</h2>
+                </div>
+                <p>Tài liệu, trạng thái index và dữ liệu trích xuất được đặt cạnh nhau để người dùng kiểm tra nhanh mà không mất ngữ cảnh.</p>
+            </div>
+
+            <div class="showcase-window landing-showcase-window">
+                <div id="showcaseSliderTrack" class="showcase-slider-track">
+                    <div class="showcase-slide">
+                        <img src="~/images/showcase/showcase-slide-1.png" alt="Giao diện tài liệu và nội dung trích xuất" />
+                    </div>
+                    <div class="showcase-slide">
+                        <img src="~/images/showcase/showcase-slide-2.png" alt="Giao diện theo dõi dữ liệu học thuật" />
+                    </div>
+                    <div class="showcase-slide">
+                        <img src="~/images/showcase/showcase-slide-3.png" alt="Giao diện quản lý nội dung đã index" />
+                    </div>
+                </div>
+            </div>
+            <div class="showcase-indicators landing-showcase-indicators">
+                <button type="button" class="showcase-dot active" aria-label="Ảnh giao diện 1"></button>
+                <button type="button" class="showcase-dot" aria-label="Ảnh giao diện 2"></button>
+                <button type="button" class="showcase-dot" aria-label="Ảnh giao diện 3"></button>
+            </div>
+        </div>
+    </section>
+
+    <section class="landing-section landing-workflow">
+        <div class="container">
+            <div class="landing-workflow-grid">
+                <div class="landing-workflow-copy">
+                    <p class="landing-section-kicker">Quy trình rõ ràng</p>
+                    <h2>Từ tệp nguồn đến dữ liệu có thể kiểm chứng.</h2>
+                    <p>Mỗi tài liệu đi qua một pipeline duy nhất. Controller chỉ tiếp nhận yêu cầu; worker nền xử lý nội dung và cập nhật trạng thái độc lập.</p>
+                    <a asp-controller="Subjects" asp-action="Index" class="landing-inline-link">
+                        Xem không gian môn học
+                        <i class="bi bi-arrow-up-right" aria-hidden="true"></i>
+                    </a>
+                </div>
+
+                <ol class="landing-steps">
+                    <li>
+                        <span>01</span>
+                        <div>
+                            <strong>Tải lên và gắn chương</strong>
+                            <p>Lưu tệp nguồn cùng metadata và chủ thể sở hữu.</p>
+                        </div>
+                    </li>
+                    <li>
+                        <span>02</span>
+                        <div>
+                            <strong>Trích xuất và chia đoạn</strong>
+                            <p>Worker xử lý văn bản, tạo chunks và embeddings.</p>
+                        </div>
+                    </li>
+                    <li>
+                        <span>03</span>
+                        <div>
+                            <strong>Theo dõi và báo cáo</strong>
+                            <p>Trạng thái, lỗi xử lý và số liệu luôn truy cập được.</p>
+                        </div>
+                    </li>
+                </ol>
+            </div>
+        </div>
+    </section>
+
+    <section class="landing-section landing-access">
+        <div class="container">
+            <div class="landing-section-heading landing-section-heading-compact">
+                <div>
+                    <p class="landing-section-kicker">Đúng người, đúng phạm vi</p>
+                    <h2>Phân quyền gắn với trách nhiệm.</h2>
+                </div>
+                <p>Quyền hiển thị trên giao diện luôn được bảo vệ lại ở server. Mỗi thao tác nội dung đều kiểm tra quyền trên môn học cụ thể.</p>
+            </div>
+
+            <div class="landing-access-grid">
+                <article>
+                    <img src="~/images/avatars/avatar-2.png" alt="" class="landing-role-avatar" />
+                    <div>
+                        <h3>Admin</h3>
+                        <p>Quản lý người dùng, môn học, phân công Trưởng môn và có quyền can thiệp khi cần.</p>
+                    </div>
+                </article>
+                <article>
+                    <img src="~/images/avatars/avatar-3.png" alt="" class="landing-role-avatar" />
+                    <div>
+                        <h3>Trưởng môn</h3>
+                        <p>Quản lý chương, tài liệu và báo cáo trong các môn học được phân công.</p>
+                    </div>
+                </article>
+                <article>
+                    <img src="~/images/avatars/avatar-1.png" alt="" class="landing-role-avatar" />
+                    <div>
+                        <h3>Sinh viên</h3>
+                        <p>Xem các môn học đang hoạt động và nội dung được cấp quyền truy cập.</p>
+                    </div>
+                </article>
+            </div>
+        </div>
+    </section>
+
+    <section id="faq" class="landing-section landing-faq">
+        <div class="container">
+            <div class="landing-faq-grid">
+                <div>
+                    <p class="landing-section-kicker">Thông tin cần biết</p>
+                    <h2>Câu hỏi thường gặp.</h2>
+                    <p>Dữ liệu học thuật được xử lý cục bộ, có phạm vi rõ ràng và không phụ thuộc dịch vụ AI bên ngoài.</p>
+                    <div class="landing-support">
+                        <img src="~/images/avatars/support-group.png" alt="" />
+                        <span>
+                            Cần hỗ trợ?
+                            <a href="mailto:support@prn222.fpt.edu.vn">support@prn222.fpt.edu.vn</a>
+                        </span>
+                    </div>
+                </div>
+                <div class="landing-faq-list">
+                    <details open>
+                        <summary>Hệ thống hỗ trợ những định dạng nào?</summary>
+                        <p>PDF, DOCX và PPTX với giới hạn 50 MB cho mỗi tệp tải lên.</p>
+                    </details>
+                    <details>
+                        <summary>Dữ liệu giữa các môn học có bị trộn không?</summary>
+                        <p>Không. Tài liệu, chương và báo cáo đều mang subject context cụ thể; quyền truy cập được kiểm tra ở server.</p>
+                    </details>
+                    <details>
+                        <summary>Ai có thể quản lý tài liệu?</summary>
+                        <p>Admin có thể quản lý mọi môn. Trưởng môn chỉ quản lý các môn được Admin phân công.</p>
+                    </details>
+                    <details>
+                        <summary>AI và embeddings được xử lý ở đâu?</summary>
+                        <p>Ollama chạy cục bộ; embeddings được lưu trong PostgreSQL với extension pgvector.</p>
+                    </details>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="landing-final-cta">
+        <div class="container">
+            <div class="landing-final-cta-inner">
+                <div>
+                    <p class="landing-section-kicker">Bắt đầu từ môn học của bạn</p>
+                    <h2>Một kho tài liệu gọn, rõ và đúng quyền.</h2>
+                </div>
+                @if (User.Identity?.IsAuthenticated == true)
+                {
+                    <a asp-controller="Subjects" asp-action="Index" class="landing-btn landing-btn-light">
+                        Mở danh mục môn học
+                        <i class="bi bi-arrow-right" aria-hidden="true"></i>
+                    </a>
+                }
+                else
+                {
+                    <a asp-page="/Account/Login" class="landing-btn landing-btn-light">
+                        Đăng nhập để bắt đầu
+                        <i class="bi bi-arrow-right" aria-hidden="true"></i>
+                    </a>
+                }
+            </div>
+        </div>
+    </section>
 </div>

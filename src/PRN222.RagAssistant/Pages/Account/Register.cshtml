@@ -1,0 +1,90 @@
+@page
+@model PRN222.RagAssistant.Pages.Account.RegisterModel
+@{
+    Layout = null;
+    ViewData["Title"] = "Đăng ký - PRN222 RAG Assistant";
+}
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"]</title>
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/lib/bootstrap-icons/font/bootstrap-icons.min.css" />
+    <link rel="stylesheet" href="~/css/design-tokens.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/components.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+</head>
+<body class="account-page">
+    <main class="account-shell">
+        <section class="account-visual" aria-label="PRN222 RAG Assistant">
+            <a class="account-brand" asp-page="/Index" aria-label="Về trang chủ">
+                <span class="app-logo-mark" aria-hidden="true">
+                    <span class="app-logo-letter">R</span>
+                    <span class="app-logo-accent"></span>
+                </span>
+                <span class="app-brand-copy">
+                    <span class="app-brand-name">PRN222</span>
+                    <span class="app-brand-product">RAG Assistant</span>
+                </span>
+            </a>
+            <div class="account-visual-copy">
+                <p>Không gian tri thức môn học</p>
+                <h1>Bắt đầu với một tài khoản duy nhất.</h1>
+                <ul>
+                    <li>Danh mục môn học được phân quyền</li>
+                    <li>Tài liệu và báo cáo cùng một nơi</li>
+                    <li>Dữ liệu được xử lý cục bộ</li>
+                </ul>
+            </div>
+        </section>
+
+        <section class="account-form-pane account-form-pane-register">
+            <div class="account-form-wrap">
+                <a asp-page="/Index" class="account-back-link"><i class="bi bi-arrow-left" aria-hidden="true"></i> Trang chủ</a>
+                <p class="account-form-kicker">Tạo tài khoản</p>
+                <h2>Đăng ký</h2>
+                <p class="account-form-intro">Tài khoản mới được gán vai trò Sinh viên và có thể truy cập các môn học đang hoạt động.</p>
+
+                <form method="post" class="account-form">
+                    <div asp-validation-summary="ModelOnly" class="alert alert-danger small" role="alert"></div>
+
+                    <div>
+                        <label asp-for="Input.DisplayName">Họ và tên</label>
+                        <input asp-for="Input.DisplayName" autocomplete="name" placeholder="Nguyễn Văn A" />
+                        <span asp-validation-for="Input.DisplayName" class="text-danger small"></span>
+                    </div>
+
+                    <div>
+                        <label asp-for="Input.Email">Email</label>
+                        <input asp-for="Input.Email" autocomplete="username" placeholder="sinhvien@fpt.edu.vn" />
+                        <span asp-validation-for="Input.Email" class="text-danger small"></span>
+                    </div>
+
+                    <div class="account-form-columns">
+                        <div>
+                            <label asp-for="Input.Password">Mật khẩu</label>
+                            <input asp-for="Input.Password" autocomplete="new-password" placeholder="Tối thiểu 6 ký tự" />
+                            <span asp-validation-for="Input.Password" class="text-danger small"></span>
+                        </div>
+                        <div>
+                            <label asp-for="Input.ConfirmPassword">Xác nhận mật khẩu</label>
+                            <input asp-for="Input.ConfirmPassword" autocomplete="new-password" placeholder="Nhập lại mật khẩu" />
+                            <span asp-validation-for="Input.ConfirmPassword" class="text-danger small"></span>
+                        </div>
+                    </div>
+
+                    <input type="hidden" name="returnUrl" value="@Model.ReturnUrl" />
+                    <button type="submit" class="account-submit">Tạo tài khoản <i class="bi bi-arrow-right" aria-hidden="true"></i></button>
+                </form>
+
+                <p class="account-switch">Đã có tài khoản? <a asp-page="/Account/Login">Đăng nhập</a></p>
+            </div>
+        </section>
+    </main>
+
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <partial name="_ValidationScriptsPartial" />
+</body>
+</html>

@@ -1,56 +1,168 @@
 @using PRN222.RagAssistant.Domain.Enums
 @model DocumentDetailsViewModel
 @{
-    ViewData["Title"] = $"Chi tiết - {Model.Document.Title}";
+    ViewData["Title"] = $"Chi tiết: {Model.Document.Title} - {Model.Document.SubjectCode}";
 }
 
-<div class="d-flex justify-content-between align-items-start mb-4 gap-3">
-    <div>
-        <div class="small text-muted">@Model.Document.SubjectCode - @Model.Document.SubjectName</div>
-        <h2 class="mb-1">@Model.Document.Title</h2>
-        <span class="text-muted">Chi tiết thông tin và trạng thái xử lý tài liệu</span>
+<div class="container py-4">
+    <!-- Breadcrumb -->
+    <div class="academic-breadcrumb mb-3">
+        <a asp-page="/Index"><i class="bi bi-house-door"></i> Trang chủ</a>
+        <span class="academic-breadcrumb-separator">/</span>
+        <a asp-controller="Subjects" asp-action="Index">Môn học</a>
+        <span class="academic-breadcrumb-separator">/</span>
+        <a asp-controller="Documents" asp-action="Index" asp-route-subjectId="@Model.Document.SubjectId">Tài liệu @Model.Document.SubjectCode</a>
+        <span class="academic-breadcrumb-separator">/</span>
+        <span class="text-slate-800 fw-semibold">Chi tiết tài liệu</span>
     </div>
-    <a asp-controller="Documents" asp-action="Index" asp-route-subjectId="@Model.Document.SubjectId" class="btn btn-outline-secondary">Quay lại danh sách</a>
-</div>
 
-<div class="row">
-    <div class="col-md-8">
-        <div class="card shadow-sm mb-4"><div class="card-header bg-light fw-bold">Thông tin chung</div><div class="card-body">
-            <dl class="row mb-0">
-                <dt class="col-sm-4">Tiêu đề</dt><dd class="col-sm-8">@Model.Document.Title</dd>
-                <dt class="col-sm-4">File gốc</dt><dd class="col-sm-8"><code>@Model.Document.OriginalFileName</code></dd>
-                <dt class="col-sm-4">Môn học</dt><dd class="col-sm-8">@Model.Document.SubjectCode - @Model.Document.SubjectName</dd>
-                <dt class="col-sm-4">Chương</dt><dd class="col-sm-8">@(Model.Document.ChapterNumber.HasValue ? $"Chương {Model.Document.ChapterNumber}: {Model.Document.ChapterTitle}" : "Chưa gán chương")</dd>
-                <dt class="col-sm-4">Dung lượng</dt><dd class="col-sm-8">@Model.Document.FormattedSize</dd>
-                <dt class="col-sm-4">Định dạng</dt><dd class="col-sm-8">@Model.Document.FileExtension (@Model.Document.ContentType)</dd>
-                <dt class="col-sm-4">Người tải lên</dt><dd class="col-sm-8">@Model.Document.UploadedByEmail</dd>
-                <dt class="col-sm-4">Thời gian</dt><dd class="col-sm-8">@Model.Document.UploadedAtUtc.ToString("dd/MM/yyyy HH:mm:ss") UTC</dd>
-            </dl>
-        </div></div>
+    <!-- Header -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4 pb-2 border-bottom">
+        <div>
+            <div class="badge bg-primary-subtle text-primary border border-primary-subtle px-2.5 py-1 mb-1 font-monospace">@Model.Document.SubjectCode — @Model.Document.SubjectName</div>
+            <h1 class="fw-bold fs-3 text-slate-900 mb-1">
+                <i class="bi bi-file-text text-primary me-2"></i>@Model.Document.Title
+            </h1>
+            <p class="text-slate-500 mb-0">Thông số kỹ thuật tài liệu và chỉ số vector nhúng RAG.</p>
+        </div>
+        <a asp-controller="Documents" asp-action="Index" asp-route-subjectId="@Model.Document.SubjectId" class="btn btn-sm btn-academic-outline">
+            <i class="bi bi-arrow-left"></i> Quay lại kho tài liệu
+        </a>
     </div>
-    <div class="col-md-4">
-        <div class="card shadow-sm mb-4"><div class="card-header bg-light fw-bold">Indexing</div><div class="card-body">
-            <div class="mb-3">
-                @switch (Model.Document.IndexStatus)
+
+    <div class="row g-4">
+        <!-- 65% Left: Metadata Overview -->
+        <div class="col-lg-8">
+            <div class="academic-card mb-4">
+                <div class="d-flex align-items-center gap-2 mb-3 pb-2 border-bottom">
+                    <i class="bi bi-info-circle text-primary fs-5"></i>
+                    <h3 class="fw-bold fs-5 text-slate-900 mb-0">Thông Tin Tổng Quan</h3>
+                </div>
+
+                <dl class="row mb-0 g-2">
+                    <dt class="col-sm-4 text-slate-500 small fw-semibold">Tiêu đề tài liệu:</dt>
+                    <dd class="col-sm-8 text-slate-900 fw-bold">@Model.Document.Title</dd>
+
+                    <dt class="col-sm-4 text-slate-500 small fw-semibold">Tên file vật lý:</dt>
+                    <dd class="col-sm-8"><code class="p-1 bg-light rounded text-slate-800">@Model.Document.OriginalFileName</code></dd>
+
+                    <dt class="col-sm-4 text-slate-500 small fw-semibold">Môn học:</dt>
+                    <dd class="col-sm-8 text-slate-800">
+                        <span class="badge bg-primary text-white me-1">@Model.Document.SubjectCode</span>
+                        @Model.Document.SubjectName
+                    </dd>
+
+                    <dt class="col-sm-4 text-slate-500 small fw-semibold">Chương học FLM:</dt>
+                    <dd class="col-sm-8">
+                        @if (Model.Document.ChapterNumber.HasValue)
+                        {
+                            <span class="badge bg-light text-slate-800 border px-2.5 py-1 fw-medium">
+                                <i class="bi bi-bookmark-fill text-primary me-1"></i>Chương @Model.Document.ChapterNumber: @Model.Document.ChapterTitle
+                            </span>
+                        }
+                        else
+                        {
+                            <span class="text-slate-400 fst-italic">Tài liệu chung (Chưa phân chương)</span>
+                        }
+                    </dd>
+
+                    <dt class="col-sm-4 text-slate-500 small fw-semibold">Dung lượng:</dt>
+                    <dd class="col-sm-8 text-slate-800 font-monospace">@Model.Document.FormattedSize (@Model.Document.FileSizeBytes bytes)</dd>
+
+                    <dt class="col-sm-4 text-slate-500 small fw-semibold">Định dạng / MIME:</dt>
+                    <dd class="col-sm-8 text-slate-700 font-monospace small"><code>@Model.Document.FileExtension</code> (@Model.Document.ContentType)</dd>
+
+                    <dt class="col-sm-4 text-slate-500 small fw-semibold">Người tải lên:</dt>
+                    <dd class="col-sm-8 text-slate-800"><i class="bi bi-person me-1"></i>@Model.Document.UploadedByEmail</dd>
+
+                    <dt class="col-sm-4 text-slate-500 small fw-semibold">Thời điểm tải lên:</dt>
+                    <dd class="col-sm-8 text-slate-700 small">
+                        @Model.Document.UploadedAtUtc.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss") (Giờ Việt Nam)
+                        <span class="text-slate-400">[@Model.Document.UploadedAtUtc.ToString("dd/MM/yyyy HH:mm:ss") UTC]</span>
+                    </dd>
+                </dl>
+            </div>
+        </div>
+
+        <!-- 35% Right: AI Vector Specs & Actions -->
+        <div class="col-lg-4">
+            <div class="academic-card mb-4">
+                <div class="d-flex align-items-center gap-2 mb-3 pb-2 border-bottom">
+                    <i class="bi bi-cpu text-primary fs-5"></i>
+                    <h3 class="fw-bold fs-5 text-slate-900 mb-0">Thông Số Kỹ Thuật AI (RAG)</h3>
+                </div>
+
+                <div class="mb-3">
+                    <div class="text-slate-500 small mb-1">Trạng thái Index:</div>
+                    <div>
+                        @switch (Model.Document.IndexStatus)
+                        {
+                            case DocumentIndexStatus.Uploaded:
+                                <span class="status-pill status-uploaded">Chờ Index</span>
+                                break;
+                            case DocumentIndexStatus.Processing:
+                                <span class="status-pill status-processing">Đang tạo vector embeddings...</span>
+                                break;
+                            case DocumentIndexStatus.Indexed:
+                                <span class="status-pill status-indexed">Đã Index (Sẵn sàng phục vụ RAG)</span>
+                                break;
+                            case DocumentIndexStatus.Failed:
+                                <span class="status-pill status-failed">Thất bại</span>
+                                break;
+                        }
+                    </div>
+                </div>
+
+                <div class="stat-box mb-3 text-start">
+                    <div class="stat-label">Số Vector Chunks Trong PostgreSQL</div>
+                    <div class="stat-value text-primary">@Model.Document.ChunkCount <span class="fs-6 text-slate-500 fw-normal">chunks</span></div>
+                    <div class="small text-slate-500 mt-1">Mỗi chunk chứa tối đa ~500 ký tự ngữ nghĩa.</div>
+                </div>
+
+                <div class="mb-3 small">
+                    <span class="text-slate-500">Thời điểm hoàn tất:</span>
+                    <div class="fw-semibold text-slate-800">
+                        @if (Model.Document.IndexedAtUtc.HasValue)
+                        {
+                            <span>@Model.Document.IndexedAtUtc.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss")</span>
+                        }
+                        else
+                        {
+                            <span class="text-slate-400 fst-italic">Chưa hoàn tất</span>
+                        }
+                    </div>
+                </div>
+
+                @if (!string.IsNullOrEmpty(Model.Document.IndexError))
                 {
-                    case DocumentIndexStatus.Uploaded: <span class="badge bg-secondary">Uploaded</span> break;
-                    case DocumentIndexStatus.Processing: <span class="badge bg-primary">Processing</span> break;
-                    case DocumentIndexStatus.Indexed: <span class="badge bg-success">Indexed</span> break;
-                    case DocumentIndexStatus.Failed: <span class="badge bg-danger">Failed</span> break;
+                    <div class="alert alert-danger p-2.5 small mb-0">
+                        <div class="fw-bold mb-1"><i class="bi bi-exclamation-octagon"></i> Chi tiết lỗi:</div>
+                        <code>@Model.Document.IndexError</code>
+                    </div>
                 }
             </div>
-            <div class="mb-2"><strong>@Model.Document.ChunkCount</strong> chunks</div>
-            @if (Model.Document.IndexedAtUtc.HasValue) { <div class="small text-muted mb-2">Indexed: @Model.Document.IndexedAtUtc.Value.ToString("dd/MM/yyyy HH:mm:ss") UTC</div> }
-            @if (!string.IsNullOrWhiteSpace(Model.Document.IndexError)) { <div class="alert alert-danger small mb-0">@Model.Document.IndexError</div> }
-        </div></div>
 
-        @if (Model.CanManageDocuments)
-        {
-            <div class="card shadow-sm"><div class="card-body d-grid gap-2">
-                <a asp-controller="Documents" asp-action="Edit" asp-route-id="@Model.Document.Id" class="btn btn-primary">Chỉnh sửa</a>
-                <form method="post" asp-controller="Documents" asp-action="Reindex" asp-route-id="@Model.Document.Id" onsubmit="return confirm('Index lại tài liệu này?');"><button class="btn btn-warning w-100" type="submit">Re-index</button></form>
-                <form method="post" asp-controller="Documents" asp-action="Delete" asp-route-id="@Model.Document.Id" onsubmit="return confirm('Xóa tài liệu này?');"><button class="btn btn-outline-danger w-100" type="submit">Xóa</button></form>
-            </div></div>
-        }
+            @if (Model.CanManageDocuments)
+            {
+                <div class="academic-card">
+                    <h4 class="fw-bold fs-6 text-slate-900 mb-3">Thao Tác Quản Trị</h4>
+                    <div class="d-grid gap-2">
+                        <a asp-controller="Documents" asp-action="Edit" asp-route-id="@Model.Document.Id" class="btn btn-academic-primary justify-content-center">
+                            <i class="bi bi-pencil"></i> Chỉnh sửa thông tin
+                        </a>
+                        <form method="post" asp-controller="Documents" asp-action="Reindex" asp-route-id="@Model.Document.Id" onsubmit="return confirm('Yêu cầu hệ thống tách chunk và embed lại tài liệu này?');">
+                            <button type="submit" class="btn btn-outline-warning text-dark w-100 d-flex align-items-center justify-content-center gap-2">
+                                <i class="bi bi-arrow-repeat"></i> Re-index tài liệu
+                            </button>
+                        </form>
+                        <form method="post" asp-controller="Documents" asp-action="Delete" asp-route-id="@Model.Document.Id" onsubmit="return confirm('Xóa tài liệu này khỏi hệ thống?');">
+                            <button type="submit" class="btn btn-outline-danger w-100 d-flex align-items-center justify-content-center gap-2">
+                                <i class="bi bi-trash"></i> Xóa tài liệu
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            }
+        </div>
     </div>
 </div>

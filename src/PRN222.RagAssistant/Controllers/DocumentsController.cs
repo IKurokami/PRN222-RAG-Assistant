@@ -42,6 +42,8 @@ public sealed class DocumentsController : Controller
     public async Task<IActionResult> Index(
         Guid subjectId,
         Guid? selectedChapterId,
+        string? searchTerm,
+        DocumentIndexStatus? selectedStatus,
         CancellationToken cancellationToken)
     {
         if (subjectId == Guid.Empty)
@@ -78,9 +80,25 @@ public sealed class DocumentsController : Controller
             .AsNoTracking()
             .Where(document => document.SubjectId == subjectId);
 
+        var totalDocumentCount = await query.CountAsync(cancellationToken);
+
         if (selectedChapterId.HasValue)
         {
             query = query.Where(document => document.ChapterId == selectedChapterId.Value);
+        }
+
+        var normalizedSearchTerm = searchTerm?.Trim();
+        if (!string.IsNullOrEmpty(normalizedSearchTerm))
+        {
+            var normalizedSearch = normalizedSearchTerm.ToLowerInvariant();
+            query = query.Where(document =>
+                document.Title.ToLower().Contains(normalizedSearch)
+                || document.OriginalFileName.ToLower().Contains(normalizedSearch));
+        }
+
+        if (selectedStatus.HasValue)
+        {
+            query = query.Where(document => document.IndexStatus == selectedStatus.Value);
         }
 
         var documentEntities = await query
@@ -95,6 +113,9 @@ public sealed class DocumentsController : Controller
             SubjectCode = subject.Code,
             SubjectName = subject.Name,
             SelectedChapterId = selectedChapterId,
+            SearchTerm = normalizedSearchTerm ?? string.Empty,
+            SelectedStatus = selectedStatus,
+            TotalDocumentCount = totalDocumentCount,
             CanManageDocuments = await _subjectAccessService.CanManageSubjectAsync(User, subjectId, cancellationToken),
             StatusMessage = TempData["StatusMessage"] as string,
             ChapterOptions = chapters
@@ -425,6 +446,8 @@ public sealed class DocumentsController : Controller
     public async Task<IActionResult> Delete(
         Guid id,
         Guid? selectedChapterId,
+        string? searchTerm,
+        DocumentIndexStatus? selectedStatus,
         CancellationToken cancellationToken)
     {
         var document = await _dbContext.Documents.FindAsync([id], cancellationToken);
@@ -461,7 +484,7 @@ public sealed class DocumentsController : Controller
         }
 
         TempData["StatusMessage"] = $"Đã xóa tài liệu '{document.Title}' thành công.";
-        return RedirectToAction(nameof(Index), new { subjectId, selectedChapterId });
+        return RedirectToAction(nameof(Index), new { subjectId, selectedChapterId, searchTerm, selectedStatus });
     }
 
     [HttpPost]
@@ -470,6 +493,8 @@ public sealed class DocumentsController : Controller
     public async Task<IActionResult> Reindex(
         Guid id,
         Guid? selectedChapterId,
+        string? searchTerm,
+        DocumentIndexStatus? selectedStatus,
         CancellationToken cancellationToken)
     {
         var document = await _dbContext.Documents.FindAsync([id], cancellationToken);
@@ -491,7 +516,9 @@ public sealed class DocumentsController : Controller
         await _indexingQueue.EnqueueAsync(document.Id, cancellationToken);
 
         TempData["StatusMessage"] = $"Đã đưa tài liệu '{document.Title}' vào hàng chờ index lại.";
-        return RedirectToAction(nameof(Index), new { subjectId = document.SubjectId, selectedChapterId });
+        return RedirectToAction(
+            nameof(Index),
+            new { subjectId = document.SubjectId, selectedChapterId, searchTerm, selectedStatus });
     }
 
     private async Task<bool> PopulateUploadMetadataAsync(

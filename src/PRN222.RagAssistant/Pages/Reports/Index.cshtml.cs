@@ -101,6 +101,7 @@ public sealed class IndexModel : PageModel
         var countMap = docCountsByChapter.ToDictionary(item => item.ChapterId, item => item.Count);
         DocumentsByChapter = chapters.Select(chapter => new ChapterDocumentCountViewModel
         {
+            Id = chapter.Id,
             Number = chapter.Number,
             Title = chapter.Title,
             DocumentCount = countMap.GetValueOrDefault(chapter.Id)
@@ -193,6 +194,7 @@ public sealed class IndexModel : PageModel
 
     public sealed class ChapterDocumentCountViewModel
     {
+        public Guid Id { get; set; }
         public int Number { get; set; }
         public string Title { get; set; } = string.Empty;
         public int DocumentCount { get; set; }

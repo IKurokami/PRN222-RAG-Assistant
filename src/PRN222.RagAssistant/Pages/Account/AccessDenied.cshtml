@@ -2,8 +2,18 @@
 @using Microsoft.AspNetCore.Authorization
 @attribute [AllowAnonymous]
 @{
-    ViewData["Title"] = "Access denied";
+    ViewData["Title"] = "Không có quyền truy cập";
 }
 
-<h1 class="h3 text-danger">Access denied</h1>
-<p>You do not have permission to access this resource.</p>
+<div class="container system-message-page">
+    <div class="system-message-code">403</div>
+    <p class="system-message-kicker">Yêu cầu đã bị từ chối</p>
+    <h1>Bạn không có quyền truy cập nội dung này.</h1>
+    <p>Quyền quản lý được kiểm tra theo vai trò và môn học cụ thể. Hãy quay lại danh mục môn học để tiếp tục với phạm vi được cấp.</p>
+    <div class="system-message-actions">
+        <a asp-controller="Subjects" asp-action="Index" class="btn-academic-primary">
+            Danh mục môn học <i class="bi bi-arrow-right" aria-hidden="true"></i>
+        </a>
+        <a asp-page="/Index" class="btn-academic-outline">Trang chủ</a>
+    </div>
+</div>

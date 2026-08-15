@@ -1,6 +1,15 @@
+@using Microsoft.AspNetCore.Http
+@using PRN222.RagAssistant.Security
 @{
+    var currentPage = ViewContext.RouteData.Values["page"]?.ToString() ?? "";
+    var currentController = ViewContext.RouteData.Values["controller"]?.ToString() ?? "";
+    var isHomePage = string.Equals(currentPage, "/Index", StringComparison.OrdinalIgnoreCase) && string.IsNullOrEmpty(currentController);
     var isAdmin = User.IsInRole(AppRoles.Admin);
     var isSubjectLeader = User.IsInRole(AppRoles.SubjectLeader);
+    var isSubjectWorkspace = currentController is "Subjects" or "Documents" or "Chapters"
+        || currentPage.StartsWith("/Reports", StringComparison.OrdinalIgnoreCase);
+    var isSubjectAdminArea = string.Equals(currentController, "AdminSubjects", StringComparison.OrdinalIgnoreCase);
+    var isUserAdminArea = string.Equals(currentController, "AdminUsers", StringComparison.OrdinalIgnoreCase);
 }
 <!DOCTYPE html>
 <html lang="vi">
@@ -8,55 +17,138 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>@ViewData["Title"] - PRN222 RAG Assistant</title>
-    <script type="importmap"></script>
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/lib/bootstrap-icons/font/bootstrap-icons.min.css" />
+    <link rel="stylesheet" href="~/css/design-tokens.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/components.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
-    <link rel="stylesheet" href="~/PRN222.RagAssistant.styles.css" asp-append-version="true" />
-    <style>
-        .navbar-custom { background-color:#fff; box-shadow:0 2px 12px rgba(0,0,0,.06); border-bottom:1px solid #e2e8f0; }
-        .nav-link-custom { font-weight:500; color:#475569; padding:.5rem .9rem !important; border-radius:6px; transition:all .15s ease-in-out; }
-        .nav-link-custom:hover { color:#0d6efd; background-color:#f1f5f9; }
-        .user-pill { background-color:#f8fafc; border:1px solid #cbd5e1; border-radius:20px; padding:.3rem .85rem; }
-    </style>
 </head>
-<body>
-<header>
-<nav class="navbar navbar-expand-md navbar-light navbar-custom py-2 mb-4"><div class="container">
-    <a class="navbar-brand fw-bold d-flex align-items-center gap-2" asp-page="/Index"><span class="badge bg-primary px-2 py-1 fs-6">PRN222</span><span class="text-dark fs-5">RAG Assistant</span></a>
-    <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target=".navbar-collapse"><span class="navbar-toggler-icon"></span></button>
-    <div class="navbar-collapse collapse d-md-inline-flex justify-content-between">
-        <ul class="navbar-nav gap-1 flex-grow-1 ms-md-3">
-            <li class="nav-item"><a class="nav-link nav-link-custom" asp-page="/Index">Home</a></li>
-            @if (User.Identity?.IsAuthenticated == true)
-            {
-                <li class="nav-item"><a class="nav-link nav-link-custom" asp-controller="Subjects" asp-action="Index">Subjects</a></li>
-            }
-            @if (isAdmin)
-            {
-                <li class="nav-item"><a class="nav-link nav-link-custom" asp-controller="AdminSubjects" asp-action="Index">Manage Subjects</a></li>
-                <li class="nav-item"><a class="nav-link nav-link-custom" asp-controller="AdminUsers" asp-action="Index">Users</a></li>
-            }
-            <li class="nav-item"><a class="nav-link nav-link-custom" asp-page="/Privacy">Privacy</a></li>
-        </ul>
-        <ul class="navbar-nav align-items-center gap-2 mt-2 mt-md-0">
-            @if (User.Identity?.IsAuthenticated == true)
-            {
-                <li class="nav-item"><div class="user-pill d-flex align-items-center gap-2 small"><span class="fw-bold text-dark">@User.Identity.Name</span>@if (isAdmin) { <span class="badge bg-danger">Admin</span> } else if (isSubjectLeader) { <span class="badge bg-primary">Subject Leader</span> } else { <span class="badge bg-secondary">Student</span> }</div></li>
-                <li class="nav-item"><form method="post" asp-page="/Account/Logout" class="m-0"><button type="submit" class="btn btn-sm btn-outline-danger px-3">Logout</button></form></li>
-            }
-            else
-            {
-                <li class="nav-item"><a class="btn btn-sm btn-primary px-3" asp-page="/Account/Login">Login</a></li>
-            }
-        </ul>
-    </div>
-</div></nav>
-</header>
-<div class="container"><main role="main" class="pb-4">@RenderBody()</main></div>
-<footer class="border-top footer text-muted py-3 bg-white mt-auto"><div class="container text-center small">&copy; 2026 - PRN222.RagAssistant - <a asp-page="/Privacy" class="text-decoration-none">Privacy</a></div></footer>
-<script src="~/lib/jquery/dist/jquery.min.js"></script>
-<script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
-<script src="~/js/site.js" asp-append-version="true"></script>
-@await RenderSectionAsync("Scripts", required: false)
+<body class="d-flex flex-column min-vh-100 @(isHomePage ? "page-home" : "page-subpage")" style="background-color: var(--color-bg-warm);">
+    <header>
+        <nav class="navbar navbar-expand-xl @(isHomePage ? "navbar-humata" : "navbar-humata-solid")">
+            <div class="container navbar-humata-layout">
+                <a class="brand-humata" asp-area="" asp-page="/Index" aria-label="PRN222 RAG Assistant - Trang chủ">
+                    <span class="app-logo-mark" aria-hidden="true">
+                        <span class="app-logo-letter">R</span>
+                        <span class="app-logo-accent"></span>
+                    </span>
+                    <span class="app-brand-copy">
+                        <span class="app-brand-name">PRN222</span>
+                        <span class="app-brand-product">RAG Assistant</span>
+                    </span>
+                </a>
+
+                <button class="navbar-toggler navbar-humata-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarHumataMain" aria-controls="navbarHumataMain" aria-expanded="false" aria-label="Mở menu điều hướng">
+                    <i class="bi bi-list" aria-hidden="true"></i>
+                </button>
+
+                <div class="collapse navbar-collapse" id="navbarHumataMain">
+                    <ul class="navbar-nav navbar-humata-links mx-xl-auto">
+                        <li class="nav-item">
+                            <a class="nav-link-humata @(isHomePage ? "is-active" : null)" asp-area="" asp-page="/Index">Trang chủ</a>
+                        </li>
+                        @if (User.Identity?.IsAuthenticated == true)
+                        {
+                            <li class="nav-item">
+                                <a class="nav-link-humata @(isSubjectWorkspace ? "is-active" : null)" asp-area="" asp-controller="Subjects" asp-action="Index">Môn học</a>
+                            </li>
+                        }
+                        @if (isAdmin)
+                        {
+                            <li class="nav-item">
+                                <a class="nav-link-humata @(isSubjectAdminArea ? "is-active" : null)" asp-area="" asp-controller="AdminSubjects" asp-action="Index">Quản trị môn học</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link-humata @(isUserAdminArea ? "is-active" : null)" asp-area="" asp-controller="AdminUsers" asp-action="Index">Người dùng</a>
+                            </li>
+                        }
+                        <li class="nav-item">
+                            <a class="nav-link-humata" href="/#features">Tính năng</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link-humata" href="/#faq">Hỏi đáp</a>
+                        </li>
+                    </ul>
+
+                    <div class="navbar-humata-actions">
+                        @if (User.Identity?.IsAuthenticated == true)
+                        {
+                            <div class="nav-session">
+                                <i class="bi bi-person" aria-hidden="true"></i>
+                                <span class="nav-session-copy">
+                                    <span class="nav-session-name">@User.Identity.Name</span>
+                                    <span class="nav-session-role">
+                                        @if (isAdmin)
+                                        {
+                                            @:Quản trị viên
+                                        }
+                                        else if (isSubjectLeader)
+                                        {
+                                            @:Trưởng môn
+                                        }
+                                        else
+                                        {
+                                            @:Sinh viên
+                                        }
+                                    </span>
+                                </span>
+                            </div>
+                            <form method="post" asp-page="/Account/Logout" class="m-0">
+                                <button type="submit" class="nav-logout">
+                                    <i class="bi bi-box-arrow-right" aria-hidden="true"></i>
+                                    <span>Đăng xuất</span>
+                                </button>
+                            </form>
+                        }
+                        else
+                        {
+                            <a class="btn-humata-login" asp-page="/Account/Login">Đăng nhập</a>
+                            <a class="btn-humata-signup" asp-page="/Account/Register">Trải nghiệm ngay</a>
+                        }
+                    </div>
+                </div>
+            </div>
+        </nav>
+    </header>
+
+    <main role="main" class="flex-grow-1">
+        @RenderBody()
+    </main>
+
+    <footer class="footer-humata-deep mt-auto">
+        <div class="container">
+            <!-- Centered Brand Logo -->
+            <a class="footer-brand-logo" asp-area="" asp-page="/Index">
+                <span class="app-logo-mark app-logo-mark-footer" aria-hidden="true">
+                    <span class="app-logo-letter">R</span>
+                    <span class="app-logo-accent"></span>
+                </span>
+                <span>PRN222 RAG</span>
+            </a>
+
+            <!-- Centered Nav Links -->
+            <ul class="footer-nav-links">
+                <li><a asp-area="" asp-page="/Index">Trang chủ</a></li>
+                @if (User.Identity?.IsAuthenticated == true)
+                {
+                    <li><a asp-area="" asp-controller="Subjects" asp-action="Index">Danh mục môn học</a></li>
+                }
+                <li><a href="/#features">Tính năng</a></li>
+                <li><a href="https://flm.fpt.edu.vn/gui/role/teacher/SyllabusDetails?sylID=13892" target="_blank" rel="noopener noreferrer">Đề cương FLM</a></li>
+                <li><a asp-page="/Privacy">Điều khoản &amp; Bảo mật</a></li>
+            </ul>
+
+
+            <!-- Centered Copyright -->
+            <div class="footer-copyright">
+                &copy; 2026 PRN222 RAG Assistant — Đại Học FPT (FPT University). Toàn bộ quyền được bảo lưu.
+            </div>
+        </div>
+    </footer>
+
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="~/js/site.js" asp-append-version="true"></script>
+    @await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>

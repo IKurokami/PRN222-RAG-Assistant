@@ -13,6 +13,9 @@ public sealed class DocumentIndexViewModel
     public List<DocumentItemViewModel> Documents { get; set; } = [];
     public List<SelectListItem> ChapterOptions { get; set; } = [];
     public Guid? SelectedChapterId { get; set; }
+    public string SearchTerm { get; set; } = string.Empty;
+    public DocumentIndexStatus? SelectedStatus { get; set; }
+    public int TotalDocumentCount { get; set; }
     public bool CanManageDocuments { get; set; }
     public string? StatusMessage { get; set; }
 }

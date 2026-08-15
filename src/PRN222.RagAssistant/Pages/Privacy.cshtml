@@ -1,8 +1,43 @@
-﻿@page
+@page
 @model PrivacyModel
 @{
-    ViewData["Title"] = "Privacy Policy";
+    ViewData["Title"] = "Quyền riêng tư & bảo mật";
 }
-<h1>@ViewData["Title"]</h1>
 
-<p>Use this page to detail your site's privacy policy.</p>
+<div class="container simple-content-page">
+    <div class="academic-breadcrumb mb-4">
+        <a asp-page="/Index"><i class="bi bi-house-door" aria-hidden="true"></i> Trang chủ</a>
+        <span class="academic-breadcrumb-separator">/</span>
+        <span>Quyền riêng tư &amp; bảo mật</span>
+    </div>
+
+    <header>
+        <p class="simple-content-kicker">PRN222 RAG Assistant</p>
+        <h1>Quyền riêng tư &amp; bảo mật</h1>
+        <p>Những nguyên tắc đang được áp dụng khi hệ thống xử lý tài khoản và tài liệu môn học.</p>
+    </header>
+
+    <div class="simple-content-sections">
+        <section>
+            <span>01</span>
+            <div>
+                <h2>Dữ liệu tài khoản</h2>
+                <p>Tài khoản được quản lý bằng ASP.NET Core Identity. Quyền truy cập dựa trên vai trò Admin, Trưởng môn, Sinh viên và phạm vi môn học được phân công.</p>
+            </div>
+        </section>
+        <section>
+            <span>02</span>
+            <div>
+                <h2>Tài liệu môn học</h2>
+                <p>Tệp nguồn được lưu trong vùng lưu trữ của ứng dụng. Metadata, nội dung đã xử lý và embeddings được lưu trong PostgreSQL theo chủ thể môn học.</p>
+            </div>
+        </section>
+        <section>
+            <span>03</span>
+            <div>
+                <h2>Xử lý AI cục bộ</h2>
+                <p>Ollama cung cấp mô hình embedding trong hạ tầng cục bộ. Workflow tài liệu không gửi nội dung sang dịch vụ AI bên ngoài.</p>
+            </div>
+        </section>
+    </div>
+</div>
