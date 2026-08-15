@@ -1,10 +1,12 @@
 # Member 2 handoff - Flow 1 Document/Chapter Management
 
+> Synchronized with `master` after PR #19.
+
 ## Status
 
-Flow 1 request/presentation behavior is complete and uses MVC.
+Flow 1 request/business behavior is complete and uses MVC.
 
-Member 2 owns the established business behavior. Member 1 owns the cross-cutting multi-subject/RBAC integration now applied around it.
+Member 2 owns the established business behavior. Member 1 owns cross-cutting multi-subject/RBAC integration. Member 3 owns the completed PR #19 visual redesign of the current screens.
 
 ## Locations
 
@@ -31,6 +33,8 @@ Do not recreate `Pages/Documents` or `Pages/Chapters`.
 - safe Chapter deletion by unassigning affected Documents;
 - queue handoff through `IDocumentIndexingQueue`.
 
+PR #19 adds current list UX for text search and indexing-status filtering, and preserves active filter context across delete/re-index redirects.
+
 ## Authorization
 
 Writes retain the coarse `AppPolicies.ManageDocuments` requirement and also validate the concrete Subject via `ISubjectAccessService`.
@@ -50,6 +54,14 @@ PRN222 is only the seeded demo Subject. Never restore `SeedData.Prn222SubjectId`
 Flow 1 request code persists a `Document` containing `SubjectId` and enqueues its Document ID. Parsing/chunking/embedding stays Member 3-owned.
 
 Controllers must not call Ollama or pgvector directly.
+
+## UI/UX ownership after PR #19
+
+Member 3 completed the visual refresh for Documents/Chapters and shared application presentation.
+
+This does **not** transfer Flow 1 business logic ownership from Member 2. Future functional changes to upload/CRUD/filter/re-index semantics remain Member 2 work unless explicitly reassigned.
+
+Future UI changes should reuse the shared PR #19 design system and be coordinated through the relevant owner.
 
 ## Documentation
 

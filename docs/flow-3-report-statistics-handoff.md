@@ -1,10 +1,12 @@
 # Flow 3 handoff - Report & Statistics
 
+> Synchronized with `master` after PR #19.
+
 ## Status
 
 Flow 3 is complete and remains a read-only Razor Pages workflow under `Pages/Reports/`.
 
-Member 2 owns report behavior. Member 1 owns the cross-cutting subject/RBAC integration.
+Member 2 owns report behavior. Member 1 owns cross-cutting subject/RBAC integration. Member 3 completed the current visual redesign in PR #19.
 
 ## Subject-scoped access
 
@@ -31,6 +33,14 @@ Admin can report on any Subject. Subject Leader can report only on assigned Subj
 - recent indexing failures;
 - recently indexed Documents and chunk counts.
 
+`ChapterDocumentCountViewModel` now carries the Chapter ID used by the refreshed report presentation while preserving the same read-only reporting semantics.
+
+## PR #19 presentation update
+
+Member 3 refreshed the Reports UI as part of the application-wide design system rollout.
+
+This does not change the report ownership or data boundaries. Reports remain subject-scoped, read-only, and provider-independent.
+
 ## Transitional chat metrics
 
 Chat session/message/citation totals remain **global** because Flow 2 is pending and `ChatSession` currently has no `SubjectId`.
@@ -52,6 +62,8 @@ Reports must not:
 
 PRN222 is a seeded demo Subject, not the report's hard-coded scope.
 
-## Documentation
+## Ownership/documentation
 
-Member 2 reports future report changes to Member 1; Member 1 keeps repository docs synchronized.
+- Member 2 reports future report-behavior changes to Member 1.
+- Member 3 reports future presentation changes to Member 1.
+- Member 1 keeps repository docs synchronized.
