@@ -1,18 +1,18 @@
 # Flow 3 handoff - Report & Statistics
 
-> Updated for AI-provider backup support.
+> Synchronized after PR #30 merged on 2026-08-18.
 
 ## Status
 
 Flow 3 is complete and remains a read-only Razor Pages workflow under `Pages/Reports/`.
 
-Member 2 owns report behavior. Member 1 owns cross-cutting subject/RBAC/provider coordination. Member 3 owns the current visual redesign.
+Member 2 owns report behavior. Member 1 owns cross-cutting subject/RBAC/provider coordination. Member 3 owns the current visual baseline.
 
 ## Subject-scoped access
 
 Reports require `ManageDocuments` plus `ISubjectAccessService.CanManageSubjectAsync` for the concrete Subject.
 
-## Subject-scoped metrics
+## Subject-scoped document/index metrics
 
 - total Chapters/Documents;
 - unassigned Documents;
@@ -24,22 +24,24 @@ Reports require `ManageDocuments` plus `ISubjectAccessService.CanManageSubjectAs
 
 ## AI provider boundary
 
-Reports remain **provider-independent**.
+Reports remain provider-independent. They must not call embedding/chat providers, run similarity retrieval or mutate workflow state.
 
-They must not:
+## Chat metrics after PR #30
 
-- call `ITextEmbeddingService`;
-- call `IChatCompletionService`;
-- call Ollama/Gemini/OpenAI directly;
-- run similarity retrieval;
-- mutate workflow state.
+`ChatSession.SubjectId` now exists and the Member 4 backend is subject-aware.
 
-A provider switch may cause documents to be re-indexed, and reports can naturally reflect the resulting index status/chunk counts, but reports do not orchestrate that process.
+Existing Flow 3 chat session/message/citation aggregates were originally implemented before that field existed, so they should be audited when Member 5 completes the final Flow 2 MVC product layer. The target state is explicit subject-scoped chat metrics rather than relying on legacy global totals.
 
-## Transitional chat metrics
+This audit is follow-up integration work; it does not change the completed read-only Flow 3 document/indexing metrics.
 
-Chat session/message/citation totals remain global because Flow 2 is pending and `ChatSession` currently has no `SubjectId`.
+## Ownership / contribution
 
-## Ownership/documentation
+- Member 2: Flow 3 behavior and report implementation.
+- Member 1: subject/RBAC integration and documentation coordination.
+- Member 3: visual baseline.
+- Member 4: subject-scoped Flow 2 backend that now provides the chat subject context consumed by future report updates.
+- Member 5: pending final Flow 2 MVC/evaluation integration.
 
-Member 1 keeps repository docs synchronized.
+Canonical contribution accounting: `docs/member-contributions.md`.
+
+Project documentation uses Member numbers only and must not add GitHub usernames.
