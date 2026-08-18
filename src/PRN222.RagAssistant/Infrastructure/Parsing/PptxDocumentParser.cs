@@ -1,3 +1,4 @@
+using DocumentFormat.OpenXml;
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Presentation;
 
@@ -43,23 +44,74 @@ public sealed class PptxDocumentParser : IDocumentParser
 
     private static string ExtractSlideText(SlidePart slidePart)
     {
-        var sb = new System.Text.StringBuilder();
-
         if (slidePart.Slide is null)
         {
             return string.Empty;
         }
 
-        foreach (var paragraph in slidePart.Slide.Descendants<DocumentFormat.OpenXml.Drawing.Paragraph>())
-        {
-            var text = paragraph.InnerText?.Trim();
+        // Extract text from shapes respecting their order in the slide
+        // Group paragraphs by their containing shape and process shapes in document order
+        var shapeTexts = ExtractShapeTextsInOrder(slidePart);
 
-            if (!string.IsNullOrWhiteSpace(text))
+        if (shapeTexts.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        return string.Join("\n\n", shapeTexts);
+    }
+
+    private static List<string> ExtractShapeTextsInOrder(SlidePart slidePart)
+    {
+        var texts = new List<string>();
+
+        // Get all elements in document order
+        var allElements = slidePart.Slide.Elements().ToList();
+
+        foreach (var element in allElements)
+        {
+            var elementText = ExtractTextFromElement(element);
+            if (!string.IsNullOrWhiteSpace(elementText))
             {
-                sb.AppendLine(text);
+                texts.Add(elementText);
             }
         }
 
-        return sb.ToString();
+        return texts;
+    }
+
+    private static string ExtractTextFromElement(OpenXmlElement element)
+    {
+        var sb = new System.Text.StringBuilder();
+        var paragraphText = new System.Text.StringBuilder();
+
+        foreach (var descendant in element.Descendants<DocumentFormat.OpenXml.Drawing.Paragraph>())
+        {
+            var text = descendant.InnerText?.Trim();
+            if (!string.IsNullOrWhiteSpace(text))
+            {
+                if (paragraphText.Length > 0)
+                {
+                    paragraphText.Append(' ');
+                }
+                paragraphText.Append(text);
+            }
+        }
+
+        // Also try legacy paragraph types
+        foreach (var paragraph in element.Descendants<DocumentFormat.OpenXml.Wordprocessing.Paragraph>())
+        {
+            var text = paragraph.InnerText?.Trim();
+            if (!string.IsNullOrWhiteSpace(text))
+            {
+                if (paragraphText.Length > 0)
+                {
+                    paragraphText.Append(' ');
+                }
+                paragraphText.Append(text);
+            }
+        }
+
+        return paragraphText.ToString().Trim();
     }
 }

@@ -1,3 +1,5 @@
+using Microsoft.Extensions.Options;
+
 namespace PRN222.RagAssistant.Infrastructure.Parsing;
 
 public sealed class TextChunker
@@ -5,20 +7,35 @@ public sealed class TextChunker
     private readonly int _maxChunkSize;
     private readonly int _overlapSize;
 
-    public TextChunker(int maxChunkSize = 500, int overlapSize = 100)
+    public TextChunker(IOptions<ChunkingOptions> options)
     {
-        if (maxChunkSize <= 0)
+        var chunkingOptions = options?.Value ?? new ChunkingOptions();
+
+        if (chunkingOptions.MaxChunkSize <= 0)
         {
-            throw new ArgumentOutOfRangeException(nameof(maxChunkSize));
+            throw new ArgumentOutOfRangeException(nameof(chunkingOptions.MaxChunkSize));
         }
 
-        if (overlapSize < 0 || overlapSize >= maxChunkSize)
+        if (chunkingOptions.OverlapSize < 0 || chunkingOptions.OverlapSize >= chunkingOptions.MaxChunkSize)
         {
-            throw new ArgumentOutOfRangeException(nameof(overlapSize));
+            throw new ArgumentOutOfRangeException(nameof(chunkingOptions.OverlapSize));
         }
 
-        _maxChunkSize = maxChunkSize;
-        _overlapSize = overlapSize;
+        _maxChunkSize = chunkingOptions.MaxChunkSize;
+        _overlapSize = chunkingOptions.OverlapSize;
+    }
+
+    /// <summary>
+    /// Creates a TextChunker with explicit values (for testing).
+    /// </summary>
+    public static TextChunker Create(int maxChunkSize = 500, int overlapSize = 100)
+    {
+        var options = Options.Create(new ChunkingOptions
+        {
+            MaxChunkSize = maxChunkSize,
+            OverlapSize = overlapSize
+        });
+        return new TextChunker(options);
     }
 
     public IReadOnlyList<ChunkedText> Chunk(IReadOnlyList<ParsedPage> pages)
@@ -124,34 +141,53 @@ public sealed class TextChunker
             return SkipWhitespace(text, chunkEnd, text.Length);
         }
 
-        var desiredStart = Math.Max(chunkStart + 1, chunkEnd - _overlapSize);
+        // Bounded overlap: search only within configured overlap window
+        // Allow 1.5x configured overlap for finding natural boundaries
+        var maxOverlapSearch = (int)(_overlapSize * 1.5);
+        var minAllowedStart = Math.Max(chunkStart + 1, chunkEnd - maxOverlapSearch);
 
-        for (var index = desiredStart - 1; index > chunkStart; index--)
+        // Desired start is at the end of the configured overlap window
+        var desiredStart = Math.Max(minAllowedStart, chunkEnd - _overlapSize);
+
+        // Search backwards from desiredStart for a natural boundary within the search window
+        for (var index = desiredStart - 1; index >= minAllowedStart; index--)
         {
             if (IsSentenceEnd(text, index) || text[index] == '\n')
             {
                 var sentenceStart = SkipWhitespace(text, index + 1, chunkEnd);
-                if (sentenceStart > chunkStart && sentenceStart < chunkEnd)
+                if (sentenceStart > minAllowedStart && sentenceStart < chunkEnd)
                 {
                     return sentenceStart;
                 }
             }
         }
 
+        // Fallback to word boundary at desiredStart
         var wordStart = desiredStart;
-        if (wordStart > chunkStart
-            && wordStart < chunkEnd
-            && !char.IsWhiteSpace(text[wordStart - 1])
-            && !char.IsWhiteSpace(text[wordStart]))
+        if (wordStart > chunkStart && wordStart < text.Length)
         {
-            while (wordStart < chunkEnd && !char.IsWhiteSpace(text[wordStart]))
+            // Skip to end of current word if not already at whitespace
+            if (wordStart > 0 && !char.IsWhiteSpace(text[wordStart - 1]))
             {
-                wordStart++;
+                while (wordStart < text.Length && !char.IsWhiteSpace(text[wordStart]))
+                {
+                    wordStart++;
+                }
             }
+            wordStart = SkipWhitespace(text, wordStart, text.Length);
         }
 
-        wordStart = SkipWhitespace(text, wordStart, chunkEnd);
-        return wordStart < chunkEnd ? wordStart : desiredStart;
+        // Ensure deterministic forward progress: at least 1/4 of max chunk size
+        var minProgress = Math.Max(_maxChunkSize / 4, 1);
+        var absoluteMinStart = Math.Max(chunkStart + 1, chunkEnd - minProgress);
+
+        if (wordStart < absoluteMinStart)
+        {
+            wordStart = absoluteMinStart;
+        }
+
+        // Cap at chunkEnd and ensure forward progress
+        return wordStart < chunkEnd ? wordStart : absoluteMinStart;
     }
 
     private static bool IsSentenceEnd(string text, int index)

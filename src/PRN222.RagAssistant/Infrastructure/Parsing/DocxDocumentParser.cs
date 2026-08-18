@@ -17,31 +17,37 @@ public sealed class DocxDocumentParser : IDocumentParser
             return pages;
         }
 
-        var paragraphs = body.Descendants<Paragraph>().ToList();
-        var currentBlock = new System.Text.StringBuilder();
-        var blockIndex = 1;
-
-        foreach (var paragraph in paragraphs)
+        // Collect all non-empty paragraphs and treat the entire document as a single logical page
+        // Blank paragraphs are spacing, not page breaks
+        var allParagraphs = body.Descendants<Paragraph>().ToList();
+        if (allParagraphs.Count == 0)
         {
-            var text = paragraph.InnerText?.Trim();
+            return pages;
+        }
 
+        var combinedText = new System.Text.StringBuilder();
+        foreach (var paragraph in allParagraphs)
+        {
+            var text = paragraph.InnerText;
             if (string.IsNullOrWhiteSpace(text))
             {
-                if (currentBlock.Length > 0)
-                {
-                    pages.Add(new ParsedPage(currentBlock.ToString().Trim(), PageNumber: blockIndex, SlideNumber: null));
-                    currentBlock.Clear();
-                    blockIndex++;
-                }
+                // Skip blank paragraphs - they are formatting/spacing, not page breaks
                 continue;
             }
 
-            currentBlock.AppendLine(text);
+            if (combinedText.Length > 0)
+            {
+                combinedText.AppendLine();
+                combinedText.AppendLine();
+            }
+            combinedText.Append(text.Trim());
         }
 
-        if (currentBlock.Length > 0)
+        var textContent = combinedText.ToString().Trim();
+        if (!string.IsNullOrEmpty(textContent))
         {
-            pages.Add(new ParsedPage(currentBlock.ToString().Trim(), PageNumber: blockIndex, SlideNumber: null));
+            // Use null for PageNumber since DOCX doesn't provide reliable page metadata
+            pages.Add(new ParsedPage(textContent, PageNumber: null, SlideNumber: null));
         }
 
         return pages;

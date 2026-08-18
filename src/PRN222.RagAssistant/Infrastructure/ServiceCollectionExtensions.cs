@@ -74,6 +74,7 @@ public static class ServiceCollectionExtensions
         // Member 3: Document Indexing & Ingestion Services.
         services.AddSingleton<IDocumentIndexingQueue, InMemoryDocumentIndexingQueue>();
         services.AddSingleton<DocumentParserFactory>();
+        services.Configure<ChunkingOptions>(configuration.GetSection(ChunkingOptions.SectionName));
         services.AddSingleton<TextChunker>();
         services.AddScoped<TextEmbeddingBatcher>();
         services.AddScoped<IDocumentIndexingService, DocumentIndexingService>();
