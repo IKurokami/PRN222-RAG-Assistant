@@ -74,6 +74,23 @@ Pending:
 
 The internal RAG demo page is not the final Member 5 MVC product flow.
 
+## Deployment / CD
+
+Render CD is prepared through the repository Blueprint:
+
+```text
+master -> GitHub Actions CI -> checks pass -> Render auto deploy
+```
+
+The Render target is a Docker web service plus PostgreSQL 17 in Singapore. The deployment uses OpenRouter for both AI contracts:
+
+```text
+Chat:      nvidia/nemotron-3.5-lightning:free
+Embedding: nvidia/llama-nemotron-embed-vl-1b-v2:free (1024 dimensions)
+```
+
+Only the OpenRouter API key is a required manual AI secret in the Render Dashboard. Deployment setup and free-tier persistence caveats are documented in `docs/render-deployment.md`.
+
 ## Issue #27 status
 
 Issue #27 is closed as completed after PR #30 merged.

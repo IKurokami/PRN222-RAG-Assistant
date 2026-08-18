@@ -1,0 +1,55 @@
+# yaml-language-server: $schema=https://render.com/schema/render.yaml.json
+
+databases:
+  - name: prn222-rag-db
+    databaseName: prn222_rag
+    user: prn222_rag
+    plan: free
+    region: singapore
+    postgresMajorVersion: 17
+
+services:
+  - type: web
+    name: prn222-rag-assistant
+    runtime: docker
+    plan: free
+    region: singapore
+    repo: https://github.com/IKurokami/PRN222-RAG-Assistant
+    branch: master
+    dockerfilePath: ./src/PRN222.RagAssistant/Dockerfile
+    dockerContext: .
+    autoDeployTrigger: checksPass
+    healthCheckPath: /healthz
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: ASPNETCORE_FORWARDEDHEADERS_ENABLED
+        value: "true"
+      - key: ConnectionStrings__Postgres
+        fromDatabase:
+          name: prn222-rag-db
+          property: connectionString
+      - key: Database__ApplyMigrationsOnStartup
+        value: "true"
+      - key: Auth__SeedUsers__Enabled
+        value: "false"
+      - key: Rag__Storage__UploadsPath
+        value: /app/storage/uploads
+      - key: Rag__Provider
+        value: OpenRouter
+      - key: Rag__ChatProvider
+        value: OpenRouter
+      - key: Rag__EmbeddingProvider
+        value: OpenRouter
+      - key: Rag__EmbeddingDimensions
+        value: "1024"
+      - key: Rag__OpenRouter__BaseUrl
+        value: https://openrouter.ai/api/v1/
+      - key: Rag__OpenRouter__ApiKey
+        sync: false
+      - key: Rag__OpenRouter__ChatModels
+        value: nvidia/nemotron-3.5-lightning:free
+      - key: Rag__OpenRouter__EmbeddingModel
+        value: nvidia/llama-nemotron-embed-vl-1b-v2:free
+      - key: Rag__OpenRouter__AppTitle
+        value: PRN222 RAG Assistant

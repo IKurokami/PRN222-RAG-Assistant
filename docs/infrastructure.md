@@ -64,6 +64,35 @@ change embedding provider/model/dimension
 
 Do not rotate embedding models within one corpus. Chat-only provider/model/fallback changes do not require re-indexing.
 
+## Render CD
+
+The repository includes a Render Blueprint in `render.yaml`.
+
+Deployment path:
+
+```text
+master -> GitHub Actions CI -> checks pass -> Render auto deploy
+```
+
+Render provisions a Docker web service plus managed PostgreSQL 17 in Singapore. The database URL is normalized to an Npgsql connection string at startup, pgvector is enabled before EF migrations, and `/healthz` is used as the Render health check.
+
+The Render runtime intentionally uses OpenRouter for both AI contracts:
+
+```text
+Rag__Provider=OpenRouter
+Rag__ChatProvider=OpenRouter
+Rag__EmbeddingProvider=OpenRouter
+Rag__EmbeddingDimensions=1024
+
+Chat model:
+  nvidia/nemotron-3.5-lightning:free
+
+Embedding model:
+  nvidia/llama-nemotron-embed-vl-1b-v2:free
+```
+
+Only `Rag__OpenRouter__ApiKey` is entered manually in Render for the default deployment. See `docs/render-deployment.md`.
+
 ## Docker modes
 
 Local Ollama:

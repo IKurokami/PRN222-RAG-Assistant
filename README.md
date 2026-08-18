@@ -267,6 +267,19 @@ RAG_EMBEDDING_PROVIDER=Gemini
 
 Never commit real API keys.
 
+## Render CD
+
+`render.yaml` defines the Render deployment stack and waits for GitHub checks to pass before auto-deploying `master`.
+
+The Render deployment uses OpenRouter for both contracts:
+
+```text
+Chat:      nvidia/nemotron-3.5-lightning:free
+Embedding: nvidia/llama-nemotron-embed-vl-1b-v2:free (1024 dimensions)
+```
+
+Only `Rag__OpenRouter__ApiKey` is entered manually in the Render Dashboard. See `docs/render-deployment.md` for first-deploy steps, database wiring, health checks, and free-tier storage caveats.
+
 ## Commands
 
 ```bash
@@ -310,5 +323,6 @@ Required reading:
 - `docs/multi-subject-management.md`
 - `docs/infrastructure.md`
 - `docs/ai-provider-backup.md`
+- `docs/render-deployment.md`
 - `docs/member-3-document-indexing-handoff.md`
 - `docs/member-4-rag-backend-handoff.md`
