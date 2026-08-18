@@ -19,7 +19,7 @@ docs/ai-provider-backup.md
 
 ## Current baseline
 
-Provider-backup work is based on `master` after merged PR #20 on 2026-08-15.
+Provider routing/fallback extends the merged provider-backup foundation on 2026-08-15.
 
 - Main project: `src/PRN222.RagAssistant`
 - Tests: `tests/PRN222.RagAssistant.Tests`
@@ -29,7 +29,7 @@ Provider-backup work is based on `master` after merged PR #20 on 2026-08-15.
 - Roles: `Admin`, `SubjectLeader`, `Student`
 - Policies: `ManageUsers`, `ManageSubjects`, `ManageDocuments`
 - Database: PostgreSQL + pgvector
-- AI runtime: provider-neutral; Ollama local default, OpenAI/Gemini online backups
+- AI runtime: provider-neutral; Ollama local default, Gemini/OpenAI/OpenRouter online options
 - Source storage: `storage/uploads/`
 
 Presentation/workflow state:
@@ -42,7 +42,7 @@ Auth/shell -> Razor Pages         [COMPLETE]
 Admin user management -> MVC      [COMPLETE]
 Admin subject management -> MVC   [COMPLETE]
 Cross-app UI/UX redesign          [COMPLETE - PR #19 - Member 3]
-AI provider foundation            [IMPLEMENTED - Member 1]
+AI provider foundation/routing    [MEMBER 1]
 ```
 
 PRN222 remains the seeded demo subject. Do not treat PRN222 as the application-wide hard-coded subject scope.
@@ -56,13 +56,22 @@ ITextEmbeddingService
 IChatCompletionService
 ```
 
-Concrete provider selection belongs to Infrastructure and is controlled by:
+Concrete provider selection belongs to Infrastructure.
+
+Backward-compatible default:
 
 ```text
-Rag:Provider = Ollama | OpenAI | Gemini
+Rag:Provider / RAG_PROVIDER = Ollama | OpenAI | Gemini | OpenRouter
 ```
 
-Environment mapping uses `RAG_PROVIDER`. API keys are server-side secrets and must never be committed, logged, rendered to clients, or placed in tracked appsettings files.
+Optional purpose-specific overrides:
+
+```text
+Rag:ChatProvider / RAG_CHAT_PROVIDER
+Rag:EmbeddingProvider / RAG_EMBEDDING_PROVIDER
+```
+
+Blank overrides inherit `RAG_PROVIDER`.
 
 Supported provider stacks:
 
@@ -78,11 +87,23 @@ OpenAI:
 Gemini:
   chat      gemini-3.6-flash
   embedding gemini-embedding-2
+
+OpenRouter:
+  chat      ordered models list with provider/model fallback
+  embedding one fixed configured embedding model
 ```
 
-Do not add silent automatic local-to-cloud failover. Cloud use must be an explicit operator choice because it changes data egress and API cost.
+OpenRouter default chat chain:
 
-Default embedding dimensions are `1024`. Equal dimensions do not imply compatible vector spaces. Whenever the embedding provider, embedding model, or configured dimensions change, re-index the whole corpus before similarity retrieval. Never mix chunks produced by different embedding models in one searchable corpus.
+```text
+google/gemma-4-26b-a4b-it:free
+ -> nvidia/nemotron-3-ultra-550b-a55b:free
+ -> openrouter/free
+```
+
+Do not add hidden application-level automatic local-to-cloud failover. Cloud use remains an explicit operator choice because it changes data egress/API cost/privacy. Once OpenRouter is explicitly selected for chat, its configured internal model/provider fallback is allowed.
+
+Default embedding dimensions are `1024`. Equal dimensions do not imply compatible vector spaces. **Never rotate between embedding models.** Whenever the embedding provider, embedding model, or configured dimensions change, re-index the whole corpus before similarity retrieval. Never mix chunks produced by different embedding models in one searchable corpus.
 
 Canonical details: `docs/ai-provider-backup.md`.
 
@@ -132,6 +153,7 @@ Member 1 owns:
 - cross-workflow subject-context wiring;
 - role/subject authorization tests;
 - AI provider selection/configuration and concrete provider adapters;
+- OpenRouter free-model chat fallback/routing configuration;
 - API-key/environment wiring and embedding-dimension compatibility rules;
 - provider-registration/adapter tests;
 - all repository documentation edits.
@@ -146,7 +168,7 @@ Do not put provider HTTP calls in MVC/Razor request code.
 
 ### Member 3 - indexing + completed UI/UX redesign
 
-Member 3 owns the parser/chunker/indexing worker/service pipeline and startup recovery. The indexing pipeline now consumes whichever `ITextEmbeddingService` Member 1's provider configuration selects.
+Member 3 owns the parser/chunker/indexing worker/service pipeline and startup recovery. The indexing pipeline consumes whichever `ITextEmbeddingService` Member 1's provider configuration selects.
 
 Member 3 also owns the completed cross-application UI/UX redesign merged in PR #19.
 
@@ -165,7 +187,7 @@ selected subject
     -> citations/messages bound to that Subject
 ```
 
-Member 4 consumes `ITextEmbeddingService` and `IChatCompletionService`; do not call Ollama/OpenAI/Gemini directly.
+Member 4 consumes `ITextEmbeddingService` and `IChatCompletionService`; do not call Ollama/OpenAI/Gemini/OpenRouter directly.
 
 ### Member 5 - Flow 2 MVC presentation/evaluation - PENDING
 
@@ -194,7 +216,7 @@ Owns future MVC chat/session/history/citation UI and evaluation tooling. Do not 
 - Preserve responsive/accessibility behavior.
 - UI must not weaken server-side authorization.
 - Public registration may create only `Student` accounts.
-- User-facing privacy/product copy must not claim AI is always local when OpenAI/Gemini mode is supported.
+- User-facing privacy/product copy must not claim AI is always local when online provider modes are supported.
 
 ## EF Core rules
 
@@ -205,7 +227,7 @@ Owns future MVC chat/session/history/citation UI and evaluation tooling. Do not 
 5. Do not use `EnsureCreated` for application runtime schema.
 6. Preserve explicit delete behaviors and architecture tests.
 
-The provider-backup implementation does not require an EF migration. `DocumentChunk.Embedding` remains provider-neutral storage.
+The provider-routing implementation does not require an EF migration. `DocumentChunk.Embedding` remains provider-neutral storage.
 
 ## Shared contracts
 
@@ -229,7 +251,7 @@ Provider-specific request/response DTOs stay in Infrastructure, not Application.
 - Default branch: `master`.
 - Use focused branches/PRs.
 - Local Ollama Compose uses the `local-ai` profile.
-- Online provider runs must not require the Ollama container.
+- Online provider runs must not require the Ollama container unless a selected contract uses Ollama.
 - Run build/tests/pending-model/Docker validation before merge.
 - Never run `docker compose down -v` unless explicitly requested.
 

@@ -2,7 +2,7 @@
 
 ASP.NET Core RAG learning assistant built with .NET 10, MVC + Razor Pages, PostgreSQL/pgvector, ASP.NET Core Identity, and a provider-neutral AI runtime.
 
-> Documentation baseline: AI-provider backup work branched from `master` after merged PR #20 on 2026-08-15.
+> Documentation baseline: provider routing/fallback update on 2026-08-15 after the original provider-backup foundation was merged.
 
 The repository name remains PRN222 RAG Assistant and PRN222 remains the seeded demo subject, but the application is designed to host multiple subjects. PRN222 is not the application-wide hard-coded workflow scope.
 
@@ -13,13 +13,13 @@ The repository name remains PRN222 RAG Assistant and PRN222 remains the seeded d
 | Core/Data/Identity/RBAC | Complete | Member 1 |
 | Admin user/role management | Complete | Member 1 |
 | Multi-subject management + Subject Leader assignment | Complete / merged | Member 1 |
-| AI provider foundation - Ollama / Gemini / OpenAI | Implemented in this PR | **Member 1** |
+| AI provider foundation - Ollama / Gemini / OpenAI / OpenRouter | Extended with free chat fallback in current PR | **Member 1** |
 | Flow 1 - Document Management & Indexing | Complete | Member 2 request behavior + Member 3 indexing; Member 1 subject/RBAC integration |
 | Flow 2 - RAG Q&A + Conversation Management | Pending | Member 4 backend + Member 5 MVC/evaluation |
 | Flow 3 - Report & Statistics | Complete | Member 2 behavior; Member 1 subject/RBAC integration |
 | Cross-app UI/UX redesign | Complete / merged in PR #19 | **Member 3** |
 | Public Student registration | Complete / merged in PR #19 | Member 3 implementation; Member 1 retains Identity/RBAC ownership |
-| Repository documentation | Updated for provider backup | Member 1 only |
+| Repository documentation | Updated for provider routing/fallback | Member 1 only |
 
 Product workflows:
 
@@ -29,7 +29,7 @@ Product workflows:
 
 Conversation History belongs to Flow 2 and is not counted as a separate flow.
 
-## AI runtime - local or online
+## AI runtime - local, direct cloud, or OpenRouter
 
 Workflow code consumes provider-neutral contracts:
 
@@ -38,13 +38,23 @@ ITextEmbeddingService
 IChatCompletionService
 ```
 
-Choose one provider through `.env` / deployment environment:
+`RAG_PROVIDER` remains backward compatible and supplies both contracts when no purpose-specific override is configured:
 
 ```text
 RAG_PROVIDER=Ollama
 RAG_PROVIDER=Gemini
 RAG_PROVIDER=OpenAI
+RAG_PROVIDER=OpenRouter
 ```
+
+Chat and embedding providers may now be selected independently:
+
+```text
+RAG_CHAT_PROVIDER=OpenRouter
+RAG_EMBEDDING_PROVIDER=Gemini
+```
+
+Blank overrides inherit `RAG_PROVIDER`.
 
 ### Free/default paths
 
@@ -57,7 +67,7 @@ Embedding: qwen3-embedding:0.6b
 
 Inference runs on your own machine. Hardware, RAM/VRAM and electricity remain your responsibility.
 
-**Google Gemini - online Free Tier backup**
+**Google Gemini - direct online Free Tier path**
 
 ```text
 Chat:      gemini-3.6-flash
@@ -65,6 +75,26 @@ Embedding: gemini-embedding-2
 ```
 
 As of 2026-08-15, Google lists both models as available on the Gemini Developer API Standard Free Tier. Free Tier usage is rate-limited and Google states Free Tier content may be used to improve its products. Re-check official pricing/rate-limit pages before production deployment because cloud terms can change.
+
+**OpenRouter - free-first routed path**
+
+Default ordered chat fallback:
+
+```text
+google/gemma-4-26b-a4b-it:free
+ -> nvidia/nemotron-3-ultra-550b-a55b:free
+ -> openrouter/free
+```
+
+The OpenRouter adapter sends this list through the provider's `models` fallback mechanism. If an earlier model errors, is rate-limited, or is unavailable, OpenRouter can try the next entry. `openrouter/free` is kept last as a catch-all router over the free models currently available.
+
+Default fixed OpenRouter embedding model:
+
+```text
+nvidia/llama-nemotron-embed-vl-1b-v2:free
+```
+
+OpenRouter free model availability/rate limits can change and are intended for development/demo/low-volume workloads. The default free embedding endpoint also has provider-specific logging/data-use terms; review the current provider policy before sending sensitive material.
 
 ### Optional paid path
 
@@ -79,7 +109,7 @@ OpenAI is retained as an optional provider, not as the project's free online fal
 
 Canonical setup/research notes: `docs/ai-provider-backup.md`.
 
-There is deliberately no silent local-to-cloud failover. Operators must explicitly select a cloud provider because doing so changes data egress and potentially cost.
+There is deliberately no hidden application-level local-to-cloud failover. Operators explicitly select cloud providers because doing so changes data egress and potentially cost. Once `OpenRouter` is explicitly selected for chat, model/provider fallback inside OpenRouter is intentional and configurable.
 
 ## Embedding compatibility
 
@@ -89,9 +119,11 @@ Default corpus dimension:
 RAG_EMBEDDING_DIMENSIONS=1024
 ```
 
-The selected embedding adapter validates this dimension. OpenAI and Gemini are asked to return the configured dimension.
+The selected embedding adapter validates this dimension. OpenAI, Gemini, and OpenRouter adapters ask their configured embedding endpoint for the configured dimension.
 
 **Do not mix embeddings from different models/providers in one searchable corpus.** Equal vector length does not mean equal vector space. Whenever the embedding provider, model, or dimension changes, re-index the complete document corpus before similarity retrieval.
+
+Chat fallback is different: switching/falling back between chat models does not invalidate stored document vectors and therefore does not require re-indexing.
 
 ## UI/UX baseline after PR #19
 
@@ -107,7 +139,7 @@ Implemented presentation scope includes:
 - refreshed Subjects, Admin Users, Admin Subjects, Chapters, Documents, and Reports screens;
 - document search/status filtering and preserved filter context for delete/re-index actions.
 
-Provider-backup copy changes only remove the obsolete claim that AI must always be local; they do not transfer UI/UX ownership away from Member 3.
+Provider-routing copy changes only remove obsolete assumptions about a single runtime and add the OpenRouter cloud boundary; they do not transfer UI/UX ownership away from Member 3.
 
 ## Multi-subject model
 
@@ -183,7 +215,7 @@ DocumentIndexingWorker
 DocumentIndexingService
       +--> parse
       +--> chunk
-      +--> ITextEmbeddingService (selected provider)
+      +--> ITextEmbeddingService (selected embedding provider)
       \--> persist DocumentChunk / status
 ```
 
@@ -208,7 +240,7 @@ Before retrieval/chat persistence is considered complete:
 - Conversation History must preserve subject context;
 - citations must not cross subject boundaries.
 
-Member 4 must not call Ollama, Gemini, or OpenAI directly. Member 1 owns provider wiring; Member 4 owns RAG behavior.
+Member 4 must not call Ollama, Gemini, OpenAI, or OpenRouter directly. Member 1 owns provider wiring; Member 4 owns RAG behavior.
 
 ## Technology
 
@@ -218,7 +250,8 @@ Member 4 must not call Ollama, Gemini, or OpenAI directly. Member 1 owns provide
 - EF Core
 - PostgreSQL + pgvector
 - Ollama local provider
-- Google Gemini Developer API online Free Tier provider
+- Google Gemini Developer API direct online Free Tier provider
+- OpenRouter free-first routed provider
 - optional OpenAI API provider
 - PDF parsing via PdfPig
 - DOCX/PPTX parsing via OpenXml
@@ -229,14 +262,33 @@ Member 4 must not call Ollama, Gemini, or OpenAI directly. Member 1 owns provide
 
 Copy `.env.example` to `.env` for Docker Compose. `.env` is ignored by Git.
 
-Shared:
+Shared/backward-compatible default:
 
 ```text
 RAG_PROVIDER=Ollama
+RAG_CHAT_PROVIDER=
+RAG_EMBEDDING_PROVIDER=
 RAG_EMBEDDING_DIMENSIONS=1024
 ```
 
-Gemini Free Tier online backup:
+Recommended free-first hybrid - OpenRouter chat fallback + Gemini embeddings:
+
+```text
+RAG_PROVIDER=Ollama
+RAG_CHAT_PROVIDER=OpenRouter
+RAG_EMBEDDING_PROVIDER=Gemini
+OPENROUTER_API_KEY=<your key>
+GEMINI_API_KEY=<your key>
+```
+
+OpenRouter chat/embedding configuration:
+
+```text
+OPENROUTER_CHAT_MODELS=google/gemma-4-26b-a4b-it:free,nvidia/nemotron-3-ultra-550b-a55b:free,openrouter/free
+OPENROUTER_EMBEDDING_MODEL=nvidia/llama-nemotron-embed-vl-1b-v2:free
+```
+
+Gemini direct Free Tier:
 
 ```text
 RAG_PROVIDER=Gemini
@@ -277,7 +329,7 @@ Local Ollama runtime:
 docker compose --profile local-ai up -d --build
 ```
 
-Gemini/OpenAI runtime (Ollama container is not required):
+Cloud/hybrid runtime (Ollama container is not required unless a selected contract uses Ollama):
 
 ```bash
 docker compose up -d --build

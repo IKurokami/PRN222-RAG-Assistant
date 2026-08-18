@@ -1,6 +1,6 @@
 # Application-layer instructions
 
-> Provider-backup update based on `master` after merged PR #20.
+> Provider routing/fallback update on top of the merged provider-backup foundation.
 
 This subtree contains stable cross-workflow contracts/models. Keep it independent from MVC/Razor/provider-specific HTTP/PostgreSQL-specific presentation details.
 
@@ -10,7 +10,7 @@ This subtree contains stable cross-workflow contracts/models. Keep it independen
 2. Flow 2 - RAG Q&A + Conversation Management - pending - MVC.
 3. Flow 3 - Report & Statistics - complete - Razor Pages.
 4. Cross-app UI/UX redesign - complete in PR #19 - Member 3.
-5. Provider-neutral AI runtime foundation - implemented by Member 1.
+5. Provider-neutral AI runtime foundation/routing - Member 1.
 
 ## Provider-neutral boundary
 
@@ -21,17 +21,18 @@ ITextEmbeddingService
 IChatCompletionService
 ```
 
-Infrastructure selects exactly one implementation from `Ollama`, `OpenAI`, or `Gemini`.
+Infrastructure selects the concrete implementations from `Ollama`, `OpenAI`, `Gemini`, or `OpenRouter`. Chat and embedding providers may be configured independently. OpenRouter may perform ordered chat-model fallback inside Infrastructure.
 
 Do not:
 
-- add Ollama/OpenAI/Gemini DTOs to Application;
+- add Ollama/OpenAI/Gemini/OpenRouter DTOs to Application;
 - expose API keys through Application contracts;
 - branch on provider names inside workflow services;
-- add silent cloud failover behavior to Application;
+- implement provider/model fallback in Application;
+- add embedding-model rotation;
 - assume embeddings from two models are interchangeable.
 
-If the configured embedding provider/model/dimension changes, Infrastructure/operations must treat existing vectors as stale and re-index the corpus.
+If the configured embedding provider/model/dimension changes, Infrastructure/operations must treat existing vectors as stale and re-index the corpus. Chat-provider/model fallback alone does not require re-indexing.
 
 ## Subject boundary
 
@@ -53,7 +54,7 @@ subject-aware MVC action
    -> IDocumentIndexingQueue.EnqueueAsync(documentId)
    -> DocumentIndexingWorker
    -> IDocumentIndexingService.IndexAsync(documentId)
-   -> ITextEmbeddingService (selected provider)
+   -> ITextEmbeddingService (selected embedding provider)
 ```
 
 The request layer never needs to know which provider is selected.
@@ -67,7 +68,7 @@ MVC subject/session context
    -> subject-scoped RAG application boundary
    -> ITextEmbeddingService
    -> pgvector retrieval restricted to selected Subject
-   -> IChatCompletionService
+   -> IChatCompletionService (selected chat provider; Infrastructure may route/fallback)
    -> message/citation persistence bound to same Subject/session
 ```
 
@@ -90,7 +91,7 @@ Prefer additive changes. Keep concrete provider payloads under Infrastructure.
 
 ## Ownership
 
-- Member 1: shared contracts, Core/Data/Identity/RBAC/multi-subject, provider configuration/adapters, schema coordination, all docs.
+- Member 1: shared contracts, Core/Data/Identity/RBAC/multi-subject, provider configuration/adapters/routing, schema coordination, all docs.
 - Member 2: Flow 1 request/business behavior + Flow 3 reporting behavior.
 - Member 3: indexing implementation + completed cross-app UI/UX redesign.
 - Member 4: pending Flow 2 backend.
@@ -99,7 +100,7 @@ Prefer additive changes. Keep concrete provider payloads under Infrastructure.
 ## Dependency rules
 
 - Application abstractions do not depend on MVC, Razor PageModel, HttpContext, provider-specific SDK/DTOs, Npgsql query types, CSS, or JS.
-- Infrastructure implements provider adapters.
+- Infrastructure implements provider adapters/routing.
 - Flow 1 controllers do not parse/chunk/embed/call providers.
 - Flow 2 MVC does not call providers or pgvector directly.
 - Flow 3 does not call provider/retrieval code.

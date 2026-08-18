@@ -1,12 +1,12 @@
 # Team workflow and ownership
 
-> Provider-backup coordination baseline: work based on `master` after merged PR #20. Member 1 is the sole documentation owner.
+> Provider-routing/fallback coordination baseline. Member 1 is the sole documentation owner.
 
 ## Current milestone
 
 - Member 1 Core/Data/Identity/RBAC: complete.
 - Member 1 multi-subject management/subject scoping: complete.
-- **Member 1 AI provider foundation: implemented in this PR.**
+- **Member 1 AI provider foundation + OpenRouter fallback routing: implemented in current PR.**
 - Member 2 Flow 1 request/business behavior: complete.
 - Member 3 Flow 1 indexing: complete / merged through PR #9.
 - Member 2 Flow 3 reporting behavior: complete / merged through PR #12.
@@ -25,7 +25,8 @@ Owns:
 - Subject management/assignment and `ISubjectAccessService`;
 - cross-workflow subject-context integration;
 - **AI provider selection/configuration**;
-- **Gemini/OpenAI/Ollama concrete AI adapters behind Application interfaces**;
+- **Gemini/OpenAI/Ollama/OpenRouter concrete AI adapters behind Application interfaces**;
+- **OpenRouter free chat-model routing/fallback**;
 - **online API-key/env wiring**;
 - **embedding dimension/vector-space/re-index compatibility rule**;
 - provider regression tests;
@@ -45,13 +46,13 @@ Controllers/Pages must not call a concrete AI provider.
 
 Member 3 owns parsers, chunker, indexing service/worker, state transitions, chunk replacement, and startup recovery.
 
-The pipeline consumes `ITextEmbeddingService`; Member 1 now owns which concrete provider implements that interface at startup.
+The pipeline consumes `ITextEmbeddingService`; Member 1 owns which concrete embedding provider implements that interface at startup.
 
 No provider-specific worker is created.
 
 ### Cross-app UI/UX redesign - complete
 
-Member 3 retains the PR #19 design system/presentation ownership. Provider-backup changes may update factual copy that previously said AI was always local, but this does not transfer visual ownership.
+Member 3 retains the PR #19 design system/presentation ownership. Provider-routing changes may update factual provider/privacy copy, but this does not transfer visual ownership.
 
 ## Member 4 - Flow 2 backend
 
@@ -65,7 +66,7 @@ Pending responsibilities:
 - session ownership validation;
 - messages/citations persistence.
 
-Do not call Ollama, Gemini, or OpenAI directly.
+Do not call Ollama, Gemini, OpenAI, or OpenRouter directly.
 
 ## Member 5 - Flow 2 MVC/evaluation
 
@@ -76,24 +77,28 @@ Do not call provider APIs in controllers/views.
 ## Provider integration map
 
 ```text
-RAG_PROVIDER
+RAG_PROVIDER [backward-compatible default]
    |
-   +--> Ollama [local/default, $0 provider fee]
-   +--> Gemini [online Free Tier backup]
-   \--> OpenAI [online paid optional]
-             |
-             +--> ITextEmbeddingService
-             \--> IChatCompletionService
-                        |
-              +---------+---------+
-              |                   |
-         Flow 1 indexing     future Flow 2 RAG
-         [Member 3]          [Member 4]
+   +--> RAG_CHAT_PROVIDER override
+   |       +--> Ollama / Gemini / OpenAI
+   |       \--> OpenRouter -> ordered free-model fallback
+   |
+   \--> RAG_EMBEDDING_PROVIDER override
+           +--> Ollama / Gemini / OpenAI / OpenRouter
+           \--> exactly one embedding model per corpus
+                    |
+                    +--> ITextEmbeddingService
+                    \--> IChatCompletionService
+                               |
+                     +---------+---------+
+                     |                   |
+                Flow 1 indexing     future Flow 2 RAG
+                [Member 3]          [Member 4]
 ```
 
 ## Provider change procedure
 
-If only the chat model changes, no existing document vectors need re-indexing.
+If only chat provider/model/fallback order changes, no existing document vectors need re-indexing.
 
 If embedding provider/model/dimension changes:
 
@@ -102,6 +107,8 @@ If embedding provider/model/dimension changes:
 3. re-index the entire searchable corpus;
 4. do not mix old/new vectors during retrieval;
 5. validate indexing/retrieval before considering the provider switch complete.
+
+Embedding-model rotation is explicitly prohibited because it would mix semantic vector spaces.
 
 ## Secrets
 

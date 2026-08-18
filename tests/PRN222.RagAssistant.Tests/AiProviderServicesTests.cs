@@ -15,6 +15,7 @@ public sealed class AiProviderServicesTests
     [InlineData("Ollama", typeof(OllamaTextEmbeddingService), typeof(OllamaChatCompletionService))]
     [InlineData("OpenAI", typeof(OpenAiTextEmbeddingService), typeof(OpenAiChatCompletionService))]
     [InlineData("Gemini", typeof(GeminiTextEmbeddingService), typeof(GeminiChatCompletionService))]
+    [InlineData("OpenRouter", typeof(OpenRouterTextEmbeddingService), typeof(OpenRouterChatCompletionService))]
     public void AddInfrastructure_SelectsConfiguredAiProvider(
         string providerName,
         Type expectedEmbeddingType,
@@ -36,6 +37,30 @@ public sealed class AiProviderServicesTests
     }
 
     [Fact]
+    public void AddInfrastructure_AllowsIndependentChatAndEmbeddingProviders()
+    {
+        var configuration = CreateProviderConfiguration("Ollama", additionalValues: new Dictionary<string, string?>
+        {
+            ["Rag:ChatProvider"] = "OpenRouter",
+            ["Rag:EmbeddingProvider"] = "Gemini"
+        });
+        var services = new ServiceCollection();
+        services.AddLogging();
+
+        services.AddInfrastructure(configuration);
+
+        var embeddingDescriptor = Assert.Single(
+            services,
+            descriptor => descriptor.ServiceType == typeof(ITextEmbeddingService));
+        var chatDescriptor = Assert.Single(
+            services,
+            descriptor => descriptor.ServiceType == typeof(IChatCompletionService));
+
+        Assert.Equal(typeof(GeminiTextEmbeddingService), embeddingDescriptor.ImplementationType);
+        Assert.Equal(typeof(OpenRouterChatCompletionService), chatDescriptor.ImplementationType);
+    }
+
+    [Fact]
     public void AddInfrastructure_RejectsOnlineProviderWithoutApiKey()
     {
         var configuration = CreateProviderConfiguration("OpenAI", includeApiKey: false);
@@ -49,6 +74,26 @@ public sealed class AiProviderServicesTests
     }
 
     [Fact]
+    public void AddInfrastructure_RejectsOpenRouterWithoutApiKeyWhenSelectedForChatOnly()
+    {
+        var configuration = CreateProviderConfiguration(
+            "Ollama",
+            includeApiKey: false,
+            additionalValues: new Dictionary<string, string?>
+            {
+                ["Rag:ChatProvider"] = "OpenRouter",
+                ["Rag:EmbeddingProvider"] = "Ollama"
+            });
+        var services = new ServiceCollection();
+        services.AddLogging();
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => services.AddInfrastructure(configuration));
+
+        Assert.Contains("Rag:OpenRouter:ApiKey", exception.Message);
+    }
+
+    [Fact]
     public void AddInfrastructure_RejectsUnsupportedAiProvider()
     {
         var services = new ServiceCollection();
@@ -57,12 +102,13 @@ public sealed class AiProviderServicesTests
         var exception = Assert.Throws<InvalidOperationException>(
             () => services.AddInfrastructure(CreateProviderConfiguration("Unknown")));
 
-        Assert.Contains("Supported values: Ollama, OpenAI, Gemini", exception.Message);
+        Assert.Contains("Supported values: Ollama, OpenAI, Gemini, OpenRouter", exception.Message);
     }
 
     [Theory]
     [InlineData("OpenAI", "OpenAI", "Authorization", "Bearer test-openai-key")]
     [InlineData("Gemini", "Gemini", "x-goog-api-key", "test-gemini-key")]
+    [InlineData("OpenRouter", "OpenRouter", "Authorization", "Bearer test-openrouter-key")]
     public void OnlineProvider_HttpClientCarriesServerSideApiKey(
         string providerName,
         string clientName,
@@ -151,6 +197,75 @@ public sealed class AiProviderServicesTests
     }
 
     [Fact]
+    public async Task OpenRouterChat_SendsOrderedFallbackModelsAndParsesResponse()
+    {
+        string? requestJson = null;
+        var handler = new StubHttpMessageHandler(async request =>
+        {
+            requestJson = await request.Content!.ReadAsStringAsync();
+            return JsonResponse(
+                "{\"model\":\"nvidia/nemotron-3-ultra-550b-a55b:free\",\"choices\":[{\"message\":{\"content\":\"fallback answer\"}}]}");
+        });
+        var service = new OpenRouterChatCompletionService(
+            new StubHttpClientFactory(new HttpClient(handler)
+            {
+                BaseAddress = new Uri("https://openrouter.ai/api/v1/")
+            }),
+            new ConfigurationBuilder()
+                .AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["Rag:OpenRouter:ChatModels"] =
+                        "google/gemma-4-26b-a4b-it:free,nvidia/nemotron-3-ultra-550b-a55b:free,openrouter/free"
+                })
+                .Build());
+
+        var answer = await service.CompleteAsync("system", "question");
+
+        Assert.Equal("fallback answer", answer);
+        Assert.Contains(
+            "\"models\":[\"google/gemma-4-26b-a4b-it:free\",\"nvidia/nemotron-3-ultra-550b-a55b:free\",\"openrouter/free\"]",
+            requestJson);
+        Assert.Contains("\"allow_fallbacks\":true", requestJson);
+        Assert.Equal("/api/v1/chat/completions", handler.LastRequestUri?.AbsolutePath);
+    }
+
+    [Fact]
+    public async Task OpenRouterEmbedding_UsesOneFixedModelAndConfiguredDimensions()
+    {
+        string? requestJson = null;
+        var handler = new StubHttpMessageHandler(async request =>
+        {
+            requestJson = await request.Content!.ReadAsStringAsync();
+            return JsonResponse(
+                "{\"model\":\"nvidia/llama-nemotron-embed-vl-1b-v2:free\",\"data\":[{\"index\":1,\"embedding\":[3.0,4.0]},{\"index\":0,\"embedding\":[1.0,2.0]}]}");
+        });
+        var service = new OpenRouterTextEmbeddingService(
+            new StubHttpClientFactory(new HttpClient(handler)
+            {
+                BaseAddress = new Uri("https://openrouter.ai/api/v1/")
+            }),
+            new ConfigurationBuilder()
+                .AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["Rag:EmbeddingDimensions"] = "2",
+                    ["Rag:OpenRouter:EmbeddingModel"] = "nvidia/llama-nemotron-embed-vl-1b-v2:free"
+                })
+                .Build(),
+            NullLogger<OpenRouterTextEmbeddingService>.Instance);
+
+        var embeddings = await service.EmbedBatchAsync(["first", "second"]);
+
+        Assert.Equal([1.0f, 2.0f], embeddings[0]);
+        Assert.Equal([3.0f, 4.0f], embeddings[1]);
+        Assert.Contains("\"dimensions\":2", requestJson);
+        Assert.Contains(
+            "\"model\":\"nvidia/llama-nemotron-embed-vl-1b-v2:free\"",
+            requestJson);
+        Assert.DoesNotContain("\"models\"", requestJson);
+        Assert.Equal("/api/v1/embeddings", handler.LastRequestUri?.AbsolutePath);
+    }
+
+    [Fact]
     public async Task OnlineChatServices_ParseProviderResponses()
     {
         var openAiHandler = new StubHttpMessageHandler(_ => Task.FromResult(
@@ -187,7 +302,8 @@ public sealed class AiProviderServicesTests
 
     private static IConfiguration CreateProviderConfiguration(
         string providerName,
-        bool includeApiKey = true)
+        bool includeApiKey = true,
+        IReadOnlyDictionary<string, string?>? additionalValues = null)
     {
         var values = new Dictionary<string, string?>
         {
@@ -197,13 +313,23 @@ public sealed class AiProviderServicesTests
             ["Rag:EmbeddingDimensions"] = "1024",
             ["Rag:Ollama:BaseUrl"] = "http://localhost:11434",
             ["Rag:OpenAI:BaseUrl"] = "https://api.openai.com/v1/",
-            ["Rag:Gemini:BaseUrl"] = "https://generativelanguage.googleapis.com/"
+            ["Rag:Gemini:BaseUrl"] = "https://generativelanguage.googleapis.com/",
+            ["Rag:OpenRouter:BaseUrl"] = "https://openrouter.ai/api/v1/"
         };
 
         if (includeApiKey)
         {
             values["Rag:OpenAI:ApiKey"] = "test-openai-key";
             values["Rag:Gemini:ApiKey"] = "test-gemini-key";
+            values["Rag:OpenRouter:ApiKey"] = "test-openrouter-key";
+        }
+
+        if (additionalValues is not null)
+        {
+            foreach (var pair in additionalValues)
+            {
+                values[pair.Key] = pair.Value;
+            }
         }
 
         return new ConfigurationBuilder()
