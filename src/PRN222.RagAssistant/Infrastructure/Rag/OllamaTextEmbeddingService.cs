@@ -1,8 +1,9 @@
 using System.Net.Http.Json;
 using System.Text.Json.Serialization;
 using PRN222.RagAssistant.Application.Abstractions;
+using PRN222.RagAssistant.Infrastructure.Services;
 
-namespace PRN222.RagAssistant.Infrastructure.Services;
+namespace PRN222.RagAssistant.Infrastructure.Rag;
 
 public sealed class OllamaTextEmbeddingService : ITextEmbeddingService
 {

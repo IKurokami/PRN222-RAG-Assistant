@@ -1,28 +1,25 @@
 # Multi-subject management
 
-> Synchronized with `master` after PR #19.
+> Synchronized after PR #30 merged on 2026-08-18.
 
 ## Goal
 
-Remove PRN222 as a hard-coded application scope while keeping it as the seeded demo subject.
+PRN222 remains the seeded demo subject, but the application supports runtime Subjects without hard-coding one course as the global workflow scope.
 
-The application supports runtime Subjects such as PRN222, PRJ301, SWT301, SWP391, or future courses without changing source code for each course.
+## Persisted subject boundaries
 
-## Existing foundation
-
-The domain contains:
+Current model:
 
 ```text
 Subject(Id, Code, Name, IsActive)
 Chapter(..., SubjectId)
 Document(..., SubjectId)
+ChatSession(..., SubjectId)
 ```
 
-The completed multi-subject work added runtime Subject management, Subject Leader assignment, subject-first navigation, and subject-specific authorization. Flow 1/3 no longer use `SeedData.Prn222SubjectId` as active workflow scope.
+The completed multi-subject work provides runtime Subject management, Subject Leader assignment, subject-first navigation and subject-specific authorization for Flow 1/3. PR #30 extends the subject boundary into Flow 2 chat/RAG persistence.
 
-## Implemented design
-
-### Subject catalogue
+## Subject catalogue
 
 Authenticated users enter through:
 
@@ -30,11 +27,11 @@ Authenticated users enter through:
 GET /subjects
 ```
 
-This gives a concrete subject context before opening Documents, Chapters, or Reports.
+This establishes a concrete subject context before opening Documents, Chapters or Reports.
 
-The catalogue received the shared UI/UX refresh in PR #19 by Member 3, but visibility/authorization rules remain Member 1-owned.
+Member 3 owns the current visual baseline; visibility/authorization behavior remains Member 1-owned.
 
-### Admin subject management
+## Admin subject management
 
 ```text
 GET  /admin/subjects
@@ -46,39 +43,30 @@ GET  /admin/subjects/{id}/leaders
 POST /admin/subjects/{id}/leaders
 ```
 
-Admin can create/edit subjects, toggle `IsActive`, and assign Subject Leaders.
+Admin can create/edit subjects, toggle `IsActive`, assign Subject Leaders and manage any subject as an operational override. Hard delete remains intentionally omitted.
 
-Hard delete is intentionally omitted.
+## Subject Leader assignment
 
-These screens were visually refreshed in PR #19 without changing their authorization model.
-
-### Assignment model
-
-Subject Leader assignment uses ASP.NET Identity claims:
+Assignments use ASP.NET Identity claims:
 
 ```text
 Type  = prn222:managed-subject
 Value = Subject Guid
 ```
 
-No schema change is needed because `AspNetUserClaims` already exists.
+No dedicated assignment table is required for the current design.
 
-### Authorization service
+## Authorization service
 
-`ISubjectAccessService` is the server-side subject authorization boundary.
+`ISubjectAccessService` is the server-side subject authorization boundary for Flow 1/3 resource operations.
 
-It supports:
+- Admin: any existing subject.
+- Subject Leader: assigned subjects only for management.
+- Student: no management permission.
 
-- accessible subject listing;
-- manageable Subject ID resolution;
-- subject view checks;
-- subject manage checks.
+Entity actions authorize against the persisted entity `SubjectId`, not a posted/query value that can be tampered with.
 
-Admin is an override. Subject Leader manages only assigned IDs. Student manages none.
-
-### Flow 1 changes
-
-Documents/Chapters no longer use PRN222 seed ID as workflow scope.
+## Flow 1
 
 Subject context is preserved across:
 
@@ -86,72 +74,61 @@ Subject context is preserved across:
 - upload;
 - details/edit/delete/re-index;
 - chapter list/create/edit/delete;
-- chapter filter/validation;
-- redirects and links.
+- chapter validation;
+- redirects/links.
 
-An entity action authorizes against the persisted entity SubjectId so callers cannot move across subject boundaries by modifying query/form values.
+The indexing pipeline remains one document-ID-driven pipeline for all subjects.
 
-PR #19 added document search/status filtering and preserves those filters across delete/re-index redirects. These additions remain inside the selected subject context.
+## Flow 3
 
-### Flow 3 changes
+Reports require a concrete `subjectId` plus subject-specific manage permission.
 
-Reports require `subjectId` and subject-specific manage permission.
+Document/indexing metrics are subject-scoped. Because `ChatSession.SubjectId` now exists after PR #30, chat aggregates should be audited when Member 5 completes Flow 2 so they explicitly use the same subject boundary.
 
-Subject-scoped metrics:
+## Flow 2 after PR #30
 
-- total chapters;
-- total documents/unassigned documents;
-- indexing state counts;
-- total chunks;
-- recent failures;
-- recently indexed documents;
-- document distribution by chapter.
+The Member 4 backend now establishes subject-aware chat/RAG behavior:
 
-PR #19 refreshed report presentation without changing this boundary.
+```text
+selected/default active Subject
+ -> ChatSession.SubjectId
+ -> IRagQueryService
+ -> question embedding
+ -> pgvector retrieval filtered by Document.SubjectId
+ -> grounded generation
+ -> messages/citations attached to the validated session
+```
 
-Chat metrics remain global until Flow 2 persists subject ownership.
+Important rules:
+
+- session ownership is validated against the authenticated user;
+- a caller-supplied subject conflicting with the persisted session subject is rejected;
+- product callers should use the subject-aware session creation/reuse path;
+- product code must not intentionally construct a null-subject session and fall back to global-corpus retrieval;
+- Conversation History and citations remain tied to the validated chat session.
+
+The remaining Member 5 MVC UI must preserve this subject context rather than reimplementing retrieval or provider calls in controllers/views.
 
 ## Public Student registration
 
-PR #19 introduced public registration as part of the redesigned auth UI.
+Public registration creates only a `Student` account. It does not create Subject Leader assignments and does not expose elevated-role selection.
 
-A public registration creates only a `Student` account. It does not create Subject Leader assignments and does not allow elevated-role selection.
+## Migration history
 
-## Why no migration for current subject/RBAC work
+The original Subject/Chapter/Document multi-subject work reused existing model fields and Identity claims.
 
-The current multi-subject assignment feature uses an Identity table that already exists. `Subject`, `Chapter.SubjectId`, and `Document.SubjectId` also already existed.
+PR #30 adds the real persisted `ChatSession.SubjectId` change/migration needed for subject-scoped RAG sessions.
 
-Public registration also uses existing Identity persistence.
+Member 1 remains the schema/migration coordinator for future cross-workflow model changes.
 
-Therefore these features do not by themselves require a new application schema migration.
+## Ownership and contribution
 
-## Flow 2 contract
+- Member 1: Subject management, Subject Leader assignment, authorization service, schema coordination, cross-workflow subject wiring and docs.
+- Member 2: established Flow 1/Flow 3 behavior.
+- Member 3: completed visual baseline and indexing maintenance ownership.
+- Member 4: merged Flow 2 subject-scoped RAG backend.
+- Member 5: pending final Flow 2 MVC/evaluation layer.
 
-Flow 2 is the remaining place where subject isolation is not yet complete because the workflow is pending.
+Actual merged contribution credit is tracked separately in `docs/member-contributions.md`.
 
-Before RAG backend work is complete:
-
-1. establish a selected Subject in the chat/session boundary;
-2. persist Subject ownership for each chat session;
-3. retrieve only chunks whose `Document.SubjectId` equals that session/selected Subject;
-4. persist citations only from that subject;
-5. keep Conversation History subject-aware;
-6. update Flow 3 chat metrics to subject-scoped once persistence exists.
-
-Do not implement a global retrieval query and plan to filter later.
-
-## Member ownership
-
-Member 1 owns this feature end-to-end:
-
-- Subject management behavior;
-- Subject Leader assignment;
-- subject authorization service;
-- cross-workflow subject-context wiring;
-- tests;
-- schema coordination;
-- all documentation.
-
-Member 2 retains established Flow 1/Flow 3 business behavior.
-
-Member 3 owns the completed PR #19 visual redesign of these screens, not their RBAC/business rules.
+Project documentation uses Member numbers only and must not add GitHub usernames.

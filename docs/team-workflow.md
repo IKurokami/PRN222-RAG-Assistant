@@ -1,18 +1,19 @@
 # Team workflow and ownership
 
-> Provider-backup coordination baseline: work based on `master` after merged PR #20. Member 1 is the sole documentation owner.
+> Post-PR #30 coordination baseline. Member 1 is the sole documentation owner.
 
 ## Current milestone
 
-- Member 1 Core/Data/Identity/RBAC: complete.
-- Member 1 multi-subject management/subject scoping: complete.
-- **Member 1 AI provider foundation: implemented in this PR.**
+- Member 1 Core/Data/Identity/RBAC/multi-subject/provider infrastructure: complete.
 - Member 2 Flow 1 request/business behavior: complete.
-- Member 3 Flow 1 indexing: complete / merged through PR #9.
-- Member 2 Flow 3 reporting behavior: complete / merged through PR #12.
-- Member 3 cross-app UI/UX redesign: complete / merged through PR #19.
-- Member 4 Flow 2 backend: pending.
+- Member 2 Flow 3 reporting behavior: complete.
+- Member 3 cross-app UI/UX redesign: complete.
+- Member 3 remains the maintenance owner for Flow 1 indexing/ingestion.
+- Member 4 Flow 2 RAG backend: complete / merged through PR #30.
+- Member 4 also delivered the latest issue #27 parser/chunker fixes in PR #30.
 - Member 5 Flow 2 MVC/history/citations/evaluation: pending.
+
+Contribution credit is tracked separately from nominal ownership in `docs/member-contributions.md`.
 
 ## Member 1 - Core/Data/RBAC/multi-subject/provider/docs
 
@@ -24,76 +25,106 @@ Owns:
 - Admin/SubjectLeader/Student roles/policies;
 - Subject management/assignment and `ISubjectAccessService`;
 - cross-workflow subject-context integration;
-- **AI provider selection/configuration**;
-- **Gemini/OpenAI/Ollama concrete AI adapters behind Application interfaces**;
-- **online API-key/env wiring**;
-- **embedding dimension/vector-space/re-index compatibility rule**;
+- AI provider selection/configuration;
+- Gemini/OpenAI/Ollama/OpenRouter adapters behind shared interfaces;
+- OpenRouter free chat-model routing/fallback;
+- API-key/env wiring;
+- embedding dimension/vector-space/re-index compatibility rules;
 - provider regression tests;
 - all README/AGENTS/docs edits.
 
-The provider task is cross-cutting infrastructure. It does not move parsing/chunking/indexing workflow ownership from Member 3 or RAG business behavior from Member 4.
+Actual merged contribution also includes the original indexing implementation from PR #9 and chunk-preview/chunking/PDF work from PR #23. These contributions are credited to Member 1 even though Member 3 remains the indexing maintenance owner.
 
 ## Member 2 - Flow 1 request behavior + Flow 3 reporting
 
-Member 2 retains established Chapter/Document request semantics and read-only reporting behavior.
+Complete responsibilities:
 
-Controllers/Pages must not call a concrete AI provider.
+- Chapter/Document request semantics;
+- upload/list/details/edit/delete/re-index behavior;
+- validation and authorization around Flow 1 request handling;
+- read-only Report & Statistics behavior and regression tests.
 
-## Member 3 - indexing + UI/UX redesign
+Controllers/Pages must not call concrete AI providers.
 
-### Indexing - complete
+## Member 3 - indexing maintenance + UI/UX redesign
 
-Member 3 owns parsers, chunker, indexing service/worker, state transitions, chunk replacement, and startup recovery.
+### Indexing ownership
 
-The pipeline consumes `ITextEmbeddingService`; Member 1 now owns which concrete provider implements that interface at startup.
+Member 3 remains responsible for maintaining:
 
-No provider-specific worker is created.
+- PDF/DOCX/PPTX parsers;
+- `TextChunker`;
+- indexing worker/service;
+- indexing state transitions;
+- coherent chunk replacement;
+- startup recovery.
 
-### Cross-app UI/UX redesign - complete
+Contribution accounting is separate: the original merged indexing implementation in PR #9 is credited to Member 1, while the issue #27 remediation in PR #30 is credited to Member 4.
 
-Member 3 retains the PR #19 design system/presentation ownership. Provider-backup changes may update factual copy that previously said AI was always local, but this does not transfer visual ownership.
+### Cross-app UI/UX redesign
 
-## Member 4 - Flow 2 backend
+Member 3 delivered and owns the PR #19 visual baseline, including the shared design system, application shell, authentication presentation and refreshed workflow screens.
 
-Pending responsibilities:
+## Member 4 - Flow 2 backend - COMPLETE BASELINE
 
-- subject-scoped RAG query design;
+Merged responsibilities now include:
+
+- subject-scoped RAG query behavior;
 - question embeddings through `ITextEmbeddingService`;
-- pgvector retrieval over only the selected subject;
-- grounding/no-evidence behavior;
+- pgvector retrieval constrained by subject context;
+- grounded prompt/no-evidence behavior;
 - completion through `IChatCompletionService`;
-- session ownership validation;
-- messages/citations persistence.
+- session ownership/subject validation;
+- messages/citations persistence;
+- citation-marker parsing;
+- backend configuration validation and tests.
 
-Do not call Ollama, Gemini, or OpenAI directly.
+Member 4 must remain provider-neutral and must not call Ollama/Gemini/OpenAI/OpenRouter directly.
 
-## Member 5 - Flow 2 MVC/evaluation
+PR #30 also contains Member 4's merged issue #27 remediation for chunk overlap, Unicode safety, PDF layout handling and parser/chunker regression coverage.
 
-Owns Chat MVC actions/views, subject-aware session navigation/history/citations, and evaluation tooling.
+## Member 5 - Flow 2 MVC/evaluation - PENDING
 
-Do not call provider APIs in controllers/views.
+Owns the remaining product layer:
 
-## Provider integration map
+- MVC Chat/session/history/citation actions and views;
+- subject-aware conversation navigation;
+- user-facing citation rendering;
+- evaluation tooling and final Flow 2 product integration.
+
+The internal RAG demo page is a development surface and does not replace the final Member 5 MVC implementation.
+
+## Flow integration map
 
 ```text
-RAG_PROVIDER
-   |
-   +--> Ollama [local/default, $0 provider fee]
-   +--> Gemini [online Free Tier backup]
-   \--> OpenAI [online paid optional]
-             |
-             +--> ITextEmbeddingService
-             \--> IChatCompletionService
-                        |
-              +---------+---------+
-              |                   |
-         Flow 1 indexing     future Flow 2 RAG
-         [Member 3]          [Member 4]
+                   Member 1 provider infrastructure
+                  /                               \
+        ITextEmbeddingService                IChatCompletionService
+                 |                                  |
+       +---------+-----------+             +--------+--------+
+       |                     |             |                 |
+Flow 1 indexing        Flow 2 query embedding       Flow 2 generation
+[Member 3 owner]           [Member 4]                 [Member 4]
+       |                     |                           |
+       +---- DocumentChunks -+---- subject-scoped ------+
+                                      |
+                                 Member 5 MVC UI
+                                    [pending]
 ```
+
+## Issue #27 / ingestion follow-up
+
+PR #30 is merged and issue #27 is closed.
+
+PDF is the primary real-world format currently being tested most heavily. The following are deferred follow-up debt rather than blockers for that milestone:
+
+- deeper DOCX complex-layout fixtures;
+- deeper PPTX grouped-shape/table/group-transform fixtures;
+- continued hardening for complex PDF table/side-note/rotated-text cases.
 
 ## Provider change procedure
 
-If only the chat model changes, no existing document vectors need re-indexing.
+If only chat provider/model/fallback order changes, no document vectors need re-indexing.
 
 If embedding provider/model/dimension changes:
 
@@ -105,10 +136,16 @@ If embedding provider/model/dimension changes:
 
 ## Secrets
 
-Real API keys live only in local/deployment secret environments. `.env.example` contains blank placeholders.
+Real API keys live only in local/deployment secret environments. Do not put keys in PR descriptions, screenshots, tests using real credentials, browser JavaScript, tracked appsettings, logs or docs.
 
-Members must never put API keys into PR descriptions, screenshots, test fixtures using real credentials, browser JavaScript, tracked appsettings, logs, or docs.
+## Documentation and contribution workflow
 
-## Documentation workflow
+Members 2-5 report code/status/doc impacts to Member 1. Member 1 reconciles docs with actual merged code.
 
-Members 2-5 report code/status/doc impacts to Member 1. Member 1 reconciles docs with actual code after integration.
+Contribution accounting rules:
+
+- use Member numbers only;
+- do not put GitHub usernames in project documentation;
+- distinguish assigned ownership from actual merged contribution;
+- do not double-credit work to an owner when another member delivered the merged implementation;
+- record auditable PR numbers in `docs/member-contributions.md`.

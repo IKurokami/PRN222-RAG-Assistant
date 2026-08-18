@@ -17,10 +17,16 @@ public sealed class ChatSessionConfiguration : IEntityTypeConfiguration<ChatSess
             .IsRequired();
 
         builder.HasIndex(x => new { x.UserId, x.UpdatedAtUtc });
+        builder.HasIndex(x => x.SubjectId);
 
         builder.HasOne<ApplicationUser>()
             .WithMany()
             .HasForeignKey(x => x.UserId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasOne<Subject>()
+            .WithMany()
+            .HasForeignKey(x => x.SubjectId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }

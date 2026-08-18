@@ -6,6 +6,8 @@ public sealed class ChatSession
 
     public Guid UserId { get; set; }
 
+    public Guid? SubjectId { get; set; }
+
     public string Title { get; set; } = string.Empty;
 
     public DateTime CreatedAtUtc { get; set; }

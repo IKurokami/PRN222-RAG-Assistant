@@ -15,6 +15,8 @@ namespace PRN222.RagAssistant.Controllers;
 [Authorize]
 public sealed class DocumentsController : Controller
 {
+    private const int ChunkPreviewPageSize = 12;
+
     private readonly ApplicationDbContext _dbContext;
     private readonly IDocumentIndexingQueue _indexingQueue;
     private readonly ISubjectAccessService _subjectAccessService;
@@ -283,7 +285,10 @@ public sealed class DocumentsController : Controller
     }
 
     [HttpGet]
-    public async Task<IActionResult> Details(Guid id, CancellationToken cancellationToken)
+    public async Task<IActionResult> Details(
+        Guid id,
+        int chunkPage = 1,
+        CancellationToken cancellationToken = default)
     {
         var entity = await _dbContext.Documents
             .AsNoTracking()
@@ -317,13 +322,49 @@ public sealed class DocumentsController : Controller
             : null;
 
         var uploader = await _userManager.FindByIdAsync(entity.UploadedByUserId.ToString());
-        var chunkCount = await _dbContext.DocumentChunks
+        var chunkQuery = _dbContext.DocumentChunks
             .AsNoTracking()
-            .CountAsync(chunk => chunk.DocumentId == id, cancellationToken);
+            .Where(chunk => chunk.DocumentId == id);
+        var chunkCount = await chunkQuery.CountAsync(cancellationToken);
+        var embeddedChunkCount = chunkCount == 0
+            ? 0
+            : await chunkQuery.CountAsync(chunk => chunk.Embedding != null, cancellationToken);
+        var totalChunkPages = chunkCount == 0
+            ? 0
+            : ((chunkCount - 1) / ChunkPreviewPageSize) + 1;
+        var currentChunkPage = totalChunkPages == 0
+            ? 1
+            : Math.Clamp(chunkPage, 1, totalChunkPages);
+
+        List<DocumentChunkPreviewItemViewModel> chunkPreviewItems = [];
+        if (chunkCount > 0)
+        {
+            chunkPreviewItems = await chunkQuery
+                .OrderBy(chunk => chunk.ChunkIndex)
+                .Skip((currentChunkPage - 1) * ChunkPreviewPageSize)
+                .Take(ChunkPreviewPageSize)
+                .Select(chunk => new DocumentChunkPreviewItemViewModel
+                {
+                    ChunkIndex = chunk.ChunkIndex,
+                    Content = chunk.Content,
+                    PageNumber = chunk.PageNumber,
+                    SlideNumber = chunk.SlideNumber,
+                    HasEmbedding = chunk.Embedding != null
+                })
+                .ToListAsync(cancellationToken);
+        }
 
         return View(new DocumentDetailsViewModel
         {
             CanManageDocuments = await _subjectAccessService.CanManageSubjectAsync(User, entity.SubjectId, cancellationToken),
+            ChunkPreview = new DocumentChunkPreviewPageViewModel
+            {
+                Items = chunkPreviewItems,
+                TotalCount = chunkCount,
+                EmbeddedCount = embeddedChunkCount,
+                CurrentPage = currentChunkPage,
+                TotalPages = totalChunkPages
+            },
             Document = new DocumentDetailViewModel
             {
                 Id = entity.Id,
@@ -343,7 +384,6 @@ public sealed class DocumentsController : Controller
                 IndexError = entity.IndexError,
                 UploadedAtUtc = entity.UploadedAtUtc,
                 IndexedAtUtc = entity.IndexedAtUtc,
-                ChunkCount = chunkCount
             }
         });
     }

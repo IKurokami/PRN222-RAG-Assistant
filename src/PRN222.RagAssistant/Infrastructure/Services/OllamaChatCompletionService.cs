@@ -37,7 +37,8 @@ public sealed class OllamaChatCompletionService : IChatCompletionService
                 new { role = "system", content = systemPrompt },
                 new { role = "user", content = userPrompt }
             },
-            stream = false
+            stream = false,
+            think = false
         };
 
         using var response = await client.PostAsJsonAsync("api/chat", request, cancellationToken);
