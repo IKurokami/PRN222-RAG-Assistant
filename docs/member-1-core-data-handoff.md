@@ -1,6 +1,6 @@
 # Member 1 handoff - Core/Data/RBAC/Multi-subject/AI Providers/Documentation
 
-> Updated for OpenRouter free-model routing/fallback.
+> Synchronized after PR #30 merged on 2026-08-18.
 
 ## Ownership
 
@@ -15,43 +15,44 @@ Member 1 owns:
 - subject-specific authorization service;
 - cross-workflow subject-context integration;
 - role/subject regression tests;
-- **AI provider selection/configuration**;
-- **Ollama/Gemini/OpenAI/OpenRouter adapters behind provider-neutral interfaces**;
-- **OpenRouter free chat-model routing/fallback**;
-- **API-key/env wiring and startup validation**;
-- **embedding dimension/vector-space/re-index coordination**;
-- all repository documentation.
+- AI provider selection/configuration;
+- Ollama/Gemini/OpenAI/OpenRouter adapters behind provider-neutral interfaces;
+- OpenRouter free chat-model routing/fallback;
+- API-key/env wiring and startup validation;
+- embedding dimension/vector-space/re-index coordination;
+- repository-wide documentation synchronization.
 
-## AI provider assignment
+## Actual merged contribution credit
 
-This task is explicitly assigned to **Member 1**.
+Member 1 also delivered merged implementation outside nominal ownership:
+
+- original end-to-end indexing pipeline in PR #9;
+- document chunk preview, semantic chunking and PDF extraction improvements in PR #23;
+- repeated cross-workflow integration/review/doc synchronization around Flow 1/2/3.
+
+These contributions are credited to Member 1 even though Member 3 retains ongoing indexing maintenance ownership.
+
+Canonical ledger: `docs/member-contributions.md`.
+
+## AI provider infrastructure
 
 Supported runtime choices:
 
 ```text
-Ollama     -> local/default
-Gemini     -> direct online Free Tier path
-OpenRouter -> online free-first routed/fallback path
-OpenAI     -> online paid optional
+Ollama
+Gemini
+OpenRouter
+OpenAI
 ```
 
-Selected defaults as of 2026-08-15:
+Application/workflow code remains provider-neutral through:
 
 ```text
-Ollama: qwen3:4b + qwen3-embedding:0.6b
-Gemini: gemini-3.6-flash + gemini-embedding-2
-OpenRouter chat: google/gemma-4-26b-a4b-it:free -> nvidia/nemotron-3-ultra-550b-a55b:free -> openrouter/free
-OpenRouter embedding: nvidia/llama-nemotron-embed-vl-1b-v2:free
-OpenAI: gpt-5.6-luna + text-embedding-3-small
+ITextEmbeddingService
+IChatCompletionService
 ```
 
-Gemini remains the stable direct free-online option; OpenRouter adds free-model fallback/rotation for chat. OpenAI is not documented as free.
-
-Provider-specific payloads remain in Infrastructure; Application keeps `ITextEmbeddingService` and `IChatCompletionService` provider-neutral.
-
-## Provider selection
-
-Backward-compatible:
+Backward-compatible selection:
 
 ```text
 RAG_PROVIDER
@@ -64,33 +65,17 @@ RAG_CHAT_PROVIDER
 RAG_EMBEDDING_PROVIDER
 ```
 
-Blank overrides inherit `RAG_PROVIDER`, so existing deployments do not need to change.
+No real API key belongs in tracked files.
 
-## Secrets/configuration
+## Embedding invariant
 
-API keys are supplied only through environment/configuration:
+Embedding uses one semantic vector space per searchable corpus.
 
-```text
-GEMINI_API_KEY
-OPENAI_API_KEY
-OPENROUTER_API_KEY
-```
+If embedding provider/model/dimension changes, Member 1 coordinates a complete corpus re-index before retrieval. Same-sized vectors from different models are not interchangeable.
 
-No real key belongs in tracked files. Only selected providers validate their required settings at startup.
+Chat provider/model changes alone do not require re-indexing.
 
-## Chat fallback vs embedding invariant
-
-OpenRouter chat may send an ordered model list and let OpenRouter move to the next model on provider/model failure. Changing chat order/provider does not require corpus re-indexing.
-
-Default embedding dimension:
-
-```text
-RAG_EMBEDDING_DIMENSIONS=1024
-```
-
-Embedding always uses one fixed model. If embedding provider/model/dimensions change, Member 1 coordinates a complete corpus re-index before retrieval. Same-sized vectors from different models must not be treated as compatible.
-
-## Existing multi-subject baseline
+## Multi-subject baseline
 
 Roles:
 
@@ -108,7 +93,7 @@ ManageSubjects
 ManageDocuments
 ```
 
-Admin manages users/roles and all Subjects. Subject Leaders manage only assigned Subjects.
+Admin manages users/roles and all Subjects. Subject Leaders manage assigned Subjects only.
 
 Assignments use Identity claims:
 
@@ -116,18 +101,19 @@ Assignments use Identity claims:
 prn222:managed-subject -> Subject Guid
 ```
 
+`ChatSession.SubjectId` is now persisted after PR #30. Member 1 remains migration/schema coordinator for future cross-workflow model changes.
+
 ## Cross-workflow boundary
 
-Flow 1 request behavior remains Member 2-owned. Indexing/chunking/worker behavior remains Member 3-owned. Member 1's provider work supplies the concrete `ITextEmbeddingService` used by that indexing pipeline.
+- Member 2 owns Flow 1 request/business behavior and Flow 3 reporting behavior.
+- Member 3 owns ongoing indexing/ingestion maintenance and the UI/UX baseline.
+- Member 4 now owns a merged Flow 2 RAG backend baseline.
+- Member 5 owns the remaining Flow 2 MVC/history/citation/evaluation product layer.
 
-Future Flow 2 RAG behavior remains Member 4-owned. Member 4 consumes `ITextEmbeddingService` and `IChatCompletionService`; Member 1 owns provider plumbing/routing, not RAG retrieval/grounding semantics.
-
-## Schema impact
-
-The provider-routing task adds no EF model change and requires no migration.
-
-A future Flow 2 subject ownership change may still require a migration; Member 1 coordinates it separately.
+Member 1 owns provider plumbing and schema/contract coordination, not Member 4's retrieval/grounding semantics.
 
 ## Documentation responsibility
 
-Member 1 exclusively edits README, AGENTS files, and `docs/*`.
+Member 1 exclusively edits README, AGENTS files and `docs/*` after reconciling merged changes from the whole team.
+
+Project documentation uses Member numbers only and must not add GitHub usernames.

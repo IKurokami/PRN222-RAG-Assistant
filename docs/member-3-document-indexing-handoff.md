@@ -1,70 +1,110 @@
 # Member 3 handoff - Document Indexing/Ingestion
 
-> Updated for provider-neutral AI runtime work. Member 3's indexing ownership remains unchanged.
+> Updated after PR #30 merged. Member 3 remains the maintenance owner for this scope.
 
 ## Status
 
-Indexing is complete / merged through PR #9 and remains the single indexing implementation for every Subject.
+The indexing pipeline is complete and active for every Subject.
 
-## Ownership
+Current pipeline:
 
-Member 3 owns:
+```text
+Document upload/re-index
+  -> IDocumentIndexingQueue
+  -> DocumentIndexingWorker
+  -> parser (PDF/DOCX/PPTX)
+  -> TextChunker
+  -> ITextEmbeddingService
+  -> replace DocumentChunk rows
+  -> Indexed / Failed
+```
 
-- PDF/DOCX/PPTX parsing;
+## Maintenance ownership
+
+Member 3 owns ongoing maintenance of:
+
+- PDF/DOCX/PPTX parsers;
 - `DocumentParserFactory`;
 - `TextChunker`;
 - `TextEmbeddingBatcher`;
 - `DocumentIndexingService`;
 - `DocumentIndexingWorker`;
-- coherent DocumentChunk replacement;
+- coherent `DocumentChunk` replacement;
 - indexing status/error/timestamp persistence;
 - startup recovery for persisted Uploaded/Processing documents.
 
-The original `OllamaTextEmbeddingService` implementation is now part of a broader provider layer coordinated by Member 1. This does **not** transfer indexing workflow ownership.
+## Contribution accounting
+
+Maintenance ownership is **not** the same as implementation credit.
+
+Actual merged contribution is recorded as follows:
+
+- the original end-to-end indexing implementation merged in PR #9 is credited to Member 1;
+- the document chunk preview/chunking/PDF improvements merged in PR #23 are credited to Member 1;
+- the issue #27 remediation merged in PR #30 is credited to Member 4;
+- Member 3 retains ownership of the resulting indexing/ingestion scope going forward.
+
+This prevents double-crediting implementation simply because Member 3 owns the area.
+
+Canonical details: `docs/member-contributions.md`.
 
 ## Provider-neutral embedding handoff
 
-Indexing consumes:
+Indexing consumes only:
 
 ```text
 ITextEmbeddingService
 ```
 
-Startup configuration selects one concrete implementation:
+Concrete provider selection belongs to Member 1 infrastructure.
 
-```text
-OllamaTextEmbeddingService
-GeminiTextEmbeddingService
-OpenAiTextEmbeddingService
-```
+Supported provider layer includes Ollama, Gemini, OpenAI and OpenRouter. The worker/indexing service must not branch by provider name and must not create provider-specific indexing pipelines.
 
-Member 3 must not branch the worker/indexing service by provider name and must not create separate provider-specific indexing pipelines.
+## Embedding compatibility
 
-## Embedding provider change
+The corpus must use one embedding vector space at a time.
 
-Default vector dimension is 1024.
+If embedding provider/model/dimension changes:
 
-A provider/model switch means existing stored embeddings are semantically stale even if dimensions match. Member 1 coordinates the provider change; the existing Member 3 re-index path is then used to rebuild every searchable document.
+1. treat existing stored embeddings as stale;
+2. re-index the entire searchable corpus;
+3. do not mix old/new embedding vectors during retrieval.
 
-Never leave a partially mixed corpus of embeddings from different models.
+Changing only chat provider/model/fallback order does not require document re-indexing.
 
-## Multi-subject impact
+## Multi-subject behavior
 
-No per-subject indexing pipeline is needed. Flow 1 queues only `Document.Id`; the persisted document carries `SubjectId`.
+No per-subject indexing worker is required.
 
-Subject isolation matters later at retrieval time, where Member 4 must restrict candidate documents/chunks to the selected Subject.
+Flow 1 queues only `Document.Id`. The persisted document carries `SubjectId`, while Flow 2 retrieval uses subject context to constrain candidate documents/chunks.
 
-## State flow
+## Issue #27 merged changes
 
-```text
-Uploaded -> Processing -> Indexed
-                     \-> Failed
-```
+PR #30 closed issue #27 and added/hardened:
 
-Re-index coherently replaces stale chunks. Startup recovery re-enqueues persisted work because the in-memory queue is not durable.
+- bounded overlap and deterministic forward progress;
+- Unicode normalization and safer grapheme boundaries;
+- configurable `ChunkingOptions` with startup validation;
+- improved PDF two-column reading order and PDF regression tests;
+- DOCX blank paragraphs no longer become fake pages/page numbers;
+- additional DOCX/PPTX extraction and integration coverage.
 
-## Other ownership
+PDF is the primary real-world ingestion format currently receiving the most active testing.
 
-Member 3 also owns the completed PR #19 cross-app UI/UX redesign. Provider-backup factual copy updates do not transfer that presentation ownership.
+## Deferred follow-up debt
 
-Any docs/status impact is reported to Member 1.
+Later focused work should add deeper coverage for:
+
+- complex DOCX list/table/layout combinations;
+- PPTX grouped shapes, tables and parent-group transform handling;
+- more difficult PDF tables, side notes and rotated text.
+
+These are follow-up quality improvements and are not blockers for the completed PR #30 milestone.
+
+## Other Member 3 ownership
+
+Member 3 also owns the completed cross-application UI/UX baseline from PR #19.
+
+Any documentation/status impact is reported to Member 1 for repository-wide synchronization.
+
+Project documentation uses Member numbers only and must not add GitHub usernames.
