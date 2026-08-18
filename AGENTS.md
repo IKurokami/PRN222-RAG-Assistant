@@ -4,13 +4,14 @@
 
 This file applies to the entire repository. Deeper `AGENTS.md` files add rules for their subtree.
 
-Before changing workflow or AI-provider code, read:
+Before changing workflow, ingestion, RAG or AI-provider code, read:
 
 ```text
 AGENTS.md
 src/PRN222.RagAssistant/Application/AGENTS.md
 docs/project-status.md
 docs/team-workflow.md
+docs/member-contributions.md
 docs/role-access-control.md
 docs/multi-subject-management.md
 docs/infrastructure.md
@@ -19,7 +20,7 @@ docs/ai-provider-backup.md
 
 ## Current baseline
 
-Provider routing/fallback extends the merged provider-backup foundation on 2026-08-15.
+Synchronized after PR #30 merged and issue #27 closed on 2026-08-18.
 
 - Main project: `src/PRN222.RagAssistant`
 - Tests: `tests/PRN222.RagAssistant.Tests`
@@ -29,133 +30,39 @@ Provider routing/fallback extends the merged provider-backup foundation on 2026-
 - Roles: `Admin`, `SubjectLeader`, `Student`
 - Policies: `ManageUsers`, `ManageSubjects`, `ManageDocuments`
 - Database: PostgreSQL + pgvector
-- AI runtime: provider-neutral; Ollama local default, Gemini/OpenAI/OpenRouter online options
+- AI runtime: provider-neutral; Ollama/Gemini/OpenAI/OpenRouter
 - Source storage: `storage/uploads/`
 
-<<<<<<< Updated upstream
-Presentation/workflow state:
-=======
-The demo is scoped to PRN222. Subject Leaders curate/upload course documents. Chapters are runtime-managed data. Students consume successfully indexed content through Flow 2 chat. Automatic FLM crawling is not authoritative ingestion.
-
-## Product workflows
-
-1. **Flow 1 - Document Management & Indexing** - COMPLETE - Razor Pages
-2. **Flow 2 - RAG Question & Answer & Conversation Management** - PENDING - **ASP.NET Core MVC**
-3. **Flow 3 - Report & Statistics** - COMPLETE - Razor Pages
-
-Conversation History belongs to Flow 2 and is not counted as Flow 3.
-
-## Current merged milestone
-
-Latest synchronized baseline after PR #12:
-
-Latest synchronized baseline after PR #12 (Member 2 Flow 3 Report & Statistics). Main remaining product work is Flow 2 RAG Q&A, now fixed to ASP.NET Core MVC Controllers + Views.
-
-PR #9 completed the Member 2 -> Member 3 Flow 1 handoff. PR #12 completed Member 2's independent Flow 3 reporting assignment. The main unfinished product work is now Flow 2, and its presentation model is fixed to ASP.NET Core MVC rather than Razor Pages.
-
-When status is unclear, latest merged code on `master` is the source of truth; synchronize docs afterward.
-
-## Team ownership and integration boundaries
-
-### Member 1 - Core/Data Lead - COMPLETE BASELINE
-
-Owns:
-
-- `Domain/Entities/`
-- `Domain/Enums/`
-- `Data/`
-- `Security/`
-- cross-workflow `Application/` contracts/models
-- schema/migration conventions
-- architecture/convention tests
-- coordination for genuine EF model/migration changes
-
-Do not move later workflow business logic into Member 1 simply because shared contracts live under `Application/`.
-
-### Member 2 - Document Management + Report & Statistics - COMPLETE CURRENT ASSIGNMENT
-
-#### Flow 1 request/presentation - COMPLETE
-
-Merged behavior includes:
-
-- runtime PRN222 Chapter list/create/edit/delete
-- Document list/filter/upload/details/edit/delete/re-index request
-- PDF/DOCX/PPTX upload validation
-- 50 MB limit
-- source-file persistence
-- document metadata persistence
-- PRN222 chapter validation
-- `AppPolicies.ManageDocuments` server-side enforcement
-- queue handoff after document persistence
-- safe chapter deletion that unassigns referenced documents first
-
-Flow 1 request handlers must not parse, chunk, embed, query pgvector, or call Ollama.
-
-#### Flow 3 Report & Statistics - COMPLETE
-
-PR #12 merged a read-only Subject Leader reporting dashboard under `Pages/Reports/`.
-
-Implemented reporting includes:
-
-- total PRN222 chapters/documents
-- documents by indexing state
-- documents by chapter/unassigned
-- total PRN222 `DocumentChunk` count
-- indexing completion percentage
-- recent indexing failures / `IndexError`
-- recently indexed documents with chunk counts/timestamps
-- total chat sessions/messages/citations
-- graceful empty/zero states before Flow 2 data exists
-
-The Reports page uses `AppPolicies.ManageDocuments` and is server-side restricted to `SubjectLeader`.
-
-Flow 3 must remain read-only and must not:
-
-- enqueue/re-index documents as part of reporting
-- alter parser/chunker/embedding/worker behavior
-- mutate workflow data
-- run pgvector similarity retrieval
-- call Ollama
-- duplicate Member 5 Conversation History UI
-- add speculative analytics entities/migrations
-- change shared contracts solely for dashboard convenience
-
-If reporting exposes a genuine persistence gap, coordinate through Member 1.
-
-Do not recreate `feature/report-statistics` as a competing implementation; Flow 3 is already merged.
-
-### Member 3 - Document Indexing / Ingestion - COMPLETE
-
-PR #9 merged:
-
-- `DocumentParserFactory`
-- PDF parser via PdfPig
-- DOCX/PPTX parsers via OpenXml
-- `TextChunker`
-- `TextEmbeddingBatcher`
-- `OllamaTextEmbeddingService`
-- single and ordered-batch `ITextEmbeddingService` support
-- `DocumentIndexingService`
-- `DocumentIndexingWorker`
-- coherent `DocumentChunk` replacement
-- index state/error/timestamp persistence
-- startup rehydration of `Uploaded`/`Processing` documents
-
-Implemented state flow:
->>>>>>> Stashed changes
+Workflow state:
 
 ```text
 Flow 1 -> MVC Controllers + Views [COMPLETE]
-Flow 2 -> MVC Controllers + Views [PENDING]
-Flow 3 -> Razor Pages             [COMPLETE]
-Auth/shell -> Razor Pages         [COMPLETE]
-Admin user management -> MVC      [COMPLETE]
-Admin subject management -> MVC   [COMPLETE]
-Cross-app UI/UX redesign          [COMPLETE - PR #19 - Member 3]
-AI provider foundation/routing    [MEMBER 1]
+Flow 2 backend              [COMPLETE - Member 4]
+Flow 2 MVC product UI       [PENDING  - Member 5]
+Flow 3 -> Razor Pages       [COMPLETE]
+Auth/shell -> Razor Pages   [COMPLETE]
+Admin user management       [COMPLETE]
+Admin subject management    [COMPLETE]
+Cross-app UI/UX baseline    [COMPLETE - Member 3]
+AI provider infrastructure  [COMPLETE - Member 1]
 ```
 
-PRN222 remains the seeded demo subject. Do not treat PRN222 as the application-wide hard-coded subject scope.
+PRN222 remains the seeded demo subject. Do not treat PRN222 as the global hard-coded application scope.
+
+## Contribution accounting rule
+
+Repository documentation uses **Member numbers only**.
+
+- Do not add GitHub usernames to README, AGENTS files or `docs/*`.
+- Assigned ownership and actual implementation credit are separate concepts.
+- Do not double-credit work to an owner when another member delivered the merged implementation.
+- Use `docs/member-contributions.md` as the canonical contribution ledger.
+- Keep PR numbers as auditable evidence.
+
+Current examples:
+
+- Member 1 receives implementation credit for PR #9 and PR #23 even though Member 3 owns indexing maintenance.
+- Member 4 receives implementation credit for the issue #27 remediation in PR #30 even though Member 3 owns indexing maintenance.
 
 ## AI provider invariant
 
@@ -183,54 +90,27 @@ Rag:EmbeddingProvider / RAG_EMBEDDING_PROVIDER
 
 Blank overrides inherit `RAG_PROVIDER`.
 
-Supported provider stacks:
+Do not add hidden application-level automatic local-to-cloud failover. Cloud use must remain explicit because it changes data egress, privacy and potentially cost.
 
-```text
-Ollama:
-  chat      qwen3:4b
-  embedding qwen3-embedding:0.6b
+Default embedding dimensions are 1024. Equal dimensions do not imply compatible vector spaces.
 
-OpenAI:
-  chat      gpt-5.6-luna
-  embedding text-embedding-3-small
-
-Gemini:
-  chat      gemini-3.6-flash
-  embedding gemini-embedding-2
-
-OpenRouter:
-  chat      ordered models list with provider/model fallback
-  embedding one fixed configured embedding model
-```
-
-OpenRouter default chat chain:
-
-```text
-google/gemma-4-26b-a4b-it:free
- -> nvidia/nemotron-3-ultra-550b-a55b:free
- -> openrouter/free
-```
-
-Do not add hidden application-level automatic local-to-cloud failover. Cloud use remains an explicit operator choice because it changes data egress/API cost/privacy. Once OpenRouter is explicitly selected for chat, its configured internal model/provider fallback is allowed.
-
-Default embedding dimensions are `1024`. Equal dimensions do not imply compatible vector spaces. **Never rotate between embedding models.** Whenever the embedding provider, embedding model, or configured dimensions change, re-index the whole corpus before similarity retrieval. Never mix chunks produced by different embedding models in one searchable corpus.
-
-Canonical details: `docs/ai-provider-backup.md`.
+**Never mix embedding models/providers within one searchable corpus.** If embedding provider/model/dimension changes, re-index the whole corpus before retrieval. Chat-only provider/model changes do not require re-indexing.
 
 ## Multi-subject invariant
 
 Subject is a first-class boundary.
 
-- `Document.SubjectId` and `Chapter.SubjectId` determine ownership.
-- Flow 1 and Flow 3 operate with a concrete subject context.
+- `Document.SubjectId` and `Chapter.SubjectId` determine content ownership.
+- `ChatSession.SubjectId` determines chat/RAG subject context.
+- Flow 1 and Flow 3 operate with concrete subject context.
+- Flow 2 backend now carries subject context through session/retrieval/persistence.
 - Admin may manage any existing subject.
 - Subject Leader may manage only assigned subjects.
 - Student may view active subjects but cannot manage them.
-- Subject Leader assignment is stored as Identity user claims of type `AppClaimTypes.ManagedSubject`.
-- `ManageDocuments` is a coarse role policy; subject-specific operations must additionally call `ISubjectAccessService`.
+- Subject Leader assignment is stored as Identity claims.
+- `ManageDocuments` is a coarse role policy; subject-specific operations additionally use `ISubjectAccessService`.
 - UI visibility is never authorization.
-- Do not reintroduce `SeedData.Prn222SubjectId` into workflow controllers/pages as active scope.
-- Do not hard-delete Subjects while dependent workflow data exists; use `IsActive` lifecycle for now.
+- Do not reintroduce `SeedData.Prn222SubjectId` into active workflow code.
 
 ## Roles and policies
 
@@ -240,108 +120,133 @@ ManageSubjects  -> Admin
 ManageDocuments -> Admin OR SubjectLeader
 ```
 
-Admin owns users, roles, subjects, Subject Leader assignments, and may perform subject-content operations as an override.
-
-Subject Leader owns academic content only for assigned subjects.
-
-If a user is changed away from `SubjectLeader`, their managed-subject claims must be cleared.
-
-Public self-registration is allowed only as `Student`.
+Public self-registration may create only `Student` accounts.
 
 ## Team ownership
 
-### Member 1 - Core/Data/RBAC/multi-subject/provider foundation/docs
+### Member 1 - Core/Data/RBAC/multi-subject/provider/docs
 
-Member 1 owns:
+Owns:
 
-- `Domain/Entities/`, `Domain/Enums/`, `Data/`, `Security/`;
-- shared `Application/` contracts/models and schema/migration coordination;
-- Identity setup/seeding and RBAC rules;
-- Admin user/role management;
-- Admin Subject management and Subject Leader assignment;
-- `ISubjectAccessService` and subject-context authorization;
-- cross-workflow subject-context wiring;
-- role/subject authorization tests;
-- AI provider selection/configuration and concrete provider adapters;
-- OpenRouter free-model chat fallback/routing configuration;
-- API-key/environment wiring and embedding-dimension compatibility rules;
-- provider-registration/adapter tests;
-- all repository documentation edits.
+- Domain/Data/Security architecture;
+- shared Application contracts/models and migration coordination;
+- Identity/RBAC and Admin user/role management;
+- Subject management/assignment and subject authorization;
+- provider selection/configuration and concrete provider adapters;
+- provider/env/embedding compatibility rules;
+- repository documentation synchronization.
 
-Member 1 provider ownership is cross-cutting infrastructure. It does not transfer Member 3's indexing workflow ownership or Member 4's future Flow 2 RAG behavior.
+Member 1 also has contribution credit for merged implementation outside nominal ownership, documented in `docs/member-contributions.md`.
 
-### Member 2 - Flow 1 request behavior + Flow 3 reporting behavior
+### Member 2 - Flow 1 request behavior + Flow 3 reporting
 
-Owns established document/chapter CRUD/upload/re-index request behavior and read-only reporting behavior.
+Owns established document/chapter request/business behavior and read-only reporting behavior.
 
-Do not put provider HTTP calls in MVC/Razor request code.
+Request handlers must not call concrete AI providers or perform embedding/retrieval work directly.
 
-### Member 3 - indexing + completed UI/UX redesign
+### Member 3 - indexing maintenance + UI/UX
 
-Member 3 owns the parser/chunker/indexing worker/service pipeline and startup recovery. The indexing pipeline consumes whichever `ITextEmbeddingService` Member 1's provider configuration selects.
+Owns ongoing maintenance of:
 
-Member 3 also owns the completed cross-application UI/UX redesign merged in PR #19.
+- PDF/DOCX/PPTX parsers;
+- `TextChunker`;
+- indexing worker/service;
+- indexing state transitions and coherent chunk replacement;
+- startup recovery.
 
-Indexing remains document-ID driven. Do not create one indexing pipeline per subject or provider.
+Member 3 also owns the completed cross-app UI/UX baseline from PR #19.
 
-### Member 4 - Flow 2 backend - PENDING
+Contribution credit for PR #9/#23 belongs to Member 1 and PR #30 issue #27 remediation belongs to Member 4.
 
-Flow 2 must remain provider-neutral and subject-scoped.
+### Member 4 - Flow 2 backend - COMPLETE BASELINE
 
-```text
-selected subject
-    -> provider-selected question embedding
-    -> only indexed Documents of that Subject
-    -> only their DocumentChunks
-    -> provider-selected grounded generation
-    -> citations/messages bound to that Subject
-```
+Owns:
 
-Member 4 consumes `ITextEmbeddingService` and `IChatCompletionService`; do not call Ollama/OpenAI/Gemini/OpenRouter directly.
+- subject-scoped RAG query behavior;
+- question embeddings through `ITextEmbeddingService`;
+- pgvector retrieval constrained by subject;
+- grounded prompt/no-evidence behavior;
+- completion through `IChatCompletionService`;
+- session ownership/subject validation;
+- conversation history loading;
+- message/citation persistence and citation marker parsing;
+- backend configuration validation and tests.
+
+Do not call concrete providers directly.
 
 ### Member 5 - Flow 2 MVC presentation/evaluation - PENDING
 
-Owns future MVC chat/session/history/citation UI and evaluation tooling. Do not call provider APIs from controllers/views.
+Owns:
+
+- final MVC Chat/session/history/citation controllers/views;
+- subject-aware conversation navigation;
+- user-facing citation rendering;
+- evaluation tooling.
+
+The internal RAG demo Razor Page is not the final Member 5 product UI.
 
 ## Flow 1 rules
 
 - MVC only: `DocumentsController`, `ChaptersController`, `Views/Documents`, `Views/Chapters`.
-- Writes require `ManageDocuments` and subject-specific manage permission.
+- Writes require `ManageDocuments` plus subject-specific manage permission.
 - Upload persists file + `Document`, then queues `Document.Id`.
-- Controllers do not parse/chunk/embed/query pgvector/call AI providers.
-- Provider changes do not change Flow 1 request semantics.
-- If the embedding provider/model/dimension changes, all indexed documents need re-indexing.
+- Controllers do not parse/chunk/embed/query pgvector/call provider APIs.
+- Indexing consumes `ITextEmbeddingService`.
+
+### Issue #27 baseline
+
+Issue #27 is closed after PR #30.
+
+Merged hardening includes deterministic bounded overlap, Unicode normalization/grapheme safety, configurable chunking, improved PDF multi-column reading order, PDF regression tests, DOCX fake-page correction and additional parser/integration coverage.
+
+PDF is the primary real-world format currently receiving the most testing.
+
+Deferred follow-up debt:
+
+- deeper DOCX complex-layout/list/table fixtures;
+- deeper PPTX grouped-shape/table/group-transform fixtures;
+- further complex PDF table/side-note/rotated-text hardening.
+
+## Flow 2 rules
+
+Product code must use subject-aware sessions and the RAG service contract.
+
+```text
+selected subject
+    -> subject-aware ChatSession
+    -> ITextEmbeddingService
+    -> indexed Documents of that Subject only
+    -> DocumentChunks
+    -> grounded generation through IChatCompletionService
+    -> citations/messages/history bound to the same subject context
+```
+
+Do not intentionally fall back to global-corpus retrieval in product paths.
 
 ## Flow 3 rules
 
 - Razor Pages under `Pages/Reports/`.
-- Requires concrete `subjectId` and subject-specific manage permission.
-- Reports are read-only.
-- Reports do not call AI providers or similarity retrieval.
-- Chat metrics remain temporarily global until Flow 2 adds subject-scoped chat persistence.
+- Reports are read-only and provider-independent.
+- Require concrete subject context and subject-specific manage permission.
+- Because `ChatSession.SubjectId` now exists, chat aggregate scoping should be audited when Member 5 completes Flow 2.
 
-## UI/UX rules after PR #19
+## UI/UX rules
 
 - Reuse `wwwroot/css/design-tokens.css` and `wwwroot/css/components.css`.
 - Preserve responsive/accessibility behavior.
 - UI must not weaken server-side authorization.
-- Public registration may create only `Student` accounts.
-- User-facing privacy/product copy must not claim AI is always local when online provider modes are supported.
+- User-facing copy must not claim AI is always local when online providers are supported.
 
 ## EF Core rules
 
 1. No navigation properties in domain entities; use scalar foreign keys.
 2. Mapping belongs in dedicated `IEntityTypeConfiguration<TEntity>` types.
 3. Keep `ApplicationDbContext` thin.
-4. Use EF migrations for actual schema changes.
+4. Use EF migrations for real schema changes.
 5. Do not use `EnsureCreated` for application runtime schema.
 6. Preserve explicit delete behaviors and architecture tests.
 
-The provider-routing implementation does not require an EF migration. `DocumentChunk.Embedding` remains provider-neutral storage.
-
 ## Shared contracts
-
-Cross-member contracts live under `Application/`.
 
 Current important contracts:
 
@@ -353,20 +258,20 @@ Current important contracts:
 - `RagAnswer`
 - `RagCitation`
 
-Provider-specific request/response DTOs stay in Infrastructure, not Application.
+Provider-specific DTOs stay in Infrastructure, not Application.
 
 ## Infrastructure and hygiene
 
-- Never commit `.env`, API keys, credentials, uploaded documents, DB dumps, logs, build output, or runtime data.
+- Never commit `.env`, API keys, credentials, uploaded documents, DB dumps, logs, build output or runtime data.
 - Default branch: `master`.
 - Use focused branches/PRs.
 - Local Ollama Compose uses the `local-ai` profile.
-- Online provider runs must not require the Ollama container unless a selected contract uses Ollama.
-- Run build/tests/pending-model/Docker validation before merge.
+- Online provider runs must not require Ollama unless a selected contract uses Ollama.
+- Run build/tests/pending-model/Docker/PostgreSQL validation before merge.
 - Never run `docker compose down -v` unless explicitly requested.
 
 ## Documentation rule
 
-**Member 1 is the sole documentation editor** for README, all AGENTS files, and `docs/*`.
+**Member 1 is the sole documentation editor** for README, all AGENTS files and `docs/*`.
 
 Members 2-5 communicate doc/status changes to Member 1.

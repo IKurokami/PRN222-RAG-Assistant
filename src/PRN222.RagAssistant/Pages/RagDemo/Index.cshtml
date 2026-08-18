@@ -1,0 +1,98 @@
+@page "/RagDemo"
+@model PRN222.RagAssistant.Pages.RagDemo.IndexModel
+@{
+    ViewData["Title"] = "RAG Demo - Member 4";
+}
+
+<div class="container py-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="bi bi-robot me-2"></i>RAG Demo - Member 4 Backend
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form method="post">
+                        <div class="mb-3">
+                            <label class="form-label">Câu hỏi</label>
+                            <textarea asp-for="Question" class="form-control" rows="3"
+                                placeholder="VD: PRN222 là môn học gì?"></textarea>
+                            <span asp-validation-for="Question" class="text-danger"></span>
+                        </div>
+                        <button type="submit" class="btn btn-primary" disabled="@Model.IsProcessing">
+                            @if (Model.IsProcessing)
+                            {
+                                <span class="spinner-border spinner-border-sm me-1"></span>
+                                <span>Đang xử lý...</span>
+                            }
+                            else
+                            {
+                                <i class="bi bi-send me-1"></i>
+                                <span>Hỏi</span>
+                            }
+                        </button>
+                    </form>
+
+                    @if (!string.IsNullOrEmpty(Model.Answer))
+                    {
+                        <hr />
+                        <div class="answer-section">
+                            <h6 class="text-muted mb-2">Câu trả lời</h6>
+                            <div class="alert alert-info">@Model.Answer</div>
+                        </div>
+                    }
+
+                    @if (Model.Citations?.Any() == true)
+                    {
+                        <hr />
+                        <h6 class="text-muted mb-2">Trích dẫn</h6>
+                        <ul class="list-group">
+                            @foreach (var citation in Model.Citations)
+                            {
+                                <li class="list-group-item">
+                                    <div class="d-flex justify-content-between align-items-start">
+                                        <div>
+                                            <span class="badge bg-primary me-2">[@citation.Rank]</span>
+                                            <strong>@citation.DocumentTitle</strong>
+                                            @if (citation.PageNumber.HasValue)
+                                            {
+                                                <span class="text-muted ms-2">(Trang @citation.PageNumber)</span>
+                                            }
+                                        </div>
+                                    </div>
+                                    @if (!string.IsNullOrEmpty(citation.Excerpt))
+                                    {
+                                        <p class="mb-0 mt-1 text-muted" style="font-size:0.875rem;">
+                                            <em>@citation.Excerpt</em>
+                                        </p>
+                                    }
+                                </li>
+                            }
+                        </ul>
+                    }
+
+                    @if (!string.IsNullOrEmpty(Model.Error))
+                    {
+                        <hr />
+                        <div class="alert alert-danger">@Model.Error</div>
+                    }
+                </div>
+            </div>
+
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h6 class="mb-0">Hướng dẫn</h6>
+                </div>
+                <div class="card-body">
+                    <ol class="mb-0">
+                        <li>Upload ít nhất 1 tài liệu PDF/DOCX vào PRN222 và đợi status chuyển sang <span class="badge bg-success">Indexed</span></li>
+                        <li>Đặt câu hỏi liên quan đến nội dung tài liệu đã upload</li>
+                        <li>Hệ thống sẽ tìm đoạn liên quan nhất và trả lời kèm trích dẫn nguồn</li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

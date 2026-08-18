@@ -23,10 +23,6 @@ public sealed class RagOptions
     public sealed class ChatOptions
     {
         public string NoEvidenceMessage { get; set; } =
-            "Tôi chỉ có thể trả lời dựa trên tài liệu PRN222 đã được index. Hiện không tìm thấy thông tin phù hợp cho câu hỏi này.";
-
-        public string? SystemPromptTemplate { get; set; }
-
-        public string NoEvidenceAssistantContent { get; set; } = "(no-evidence)";
+            "Tôi chỉ có thể trả lời dựa trên tài liệu đã được index. Hiện không tìm thấy thông tin phù hợp cho câu hỏi này.";
     }
 }

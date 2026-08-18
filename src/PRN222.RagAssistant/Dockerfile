@@ -14,9 +14,17 @@ RUN dotnet tool restore \
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
 WORKDIR /app
 
-ENV ASPNETCORE_URLS=http://+:8080
+# Npgsql probes the system GSSAPI/Kerberos library during startup. The slim
+# ASP.NET runtime image does not include it by default, which produces noisy
+# libgssapi_krb5.so.2 load errors on Render even when password auth succeeds.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libgssapi-krb5-2 \
+    && rm -rf /var/lib/apt/lists/*
+
 EXPOSE 8080
 
 COPY --from=build /app/publish .
 
-ENTRYPOINT ["dotnet", "PRN222.RagAssistant.dll"]
+# Render injects PORT (normally 10000). Local Docker/Compose keeps the existing
+# 8080 behavior when PORT is not present.
+ENTRYPOINT ["sh", "-c", "exec dotnet PRN222.RagAssistant.dll --urls http://0.0.0.0:${PORT:-8080}"]

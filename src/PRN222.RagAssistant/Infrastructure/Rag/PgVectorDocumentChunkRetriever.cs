@@ -1,13 +1,14 @@
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
+using NpgsqlTypes;
 using Pgvector;
-using PRN222.RagAssistant.Infrastructure.Rag;
 using PRN222.RagAssistant.Data;
+using PRN222.RagAssistant.Infrastructure.Rag;
 
 namespace PRN222.RagAssistant.Infrastructure.Rag;
 
 /// <summary>
-/// Retrieves relevant document chunks from pgvector based on cosine similarity using raw SQL.
+/// Retrieves relevant document chunks from pgvector based on cosine similarity.
 /// </summary>
 public sealed class PgVectorDocumentChunkRetriever : IDocumentChunkRetriever
 {
@@ -27,30 +28,68 @@ public sealed class PgVectorDocumentChunkRetriever : IDocumentChunkRetriever
 
     public async Task<IReadOnlyList<RetrievedChunk>> SearchAsync(
         float[] questionEmbedding,
-        Guid subjectId,
+        Guid? subjectId = null,
         CancellationToken cancellationToken = default)
     {
         var topK = _options.Retrieval.TopK;
 
-        var embeddingString = "[" + string.Join(",", questionEmbedding.Select(x => x.ToString(System.Globalization.CultureInfo.InvariantCulture))) + "]";
-
-        var sql = $@"
-            SELECT dc.""Id"", dc.""DocumentId"", d.""Title"", dc.""Content"",
-                   dc.""PageNumber"", dc.""SlideNumber"",
-                   dc.""Embedding"" <=> @embedding AS distance,
-                   dc.""ChunkIndex""
-            FROM ""DocumentChunks"" dc
-            JOIN ""Documents"" d ON d.""Id"" = dc.""DocumentId""
-            WHERE d.""SubjectId"" = @subjectId
-              AND d.""IndexStatus"" = 'Indexed'
-              AND dc.""Embedding"" IS NOT NULL
-            ORDER BY dc.""Embedding"" <=> @embedding
-            LIMIT {topK}";
+        string sql;
+        object[] sqlParams;
+        if (subjectId.HasValue)
+        {
+            sql = """
+                SELECT
+                    dc."Id",
+                    dc."DocumentId",
+                    d."Title",
+                    dc."Content",
+                    dc."PageNumber",
+                    dc."SlideNumber",
+                    (dc."Embedding" <=> {0}) AS distance,
+                    dc."ChunkIndex"
+                FROM "DocumentChunks" dc
+                JOIN "Documents" d ON d."Id" = dc."DocumentId"
+                WHERE d."IndexStatus" = 'Indexed'
+                  AND dc."Embedding" IS NOT NULL
+                  AND d."SubjectId" = {1}
+                ORDER BY dc."Embedding" <=> {0}
+                LIMIT {2}
+                """;
+            sqlParams = new object[]
+            {
+                new Vector(questionEmbedding),
+                subjectId.Value,
+                topK
+            };
+        }
+        else
+        {
+            sql = """
+                SELECT
+                    dc."Id",
+                    dc."DocumentId",
+                    d."Title",
+                    dc."Content",
+                    dc."PageNumber",
+                    dc."SlideNumber",
+                    (dc."Embedding" <=> {0}) AS distance,
+                    dc."ChunkIndex"
+                FROM "DocumentChunks" dc
+                JOIN "Documents" d ON d."Id" = dc."DocumentId"
+                WHERE d."IndexStatus" = 'Indexed'
+                  AND dc."Embedding" IS NOT NULL
+                ORDER BY dc."Embedding" <=> {0}
+                LIMIT {1}
+                """;
+            sqlParams = new object[]
+            {
+                new Vector(questionEmbedding),
+                topK
+            };
+        }
 
         var results = await _dbContext.Database
-            .SqlQueryRaw<ResultRow>(sql,
-                new NpgsqlParameter("@embedding", embeddingString),
-                new NpgsqlParameter("@subjectId", subjectId))
+            .SqlQueryRaw<ResultRow>(sql, sqlParams)
             .AsNoTracking()
             .ToListAsync(cancellationToken);
 
@@ -66,8 +105,8 @@ public sealed class PgVectorDocumentChunkRetriever : IDocumentChunkRetriever
             .ToList();
 
         _logger.LogDebug(
-            "Retrieved {Count} chunks for query (TopK={TopK}, SubjectId={SubjectId})",
-            chunks.Count, topK, subjectId);
+            "Retrieved {Count} chunks for query (TopK={TopK})",
+            chunks.Count, topK);
 
         return chunks;
     }

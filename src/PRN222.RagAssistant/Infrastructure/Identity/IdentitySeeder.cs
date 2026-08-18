@@ -27,26 +27,26 @@ public static class IdentitySeeder
             return;
         }
 
-        await SeedUserAsync(
+        await SeedUserIfConfiguredAsync(
             userManager,
             configuration,
             "Admin",
             AppRoles.Admin);
 
-        await SeedUserAsync(
+        await SeedUserIfConfiguredAsync(
             userManager,
             configuration,
             "SubjectLeader",
             AppRoles.SubjectLeader);
 
-        await SeedUserAsync(
+        await SeedUserIfConfiguredAsync(
             userManager,
             configuration,
             "Student",
             AppRoles.Student);
     }
 
-    private static async Task SeedUserAsync(
+    private static async Task SeedUserIfConfiguredAsync(
         UserManager<ApplicationUser> userManager,
         IConfiguration configuration,
         string configurationKey,
@@ -57,15 +57,19 @@ public static class IdentitySeeder
         var password = section["Password"];
         var displayName = section["DisplayName"];
 
-        if (string.IsNullOrWhiteSpace(email) ||
-            string.IsNullOrWhiteSpace(password) ||
-            string.IsNullOrWhiteSpace(displayName))
+        var values = new[] { email, password, displayName };
+        if (values.All(string.IsNullOrWhiteSpace))
         {
-            throw new InvalidOperationException(
-                $"Auth:SeedUsers:{configurationKey} must provide Email, Password, and DisplayName when demo user seeding is enabled.");
+            return;
         }
 
-        var user = await userManager.FindByEmailAsync(email);
+        if (values.Any(string.IsNullOrWhiteSpace))
+        {
+            throw new InvalidOperationException(
+                $"Auth:SeedUsers:{configurationKey} is partially configured. Provide Email, Password, and DisplayName together, or leave all three unset to skip this account.");
+        }
+
+        var user = await userManager.FindByEmailAsync(email!);
 
         if (user is null)
         {
@@ -75,12 +79,12 @@ public static class IdentitySeeder
                 UserName = email,
                 Email = email,
                 EmailConfirmed = true,
-                DisplayName = displayName,
+                DisplayName = displayName!,
                 CreatedAtUtc = DateTime.UtcNow
             };
 
-            var createResult = await userManager.CreateAsync(user, password);
-            EnsureSucceeded(createResult, $"create demo user '{email}'");
+            var createResult = await userManager.CreateAsync(user, password!);
+            EnsureSucceeded(createResult, $"create seeded user '{email}'");
         }
 
         if (!await userManager.IsInRoleAsync(user, roleName))

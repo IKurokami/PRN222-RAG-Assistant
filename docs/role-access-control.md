@@ -1,6 +1,6 @@
 # Role-based access control
 
-> Synchronized with `master` after PR #19.
+> Synchronized after PR #30 merged on 2026-08-18.
 
 ## Roles
 
@@ -32,7 +32,9 @@ ManageSubjects  -> Admin
 ManageDocuments -> Admin OR SubjectLeader
 ```
 
-For Flow 1/3, satisfying `ManageDocuments` does **not** by itself authorize a Subject Leader for a specific subject. Controllers/pages also use `ISubjectAccessService`.
+For Flow 1/3, satisfying `ManageDocuments` does not by itself authorize a Subject Leader for a specific subject. Controllers/pages also use `ISubjectAccessService`.
+
+Flow 2 backend additionally validates authenticated session ownership and subject consistency through the RAG service path.
 
 ## Capability matrix
 
@@ -47,21 +49,14 @@ For Flow 1/3, satisfying `ManageDocuments` does **not** by itself authorize a Su
 | Re-index documents | Any subject | Assigned subjects only | No |
 | View subject reports | Any subject | Assigned subjects only | No |
 | View active document catalogue/details | Yes | Yes | Yes |
-| Pending Flow 2 chat | Yes | Yes | Yes |
+| Use own subject-scoped RAG session/backend | Yes | Yes | Yes |
+| Manage another user's chat session | No special bypass | No | No |
 
-## Public registration after PR #19
+## Public registration
 
-PR #19 introduced `/Account/Register` as part of the redesigned auth experience.
+Public registration creates a Student account only. Admin/SubjectLeader roles are never selectable by the registrant.
 
-Server-side rule:
-
-- a successful public registration creates an `ApplicationUser`;
-- the user is assigned the `Student` role;
-- the user is signed in after successful creation;
-- local `returnUrl` is honored;
-- Admin/SubjectLeader roles are never selectable by the registrant.
-
-Member 3 implemented this PR #19 registration experience. Member 1 retains ownership of Identity/RBAC policy and any future security changes.
+Member 3 owns the completed registration/auth presentation baseline. Member 1 retains Identity/RBAC policy ownership.
 
 ## Admin
 
@@ -86,61 +81,65 @@ Safeguards:
 
 ## Subject Leader
 
-Subject Leader is an academic-content manager, not a global administrator.
-
-A Subject Leader can be assigned zero, one, or multiple subjects. For assigned subjects they can:
+A Subject Leader can be assigned zero, one or multiple subjects. For assigned subjects they can:
 
 - create/edit/delete chapters;
 - upload/edit/delete documents;
 - request re-indexing;
 - view reports/index status.
 
-They cannot create subjects, assign leaders, or manage user roles.
+They cannot create subjects, assign leaders or manage user roles.
 
 ## Student
 
-Student is a learning consumer. Students can self-register, view active subjects/document catalogue/details, but have no academic-content or identity administration permission.
+Student is a learning consumer. Students can self-register and view active subjects/document catalogue/details, but have no academic-content or identity administration permission.
 
-Flow 2 must restrict each student's chat/session/history/citations to the selected subject and their own authorized sessions.
+Flow 2 backend must restrict chat/session/history/citations to the authenticated user's session and subject context.
 
 ## Subject Leader assignment persistence
 
-Assignments use existing ASP.NET Core Identity claims:
+Assignments use ASP.NET Core Identity claims:
 
 ```text
 AppClaimTypes.ManagedSubject = "prn222:managed-subject"
 claim value = Subject.Id as Guid string
 ```
 
-`ISubjectAccessService` resolves managed Subject IDs from `ApplicationDbContext.UserClaims` on request-time authorization.
+`ISubjectAccessService` resolves managed Subject IDs from Identity claims on request-time authorization.
 
-Benefits:
-
-- no new assignment table/migration for the current requirement;
-- one leader can manage many subjects;
-- one subject can have many leaders;
-- role and resource permission remain separate;
-- Admin remains a controlled override.
-
-When an account is changed away from `SubjectLeader`, its managed-subject claims are removed so stale assignments cannot later reactivate.
+When an account is changed away from `SubjectLeader`, managed-subject claims are removed so stale assignments cannot later reactivate.
 
 ## Subject visibility
 
 - Admin: all active/inactive subjects.
-- Subject Leader: all active subjects as a learner plus assigned inactive subjects for management/cleanup.
+- Subject Leader: active subjects as learner plus assigned inactive subjects for management/cleanup.
 - Student: active subjects only.
 
 Inactive is not deletion. It prevents normal learner discovery while preserving referenced data and administrative access.
 
+## Flow 2 subject/session security after PR #30
+
+`ChatSession.SubjectId` is now persisted.
+
+The merged Member 4 backend:
+
+- queries sessions by both session ID and authenticated user ID;
+- rejects a caller-supplied subject when it conflicts with the persisted session subject;
+- supports subject-aware session creation/reuse;
+- passes subject context into pgvector retrieval;
+- keeps message/citation persistence attached to the validated session.
+
+Product code should create/use sessions through the subject-aware RAG service path. Do not intentionally construct a null-subject product session to retrieve the global corpus.
+
 ## Server-side enforcement
 
-The shared layout and view buttons only improve UX. They are not an authorization boundary.
+Layout links and hidden buttons improve UX only; they are not authorization boundaries.
 
-Every subject-specific write/report path must derive or accept a SubjectId and validate it with `ISubjectAccessService`.
+Every subject-specific write/report path must validate the concrete resource `SubjectId` server-side.
 
-Document/chapter edit/delete/re-index actions should authorize against the persisted entity's SubjectId, not trust a posted hidden SubjectId.
+Document/chapter edit/delete/re-index actions authorize against the persisted entity's `SubjectId`, not a posted hidden value.
 
-The PR #19 redesign by Member 3 must not be used as a reason to move authorization into CSS/visibility checks.
+Flow 2 MVC controllers must remain thin adapters over `IRagQueryService` and must not query pgvector or provider APIs directly.
 
 ## Routes
 
@@ -176,15 +175,17 @@ Authenticated subject selection:
 
 ## Persistence/migration impact
 
-The current managed-subject assignment feature does not add an application table/column. Identity already provides `AspNetUserClaims`, so no EF migration is required for that feature.
+Managed-subject assignment continues to reuse Identity claims and does not require a dedicated assignment table.
 
-Public Student registration also uses the existing Identity schema.
+PR #30 added the persisted `ChatSession.SubjectId` model/migration required for subject-scoped RAG sessions.
 
-Future Flow 2 subject-scoped chat persistence may require a real model migration because `ChatSession` currently has no SubjectId. Member 1 coordinates that schema change.
+Member 1 remains the migration/schema coordinator for future cross-workflow model changes.
 
-## Ownership
+## Ownership and documentation identity
 
-- Member 1 owns RBAC/multi-subject code, authorization rules, regression tests, schema coordination, and all repository documentation.
-- Member 3 owns the completed PR #19 UI/UX/auth presentation implementation.
+- Member 1 owns RBAC/multi-subject code, authorization rules, regression tests, schema coordination and docs.
+- Member 3 owns the completed UI/UX/auth presentation baseline.
+- Member 4 owns the merged Flow 2 backend authorization/session behavior.
+- Member 5 owns the pending final Flow 2 MVC presentation/evaluation.
 
-Presentation ownership never overrides RBAC ownership.
+Project documentation uses Member numbers only. Do not add GitHub usernames.

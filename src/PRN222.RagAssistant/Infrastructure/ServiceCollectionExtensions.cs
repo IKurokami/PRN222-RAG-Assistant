@@ -74,18 +74,32 @@ public static class ServiceCollectionExtensions
         // Member 3: Document Indexing & Ingestion Services.
         services.AddSingleton<IDocumentIndexingQueue, InMemoryDocumentIndexingQueue>();
         services.AddSingleton<DocumentParserFactory>();
+        services.AddOptions<ChunkingOptions>()
+            .Bind(configuration.GetSection(ChunkingOptions.SectionName))
+            .Validate(o => o.MaxChunkSize > 0, "Chunking:MaxChunkSize must be greater than 0.")
+            .Validate(o => o.OverlapSize >= 0, "Chunking:OverlapSize must be greater than or equal to 0.")
+            .Validate(o => o.OverlapSize < o.MaxChunkSize, "Chunking:OverlapSize must be less than MaxChunkSize.")
+            .ValidateOnStart();
         services.AddSingleton<TextChunker>();
         services.AddScoped<TextEmbeddingBatcher>();
         services.AddScoped<IDocumentIndexingService, DocumentIndexingService>();
         services.AddHostedService<DocumentIndexingWorker>();
 
-        // Member 4: RAG Chat Services
-        services.Configure<PRN222.RagAssistant.Infrastructure.Rag.RagOptions>(configuration.GetSection(PRN222.RagAssistant.Infrastructure.Rag.RagOptions.SectionName));
-        services.AddScoped<PRN222.RagAssistant.Infrastructure.Rag.IDocumentChunkRetriever, PRN222.RagAssistant.Infrastructure.Rag.PgVectorDocumentChunkRetriever>();
-        services.AddSingleton<PRN222.RagAssistant.Infrastructure.Rag.GroundedPromptBuilder>();
-        services.AddScoped<PRN222.RagAssistant.Application.Abstractions.IRagQueryService, PRN222.RagAssistant.Features.Rag.RagQueryService>();
+        // Member 4: RAG Query Pipeline.
+        services.AddOptions<Infrastructure.Rag.RagOptions>()
+            .Bind(configuration.GetSection(Infrastructure.Rag.RagOptions.SectionName))
+            .Validate(o => o.Retrieval.TopK > 0, "Rag:Retrieval:TopK must be greater than 0.")
+            .Validate(o => o.Retrieval.MinimumSimilarityScore >= 0.0 && o.Retrieval.MinimumSimilarityScore <= 1.0, "Rag:Retrieval:MinimumSimilarityScore must be between 0.0 and 1.0.")
+            .Validate(o => o.Retrieval.HistoryTurns >= 0, "Rag:Retrieval:HistoryTurns must be non-negative.")
+            .Validate(o => o.Retrieval.ExcerptChars > 0, "Rag:Retrieval:ExcerptChars must be greater than 0.")
+            .ValidateOnStart();
+        services.AddSingleton<Infrastructure.Rag.GroundedPromptBuilder>();
+        services.AddScoped<Infrastructure.Rag.IDocumentChunkRetriever, Infrastructure.Rag.PgVectorDocumentChunkRetriever>();
+        services.AddScoped<IRagQueryService, Infrastructure.Rag.RagQueryService>();
 
         return services;
+
+
     }
 
     private static void AddAiProviders(

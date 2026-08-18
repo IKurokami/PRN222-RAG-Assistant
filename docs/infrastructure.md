@@ -1,40 +1,35 @@
 # Infrastructure baseline
 
-> Updated for OpenRouter free-model routing/fallback on top of the merged provider-backup foundation.
+> Synchronized after PR #30 merged and issue #27 closed on 2026-08-18.
 
 ## Runtime stack
 
 - ASP.NET Core .NET 10 host with MVC + Razor Pages.
 - ASP.NET Core Identity.
 - EF Core + PostgreSQL.
-- pgvector for embeddings.
-- provider-neutral AI interfaces with:
-  - Ollama local/default runtime;
-  - Google Gemini Developer API direct online Free Tier path;
-  - OpenRouter free-first routed provider;
-  - optional paid OpenAI API provider.
+- pgvector for embeddings/retrieval.
+- provider-neutral AI contracts with Ollama/Gemini/OpenAI/OpenRouter adapters.
 - runtime source storage under `storage/uploads/`.
-- Bootstrap + Bootstrap Icons for presentation dependencies.
-- shared UI design system through `wwwroot/css/design-tokens.css` and `wwwroot/css/components.css`.
+- Bootstrap + Bootstrap Icons plus the shared design system.
 
 PRN222 is the seeded demo subject; the runtime application is multi-subject.
 
 ## AI provider selection
 
-`Rag:Provider` remains the backward-compatible default for both contracts:
+Backward-compatible default:
 
 ```text
 Rag:Provider = Ollama | Gemini | OpenAI | OpenRouter
 ```
 
-Purpose-specific overrides may be configured independently:
+Purpose-specific overrides:
 
 ```text
 Rag:ChatProvider      = Ollama | Gemini | OpenAI | OpenRouter
 Rag:EmbeddingProvider = Ollama | Gemini | OpenAI | OpenRouter
 ```
 
-Docker `.env` mapping:
+Docker/env equivalents:
 
 ```text
 RAG_PROVIDER=Ollama
@@ -43,116 +38,84 @@ RAG_EMBEDDING_PROVIDER=
 RAG_EMBEDDING_DIMENSIONS=1024
 ```
 
-Blank overrides inherit `RAG_PROVIDER`.
-
-Infrastructure still registers exactly one implementation of each:
+Infrastructure registers one implementation of each contract:
 
 ```text
 ITextEmbeddingService
 IChatCompletionService
 ```
 
-The two implementations may come from different providers. Flow 1 indexing and future Flow 2 RAG behavior must not branch on provider names.
+The chat and embedding implementations may come from different providers. Workflow code must not branch on provider names.
 
-There is intentionally no hidden application-level local-to-cloud failover. An operator explicitly chooses cloud mode. OpenRouter model/provider fallback is allowed only after OpenRouter itself has been selected for the relevant contract.
+There is no hidden application-level local-to-cloud failover. Cloud selection remains explicit. OpenRouter model/provider fallback is allowed only after OpenRouter is explicitly selected.
 
-## Provider matrix
+## Embedding vector-space invariant
 
-Research snapshot: 2026-08-15.
-
-| Runtime | Chat | Embedding | Cost position |
-|---|---|---|---|
-| Ollama | `qwen3:4b` | `qwen3-embedding:0.6b` | local provider fee $0; own compute |
-| Gemini | `gemini-3.6-flash` | `gemini-embedding-2` | direct online Standard Free Tier available; rate limited |
-| OpenRouter | ordered free fallback chain | `nvidia/llama-nemotron-embed-vl-1b-v2:free` | free-first routing; low limits/availability can vary |
-| OpenAI | `gpt-5.6-luna` | `text-embedding-3-small` | paid API / optional |
-
-Canonical official-source notes and setup: `docs/ai-provider-backup.md`.
-
-## OpenRouter chat routing
-
-Default ordered chat list:
-
-```text
-google/gemma-4-26b-a4b-it:free
- -> nvidia/nemotron-3-ultra-550b-a55b:free
- -> openrouter/free
-```
-
-The Infrastructure adapter sends the list through OpenRouter's `models` field and explicitly allows provider fallback. An error/rate-limit/downtime on an earlier model can move the request to the next configured model.
-
-`openrouter/free` is last because it is a catch-all router whose free model selection/availability can change.
-
-## Embedding dimension/vector-space invariant
-
-```text
-Rag:EmbeddingDimensions = 1024
-```
-
-All embedding adapters validate the configured output dimension. OpenAI/Gemini/OpenRouter requests include the configured output dimension.
-
-Matching dimensions do **not** make two embedding models compatible. Changing embedding provider/model/dimensions invalidates the semantic vector space already stored in `DocumentChunk.Embedding`.
+Matching vector dimensions do not make embedding models semantically compatible.
 
 Operational rule:
 
 ```text
 change embedding provider/model/dimension
-        -> mark corpus embeddings stale
-        -> re-index every searchable document
-        -> only then enable similarity retrieval
+  -> treat stored embeddings as stale
+  -> re-index the complete searchable corpus
+  -> only then use similarity retrieval
 ```
 
-Do not rotate embedding models or mix old/new embedding models in one searchable corpus. Chat model/provider changes alone do not require re-indexing.
+Do not rotate embedding models within one corpus. Chat-only provider/model/fallback changes do not require re-indexing.
+
+## Render CD
+
+The repository includes a Render Blueprint in `render.yaml`.
+
+Deployment path:
+
+```text
+master -> GitHub Actions CI -> checks pass -> Render auto deploy
+```
+
+Render provisions a Docker web service plus managed PostgreSQL 17 in Singapore. The database URL is normalized to an Npgsql connection string at startup, pgvector is enabled before EF migrations, and `/healthz` is used as the Render health check.
+
+The Render runtime intentionally uses OpenRouter for both AI contracts:
+
+```text
+Rag__Provider=OpenRouter
+Rag__ChatProvider=OpenRouter
+Rag__EmbeddingProvider=OpenRouter
+Rag__EmbeddingDimensions=1024
+
+Chat model:
+  nvidia/nemotron-3.5-lightning:free
+
+Embedding model:
+  nvidia/llama-nemotron-embed-vl-1b-v2:free
+```
+
+Only `Rag__OpenRouter__ApiKey` is entered manually in Render for the default deployment. See `docs/render-deployment.md`.
 
 ## Docker modes
 
-Ollama is isolated behind the `local-ai` Compose profile.
-
-Local:
+Local Ollama:
 
 ```bash
 docker compose --profile local-ai up -d --build
 ```
 
-Online/hybrid Gemini/OpenAI/OpenRouter:
+Cloud/hybrid:
 
 ```bash
 docker compose up -d --build
 ```
 
-This prevents a cloud-only deployment from starting/downloading Ollama unnecessarily. If one purpose-specific provider is Ollama, use the `local-ai` profile.
+If either selected contract uses Ollama, enable the `local-ai` profile.
 
-## API key handling
+## Secrets and cloud-data boundary
 
-Online keys are server-side environment configuration only:
+Real provider keys remain server-side environment/deployment secrets only.
 
-```text
-GEMINI_API_KEY
-OPENAI_API_KEY
-OPENROUTER_API_KEY
-```
+Never commit API keys to `.env.example`, appsettings, source, docs or tests using real credentials. Never render them to browser code or logs.
 
-Docker Compose maps them to:
-
-```text
-Rag__Gemini__ApiKey
-Rag__OpenAI__ApiKey
-Rag__OpenRouter__ApiKey
-```
-
-Only providers selected by chat or embedding are validated. Unselected provider keys are not required.
-
-Never commit keys to `.env.example`, appsettings, documentation examples, tests, or source code. Never log them or render them to HTML/JavaScript.
-
-## Cloud-data boundary
-
-Ollama local mode keeps inference in the configured local Ollama runtime.
-
-Gemini/OpenAI/OpenRouter modes submit embedding text and/or future chat prompt/context to the configured external provider. Operators must treat provider selection as a privacy/deployment choice, not merely a performance switch.
-
-Google's Gemini Developer API Free Tier is useful for development/demo cost control, but it is rate-limited and Google's pricing page states Free Tier content may be used to improve products.
-
-OpenRouter free models also have low limits and provider-specific data policies. The default free OpenRouter embedding endpoint currently warns that prompts/output are logged for provider improvement and should not receive personal/confidential/sensitive data. Re-check current terms before real deployment.
+Selecting Gemini/OpenAI/OpenRouter sends embedding text and/or chat context to an external provider. Treat provider selection as a privacy/deployment decision as well as a cost/performance choice.
 
 ## Authentication/authorization
 
@@ -172,9 +135,9 @@ ManageSubjects  -> Admin
 ManageDocuments -> Admin OR SubjectLeader
 ```
 
-Subject-resource authorization is implemented by `ISubjectAccessService` and must accompany `ManageDocuments` for subject-specific writes/reports.
+Subject-resource authorization is implemented by `ISubjectAccessService` for Flow 1/3 resource actions.
 
-Public registration creates `Student` accounts only.
+Flow 2 backend validates chat-session ownership and subject consistency through `IRagQueryService`.
 
 ## PostgreSQL system of record
 
@@ -184,24 +147,28 @@ PostgreSQL persists:
 - Documents/index state;
 - DocumentChunks/embeddings;
 - Identity users/roles/claims;
-- ChatSessions/ChatMessages;
+- ChatSessions including `SubjectId`;
+- ChatMessages;
 - MessageCitations.
 
-Provider routing requires no schema migration. `DocumentChunk.Embedding` remains provider-neutral vector storage.
+PR #30 added the `ChatSession.SubjectId` persistence required for subject-scoped RAG sessions.
 
-## MVC/Razor allocation
+## Presentation allocation
 
 ```text
 MVC:
-  Flow 1 Documents/Chapters
-  pending Flow 2 Chat
+  Flow 1 Documents/Chapters                 [complete]
+  Flow 2 final Chat/history/citation UI     [pending Member 5]
   Admin Users
   Subjects/Admin Subjects
 
 Razor Pages:
   Auth/shell
   Flow 3 Reports
+  internal RAG demo                         [development aid only]
 ```
+
+The internal RAG demo is not the final Flow 2 product presentation.
 
 ## Flow 1 indexing pipeline
 
@@ -212,9 +179,10 @@ subject-aware HTTP request
  -> InMemoryDocumentIndexingQueue
  -> DocumentIndexingWorker
  -> IDocumentIndexingService
- -> parse/chunk
- -> ITextEmbeddingService [selected embedding provider]
- -> persist chunks/status
+ -> parse PDF/DOCX/PPTX
+ -> TextChunker
+ -> ITextEmbeddingService
+ -> replace DocumentChunk rows / persist status
 ```
 
 The queue is process-local. Startup recovery re-enqueues persisted Uploaded/Processing documents.
@@ -226,30 +194,74 @@ Parsers:
 
 The indexing pipeline is not duplicated per subject or provider.
 
-## Flow 2 infrastructure requirement
+### PR #30 / issue #27 hardening
 
-Flow 2 remains pending. It must consume provider-neutral interfaces:
+Merged changes include:
+
+- deterministic bounded chunk overlap;
+- Unicode normalization and safer grapheme boundaries;
+- configurable `ChunkingOptions` with startup validation;
+- improved PDF two-column reading order and regression coverage;
+- DOCX blank-paragraph/page-number correction;
+- additional DOCX/PPTX parser/integration coverage.
+
+PDF is the primary real-world ingestion format receiving the most active testing.
+
+Deferred follow-up debt:
+
+- complex DOCX list/table/layout fixtures;
+- PPTX grouped-shape/table/parent-transform fixtures;
+- harder PDF table/side-note/rotated-text layouts.
+
+## Flow 2 backend infrastructure - COMPLETE BASELINE
+
+Merged Member 4 path:
 
 ```text
-subject/session boundary
+subject-aware ChatSession
+ -> IRagQueryService
  -> ITextEmbeddingService
- -> pgvector retrieval restricted by Document.SubjectId
- -> grounded prompt
- -> IChatCompletionService [selected chat provider]
- -> same-subject message/citation persistence
+ -> PgVectorDocumentChunkRetriever
+ -> indexed Documents constrained by SubjectId
+ -> GroundedPromptBuilder
+ -> IChatCompletionService
+ -> referenced citation parsing
+ -> ChatMessage + MessageCitation persistence
 ```
 
-Member 4 must not call a concrete provider API directly.
+Important properties:
 
-## Ownership
+- session lookup includes authenticated user ownership;
+- conflicting caller/session subject IDs are rejected;
+- subject-aware session creation/reuse is provided by the RAG service;
+- conversation history is loaded before persisting the current turn;
+- only citation markers referenced in the answer are persisted;
+- RAG/chunking options are validated at startup;
+- failure-path tests ensure provider failures do not persist incomplete conversation turns before generation succeeds.
 
-**Member 1** owns provider selection/configuration, OpenRouter routing/fallback, online API-key wiring, concrete provider adapters, provider tests, dimension/re-index coordination, and provider docs.
+Member 4 remains provider-neutral and must not call concrete provider APIs directly.
 
-Existing ownership is preserved:
+## Flow 3 infrastructure
 
-- Member 3 owns indexing/chunking/worker behavior consuming `ITextEmbeddingService`;
-- Member 4 owns future Flow 2 RAG behavior consuming both provider-neutral AI contracts;
-- Member 5 owns Flow 2 MVC/evaluation presentation.
+Flow 3 remains provider-independent/read-only.
+
+Because `ChatSession.SubjectId` now exists, existing report-side chat aggregates should be audited when Member 5 completes Flow 2 so chat metrics are explicitly subject-scoped.
+
+## Ownership and actual contribution
+
+Ownership:
+
+- Member 1: Core/Data/RBAC/multi-subject/provider infrastructure/docs.
+- Member 2: Flow 1 request behavior + Flow 3 reporting.
+- Member 3: indexing/ingestion maintenance + UI/UX baseline.
+- Member 4: merged Flow 2 RAG backend.
+- Member 5: pending Flow 2 MVC/evaluation product layer.
+
+Actual merged contribution credit is tracked separately in `docs/member-contributions.md`.
+
+In particular, PR #9/#23 implementation credit belongs to Member 1 and PR #30 issue #27 remediation credit belongs to Member 4, while Member 3 retains indexing maintenance ownership.
+
+Project documentation uses Member numbers only; do not add GitHub usernames.
 
 ## Intentionally not added
 
@@ -257,14 +269,13 @@ Existing ownership is preserved:
 - embedding-model rotation;
 - Redis/RabbitMQ/external broker;
 - another vector DB;
-- RAGFlow/LangChain service;
 - provider-specific logic in MVC/Razor pages;
 - provider-specific contracts in Application;
 - API keys in repository files.
 
 ## Validation
 
-Before merge run:
+Before merge run the repository's CI-equivalent checks:
 
 ```text
 dotnet tool restore
@@ -274,6 +285,5 @@ dotnet build
 dotnet test
 dotnet ef migrations has-pending-model-changes ...
 docker compose config
-docker compose --profile local-ai config
-PostgreSQL migration/schema/pgvector validation through CI
+PostgreSQL migration/schema/pgvector validation
 ```
