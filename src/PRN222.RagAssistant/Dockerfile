@@ -14,9 +14,10 @@ RUN dotnet tool restore \
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
 WORKDIR /app
 
-ENV ASPNETCORE_URLS=http://+:8080
 EXPOSE 8080
 
 COPY --from=build /app/publish .
 
-ENTRYPOINT ["dotnet", "PRN222.RagAssistant.dll"]
+# Render injects PORT (normally 10000). Local Docker/Compose keeps the existing
+# 8080 behavior when PORT is not present.
+ENTRYPOINT ["sh", "-c", "exec dotnet PRN222.RagAssistant.dll --urls http://0.0.0.0:${PORT:-8080}"]
