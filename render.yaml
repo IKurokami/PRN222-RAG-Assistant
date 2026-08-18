@@ -6,6 +6,7 @@ databases:
     user: prn222_rag
     plan: free
     region: singapore
+    postgresMajorVersion: 17
 
 services:
   - type: web
