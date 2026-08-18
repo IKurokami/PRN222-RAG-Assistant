@@ -1,113 +1,125 @@
-# Member 4 - RAG Backend Handoff (2026-08-18)
+# Member 4 - RAG Backend Handoff
 
-## Scope
+> Updated after PR #30 merged on 2026-08-18.
 
-Flow 2 backend: subject-scoped RAG query pipeline.
+## Status
 
-## What was built
+**Backend baseline complete / merged.**
 
-| File | Purpose |
+Member 4 owns the Flow 2 RAG backend. The remaining product-level MVC Chat/history/citation/evaluation work belongs to Member 5.
+
+## What is merged
+
+### Subject-scoped RAG pipeline
+
+The backend now provides:
+
+```text
+question
+  -> ITextEmbeddingService
+  -> subject-scoped pgvector retrieval
+  -> GroundedPromptBuilder
+  -> IChatCompletionService
+  -> citation marker parsing
+  -> user/assistant message persistence
+  -> MessageCitation persistence
+```
+
+Important behavior:
+
+- chat session ownership is validated against the authenticated user;
+- `ChatSession.SubjectId` is part of the persisted model;
+- a caller-provided subject that conflicts with the session subject is rejected;
+- the subject-aware session creation path selects/binds a subject before normal product use;
+- retrieval can filter indexed documents by `Document.SubjectId`;
+- conversation history is loaded before the current question is persisted, preventing the current question from appearing twice in the prompt;
+- only citation markers actually referenced by the model are persisted/rendered;
+- no-evidence responses return without fake citations;
+- provider calls remain behind `ITextEmbeddingService` and `IChatCompletionService`.
+
+## Main implementation areas
+
+| Area | Purpose |
 |---|---|
-| `Application/Abstractions/IRagQueryService.cs` | Pre-existing interface (Member 1 baseline) |
-| `Infrastructure/Rag/InternalTypes.cs` | `IDocumentChunkRetriever`, `RetrievedChunk`, `ChatHistoryEntry` |
-| `Infrastructure/Rag/RagOptions.cs` | Tuning knobs via `Rag:` config section |
-| `Infrastructure/Rag/PgVectorDocumentChunkRetriever.cs` | pgvector cosine similarity retrieval |
-| `Infrastructure/Rag/GroundedPromptBuilder.cs` | System/user prompt composition |
-| `Features/Rag/RagQueryService.cs` | Main pipeline: embed → retrieve → complete → persist |
-| `Features/Rag/Exceptions/RagException.cs` | Base exception |
-| `Features/Rag/Exceptions/ChatSessionNotFoundException.cs` | Session validation error |
-| `Infrastructure/ServiceCollectionExtensions.cs` | DI registration for Member 4 services |
+| `Application/Abstractions/IRagQueryService.cs` | Application-facing RAG/session contract |
+| `Infrastructure/Rag/RagQueryService.cs` | Query, history, retrieval, completion and persistence orchestration |
+| `Infrastructure/Rag/PgVectorDocumentChunkRetriever.cs` | pgvector similarity retrieval with subject filter support |
+| `Infrastructure/Rag/GroundedPromptBuilder.cs` | Grounded system/user prompt composition |
+| `Infrastructure/Rag/RagOptions.cs` | Retrieval/chat tuning |
+| `Infrastructure/Rag/InternalTypes.cs` | Retriever/history internal models |
+| `Infrastructure/Rag/Exceptions/*` | RAG/session exceptions |
+| `Infrastructure/ServiceCollectionExtensions.cs` | RAG registration and fail-fast options validation |
+| `Pages/RagDemo/*` | Internal authenticated development/demo surface; not the final product MVC Flow 2 UI |
 
-## Key design decisions
+## Configuration
 
-### Bug fixes vs old implementation
+RAG tuning is bound from the `Rag:` configuration section and validated at startup.
 
-1. **SQL injection fix**: Old code used `$@` interpolated string with `SqlQueryRaw`. New code uses `{0}` positional parameter with `new Vector(embedding)` — safe.
-2. **ServiceCollectionExtensions**: Old branch had merge conflict markers (`<<<<<<<`). Clean baseline was used.
-3. **Subject scoping**: `ChatSession` on master has no `SubjectId`. Retrieval currently searches ALL indexed documents. This is a known limitation — see "Known limitations" below.
+Key retrieval settings include:
 
-### pgvector retrieval
+- `TopK > 0`;
+- `MinimumSimilarityScore` between 0 and 1;
+- non-negative history count;
+- positive citation excerpt length.
 
-Uses `Vector <=> query_vector` (cosine distance, `<=>` operator) with `ORDER BY ... LIMIT TopK`. Parameters are passed via `SqlQueryRaw` positional placeholders. Only chunks from documents with `IndexStatus = 'Indexed'` are retrieved.
+Member 4 does not select concrete AI providers. Provider wiring remains Member 1 infrastructure.
 
-### Prompt strategy
+## Tests added/hardened
 
-- System prompt: Vietnamese instruction to answer only from context, cite with `[n]` markers.
-- User prompt: Question + Context block (chunks with location) + History block (if enabled).
-- No-evidence path: Returns configured `NoEvidenceMessage` with empty citations.
+The merged backend test suite now covers real `RagQueryService` behavior, including:
 
-### Configuration (`Rag:` section)
+- empty-question validation;
+- session ownership validation;
+- user/assistant message persistence;
+- no-evidence behavior;
+- citation marker parsing and persistence;
+- current-question exclusion from loaded history;
+- session subject passed to retrieval via `Mock.Verify`;
+- conflicting subject rejection;
+- failure paths where embedding/chat services throw without leaving conversation messages persisted;
+- subject-aware session creation/reuse.
 
-```json
-{
-  "Rag": {
-    "Retrieval": {
-      "TopK": 5,
-      "MinimumSimilarityScore": 0.3,
-      "MaxContextChars": 4000,
-      "IncludeConversationHistory": true,
-      "HistoryTurns": 5,
-      "ExcerptChars": 240
-    },
-    "Chat": {
-      "NoEvidenceMessage": "Tôi chỉ có thể trả lời dựa trên tài liệu đã được index. Hiện không tìm thấy thông tin phù hợp cho câu hỏi này."
-    }
-  }
-}
-```
+## Issue #27 contribution in PR #30
 
-## Known limitations
+PR #30 also contains Member 4's merged contribution to the document ingestion/chunking remediation:
 
-### 1. No subject scoping in retrieval
+- deterministic bounded overlap;
+- Unicode normalization and safer grapheme boundaries;
+- configurable `ChunkingOptions` with startup validation;
+- improved PDF multi-column reading order;
+- PDF parser/chunker regression tests;
+- DOCX blank-paragraph/page-number correction;
+- additional DOCX/PPTX parser improvements and integration coverage.
 
-`PgVectorDocumentChunkRetriever` currently retrieves from ALL indexed documents. `ChatSession` on master does not have `SubjectId`, so multi-subject filtering cannot be applied at the SQL level.
+This work is contribution credit for Member 4 even though Member 3 remains the maintenance owner for document indexing/ingestion.
 
-To fix: Member 1 needs to add `SubjectId` to `ChatSession` (EF migration + schema change). Once `ChatSession.SubjectId` exists:
-1. Add `WHERE d."SubjectId" = {subjectId}` to the retrieval SQL.
-2. Add `Guid subjectId` parameter to `IRagQueryService.AskAsync`.
+## Follow-up technical debt
 
-### 2. Chat session title auto-generation
+PDF is currently the primary real-world ingestion format being exercised most heavily.
 
-Uses single `ExecuteUpdateAsync` to set `Title` from first question. This is an additive feature that does not break existing behavior.
+Deferred follow-up items:
 
-## Tests
+- deeper DOCX fixtures for complex list/table/layout cases;
+- deeper PPTX fixtures for grouped shapes, tables and parent-group transform handling;
+- further complex PDF table/side-note/rotated-text hardening.
 
-- `GroundedPromptBuilderTests`: 9 tests — system prompt, context, history, truncation, location formatting.
-- `RagQueryServiceTests`: 5 tests — record properties, similarity score thresholds.
+These are follow-up improvements, not blockers for the merged PR #30 milestone.
 
-Run: `dotnet test`
+## Handoff to Member 5
 
-## Dependencies
+Member 5 should build the final MVC product experience on `IRagQueryService` rather than calling pgvector or provider APIs directly.
 
-Member 4 code depends on:
-- `ITextEmbeddingService` (Member 1 — Ollama/Gemini/OpenAI/OpenRouter)
-- `IChatCompletionService` (Member 1 — Ollama/Gemini/OpenAI/OpenRouter)
-- `ApplicationDbContext` (Member 1 — PostgreSQL + pgvector)
-- `IDocumentIndexingService` (Member 3 — indexing pipeline)
-- `Document`, `DocumentChunk`, `ChatSession`, `ChatMessage`, `MessageCitation` entities (Member 1)
+Member 5 owns:
 
-## Integration points for Member 5 (Chat UI)
+- MVC Chat/session/history/citation controllers/views;
+- subject-aware conversation navigation;
+- user-facing citation presentation;
+- evaluation tooling.
 
-Member 5 receives `RagAnswer`:
-```csharp
-public sealed record RagAnswer(
-    Guid ChatSessionId,
-    Guid UserMessageId,
-    Guid AssistantMessageId,
-    string Answer,
-    IReadOnlyList<RagCitation> Citations);
-```
+The internal `Pages/RagDemo` surface is only a development/demo aid and should not be treated as the final Flow 2 presentation architecture.
 
-`RagCitation`:
-```csharp
-public sealed record RagCitation(
-    Guid DocumentId,
-    Guid DocumentChunkId,
-    string DocumentTitle,
-    int Rank,
-    string Excerpt,
-    int? PageNumber,
-    int? SlideNumber);
-```
+## Contribution accounting
 
-Member 5 should call `IRagQueryService.AskAsync(userId, chatSessionId, question)` from MVC controllers and render the returned `RagAnswer.Answer` + `RagAnswer.Citations`.
+Canonical contribution credit is tracked in `docs/member-contributions.md`.
+
+Project documentation uses Member numbers only and must not add GitHub usernames.
