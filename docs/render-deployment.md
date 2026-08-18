@@ -32,7 +32,7 @@ When `Database__ApplyMigrationsOnStartup=true`, startup first runs:
 CREATE EXTENSION IF NOT EXISTS vector;
 ```
 
-and then applies EF Core migrations. This is required because the application stores embeddings in pgvector columns.
+and then applies EF Core migrations. Because Npgsql caches PostgreSQL type metadata, startup reloads pgvector type metadata immediately after enabling the extension. This is required on a brand-new Render database where the Npgsql datasource can exist before the `vector` type is created.
 
 ## OpenRouter-only AI runtime
 
@@ -69,13 +69,26 @@ Rag__OpenRouter__ApiKey
 
 ### Optional seed users
 
-The Blueprint leaves demo-user seeding disabled:
+The Blueprint leaves seeded users disabled by default:
 
 ```text
 Auth__SeedUsers__Enabled=false
 ```
 
-If demo accounts are intentionally needed, enable it in the Render Dashboard and provide all configured Admin, Subject Leader and Student email/password/display-name values. Do not commit those credentials.
+Seed accounts are independent. When seeding is enabled, each account is created only when its Email, Password, and DisplayName are all configured. An entirely missing account section is skipped; a partially configured account fails startup so a secret typo does not silently create an unusable deployment.
+
+For a Render demo environment, seeding only the Admin account is enough:
+
+```text
+Auth__SeedUsers__Enabled=true
+Auth__SeedUsers__Admin__Email=<enter manually>
+Auth__SeedUsers__Admin__Password=<enter manually>
+Auth__SeedUsers__Admin__DisplayName=Administrator
+```
+
+`SubjectLeader` and `Student` seed settings may remain completely unset. Student users can also use public registration, while Admin can manage/assign the remaining application roles through the product UI.
+
+Do not commit seeded-user credentials.
 
 ## First deployment
 
@@ -86,7 +99,7 @@ If demo accounts are intentionally needed, enable it in the Render Dashboard and
 5. Review the `prn222-rag-assistant` web service and `prn222-rag-db` database.
 6. Apply the Blueprint.
 7. Confirm `/healthz` returns HTTP 200.
-8. Check logs for successful pgvector enablement and EF migration startup.
+8. Check logs for successful pgvector enablement, type reload, and EF migration startup.
 
 After the first Blueprint setup, normal commits to `master` do not require manually triggering a deployment. Render follows the configured `checksPass` CD trigger.
 
@@ -123,6 +136,8 @@ and falls back to `8080` for local Docker Compose.
 
 `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true` is set in Render so ASP.NET Core can honor the platform proxy headers before HTTPS redirection.
 
+The final Docker image also installs the Linux GSSAPI/Kerberos runtime library expected by Npgsql, avoiding the non-fatal `libgssapi_krb5.so.2` loader error seen on the slim ASP.NET runtime image.
+
 ## Health check
 
 Render checks:
@@ -132,6 +147,10 @@ GET /healthz
 ```
 
 The endpoint is intentionally lightweight and anonymous. It verifies the web process is serving HTTP; database migration failures still fail application startup before the service becomes healthy.
+
+## Runtime warnings
+
+ASP.NET Core Data Protection keys are currently stored on the web-service filesystem. On the free ephemeral filesystem, a redeploy can invalidate existing login cookies. This is acceptable for the current demo deployment but should be moved to durable shared storage or another supported persistent key store before treating the service as production-grade.
 
 ## Secrets policy
 
