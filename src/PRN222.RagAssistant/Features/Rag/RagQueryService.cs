@@ -112,7 +112,7 @@ public sealed class RagQueryService : IRagQueryService
             ChatSessionId = sessionId,
             Role = ChatMessageRole.User,
             Content = content,
-            CreatedAtUtc = _clock.GetUtcNow().DateTime
+            CreatedAtUtc = DateTime.SpecifyKind(_clock.GetUtcNow().DateTime, DateTimeKind.Utc)
         };
 
         _dbContext.ChatMessages.Add(message);
@@ -133,7 +133,7 @@ public sealed class RagQueryService : IRagQueryService
             ChatSessionId = sessionId,
             Role = ChatMessageRole.Assistant,
             Content = content,
-            CreatedAtUtc = _clock.GetUtcNow().DateTime
+            CreatedAtUtc = DateTime.SpecifyKind(_clock.GetUtcNow().DateTime, DateTimeKind.Utc)
         };
 
         _dbContext.ChatMessages.Add(message);
@@ -187,7 +187,7 @@ public sealed class RagQueryService : IRagQueryService
             .Where(s => s.Id == session.Id)
             .ExecuteUpdateAsync(
                 s => s.SetProperty(x => x.Title, title)
-                      .SetProperty(x => x.UpdatedAtUtc, _clock.GetUtcNow().DateTime),
+                      .SetProperty(x => x.UpdatedAtUtc, DateTime.SpecifyKind(_clock.GetUtcNow().DateTime, DateTimeKind.Utc)),
                 cancellationToken);
     }
 

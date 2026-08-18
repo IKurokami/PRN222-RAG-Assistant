@@ -44,8 +44,8 @@ public class RagDemoModel : PageModel
 
         try
         {
-            var user = await GetOrCreateDemoUserAsync();
-            var session = await GetOrCreateDemoSessionAsync(user.Id);
+        var user = await GetOrCreateDemoUserAsync();
+        var session = await GetOrCreateDemoSessionAsync(user.Id);
 
             var result = await _ragService.AskAsync(
                 user.Id,
@@ -107,8 +107,8 @@ public class RagDemoModel : PageModel
                 Id = Guid.CreateVersion7(),
                 UserId = userId,
                 Title = "Demo Session",
-                CreatedAtUtc = DateTime.UtcNow,
-                UpdatedAtUtc = DateTime.UtcNow
+                CreatedAtUtc = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Utc),
+                UpdatedAtUtc = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Utc)
             };
             _dbContext.ChatSessions.Add(session);
             await _dbContext.SaveChangesAsync();
