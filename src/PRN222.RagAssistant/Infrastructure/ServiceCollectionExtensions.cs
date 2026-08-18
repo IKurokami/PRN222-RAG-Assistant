@@ -79,6 +79,12 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IDocumentIndexingService, DocumentIndexingService>();
         services.AddHostedService<DocumentIndexingWorker>();
 
+        // Member 4: RAG Query Pipeline.
+        services.Configure<Infrastructure.Rag.RagOptions>(configuration.GetSection(Infrastructure.Rag.RagOptions.SectionName));
+        services.AddSingleton<Infrastructure.Rag.GroundedPromptBuilder>();
+        services.AddScoped<Infrastructure.Rag.IDocumentChunkRetriever, Infrastructure.Rag.PgVectorDocumentChunkRetriever>();
+        services.AddScoped<IRagQueryService, Features.Rag.RagQueryService>();
+
         return services;
     }
 
