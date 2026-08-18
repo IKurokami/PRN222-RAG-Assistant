@@ -79,6 +79,12 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IDocumentIndexingService, DocumentIndexingService>();
         services.AddHostedService<DocumentIndexingWorker>();
 
+        // Member 4: RAG Chat Services
+        services.Configure<PRN222.RagAssistant.Infrastructure.Rag.RagOptions>(configuration.GetSection(PRN222.RagAssistant.Infrastructure.Rag.RagOptions.SectionName));
+        services.AddScoped<PRN222.RagAssistant.Infrastructure.Rag.IDocumentChunkRetriever, PRN222.RagAssistant.Infrastructure.Rag.PgVectorDocumentChunkRetriever>();
+        services.AddSingleton<PRN222.RagAssistant.Infrastructure.Rag.GroundedPromptBuilder>();
+        services.AddScoped<PRN222.RagAssistant.Application.Abstractions.IRagQueryService, PRN222.RagAssistant.Features.Rag.RagQueryService>();
+
         return services;
     }
 
@@ -139,7 +145,7 @@ public static class ServiceCollectionExtensions
         switch (provider.ToUpperInvariant())
         {
             case "OLLAMA":
-                services.AddScoped<ITextEmbeddingService, OllamaTextEmbeddingService>();
+                services.AddScoped<ITextEmbeddingService, PRN222.RagAssistant.Infrastructure.Rag.OllamaTextEmbeddingService>();
                 break;
             case "OPENAI":
                 services.AddScoped<ITextEmbeddingService, OpenAiTextEmbeddingService>();

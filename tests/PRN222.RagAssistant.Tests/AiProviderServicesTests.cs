@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using PRN222.RagAssistant.Application.Abstractions;
 using PRN222.RagAssistant.Infrastructure;
+using PRN222.RagAssistant.Infrastructure.Rag;
 using PRN222.RagAssistant.Infrastructure.Services;
 
 namespace PRN222.RagAssistant.Tests;
@@ -12,7 +13,7 @@ namespace PRN222.RagAssistant.Tests;
 public sealed class AiProviderServicesTests
 {
     [Theory]
-    [InlineData("Ollama", typeof(OllamaTextEmbeddingService), typeof(OllamaChatCompletionService))]
+    [InlineData("Ollama", typeof(OllamaTextEmbeddingService), typeof(PRN222.RagAssistant.Infrastructure.Services.OllamaChatCompletionService))]
     [InlineData("OpenAI", typeof(OpenAiTextEmbeddingService), typeof(OpenAiChatCompletionService))]
     [InlineData("Gemini", typeof(GeminiTextEmbeddingService), typeof(GeminiChatCompletionService))]
     [InlineData("OpenRouter", typeof(OpenRouterTextEmbeddingService), typeof(OpenRouterChatCompletionService))]

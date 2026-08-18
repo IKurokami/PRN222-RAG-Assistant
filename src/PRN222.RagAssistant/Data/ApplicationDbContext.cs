@@ -31,5 +31,12 @@ public sealed class ApplicationDbContext
     {
         base.OnModelCreating(builder);
         builder.ApplyConfigurationsFromAssembly(typeof(ApplicationDbContext).Assembly);
+
+        // EF Core InMemory is used by unit tests and cannot map PostgreSQL's vector type.
+        // Production PostgreSQL keeps the vector property and its native column mapping.
+        if (Database.ProviderName == "Microsoft.EntityFrameworkCore.InMemory")
+        {
+            builder.Entity<Domain.Entities.DocumentChunk>().Ignore(chunk => chunk.Embedding);
+        }
     }
 }
