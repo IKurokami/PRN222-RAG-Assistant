@@ -1,31 +1,26 @@
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using PRN222.RagAssistant.Application.Abstractions;
 using PRN222.RagAssistant.Application.Models;
-using PRN222.RagAssistant.Data;
 using PRN222.RagAssistant.Domain.Entities;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.AspNetCore.Identity;
 
-namespace PRN222.RagAssistant.Pages;
+namespace PRN222.RagAssistant.Pages.RagDemo;
 
 [Authorize]
-public class RagDemoModel : PageModel
+public sealed class IndexModel : PageModel
 {
     private readonly IRagQueryService _ragService;
-    private readonly ApplicationDbContext _dbContext;
     private readonly UserManager<ApplicationUser> _userManager;
-    private readonly ILogger<RagDemoModel> _logger;
+    private readonly ILogger<IndexModel> _logger;
 
-    public RagDemoModel(
+    public IndexModel(
         IRagQueryService ragService,
-        ApplicationDbContext dbContext,
         UserManager<ApplicationUser> userManager,
-        ILogger<RagDemoModel> logger)
+        ILogger<IndexModel> logger)
     {
         _ragService = ragService;
-        _dbContext = dbContext;
         _userManager = userManager;
         _logger = logger;
     }
@@ -52,11 +47,11 @@ public class RagDemoModel : PageModel
         {
             var user = await _userManager.GetUserAsync(User)
                 ?? throw new UnauthorizedAccessException("User not found");
-            var session = await GetOrCreateUserSessionAsync(user.Id);
+            var sessionId = await _ragService.GetOrCreateUserSessionAsync(user.Id);
 
             var result = await _ragService.AskAsync(
                 user.Id,
-                session.Id,
+                sessionId,
                 Question);
 
             Answer = result.Answer;
@@ -87,27 +82,4 @@ public class RagDemoModel : PageModel
         IsProcessing = false;
         return Page();
     }
-
-    private async Task<ChatSession> GetOrCreateUserSessionAsync(Guid userId)
-    {
-        var session = await _dbContext.ChatSessions
-            .FirstOrDefaultAsync(s => s.UserId == userId);
-
-        if (session is null)
-        {
-            session = new ChatSession
-            {
-                Id = Guid.CreateVersion7(),
-                UserId = userId,
-                Title = string.Empty,
-                CreatedAtUtc = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Utc),
-                UpdatedAtUtc = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Utc)
-            };
-            _dbContext.ChatSessions.Add(session);
-            await _dbContext.SaveChangesAsync();
-        }
-
-        return session;
-    }
-
 }

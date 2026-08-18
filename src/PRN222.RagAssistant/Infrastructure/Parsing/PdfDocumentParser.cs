@@ -1,6 +1,7 @@
 using System.Text;
-using UglyToad.PdfPig.Content;
+using System.Text.RegularExpressions;
 using UglyToad.PdfPig;
+using UglyToad.PdfPig.Content;
 
 namespace PRN222.RagAssistant.Infrastructure.Parsing;
 
@@ -23,6 +24,8 @@ public static class EnumerableExtensions
 
 public sealed class PdfDocumentParser : IDocumentParser
 {
+    private static readonly Regex BulletOrNumberRegex = new(@"^(\u2022|\u25E6|\u25AA|\u2013|-|\*|\d+[\.\)])\s+", RegexOptions.Compiled);
+
     public IReadOnlyList<ParsedPage> Parse(Stream fileStream)
     {
         var pages = new List<ParsedPage>();
@@ -53,254 +56,244 @@ public sealed class PdfDocumentParser : IDocumentParser
             return page.Text?.Trim() ?? string.Empty;
         }
 
-        // Group words into columns and lines using layout-aware algorithm
-        var pageWidth = page.Width;
-        var orderedLines = ExtractLinesWithReadingOrder(words, pageWidth);
-
-        var result = new StringBuilder();
-        for (var i = 0; i < orderedLines.Count; i++)
+        var lines = GroupWordsIntoLines(words);
+        if (lines.Count == 0)
         {
-            if (i > 0)
-            {
-                result.Append('\n');
-            }
-            result.Append(string.Join(" ", orderedLines[i]));
+            return string.Empty;
         }
 
-        return result.ToString().Trim();
+        var orderedLines = OrderLinesByLayout(lines, page.Width);
+        return AssemblePageText(orderedLines);
     }
 
-    private static List<List<string>> ExtractLinesWithReadingOrder(IReadOnlyList<Word> words, double pageWidth)
+    private static List<PdfTextLine> GroupWordsIntoLines(IReadOnlyList<Word> words)
     {
-        if (words.Count == 0)
-        {
-            return new List<List<string>>();
-        }
-
-        // Detect if this is likely a multi-column layout by analyzing X positions
-        var xPositions = words.Select(w => w.BoundingBox.BottomLeft.X).OrderBy(x => x).ToList();
-        var medianX = xPositions[xPositions.Count / 2];
-        var isMultiColumn = DetectMultiColumnLayout(words, pageWidth);
-
-        if (isMultiColumn)
-        {
-            return ExtractMultiColumnLines(words, pageWidth);
-        }
-
-        // Single column: use improved Y-then-X sorting with better line grouping
-        return ExtractSingleColumnLines(words);
-    }
-
-    private static bool DetectMultiColumnLayout(IReadOnlyList<Word> words, double pageWidth)
-    {
-        if (words.Count < 10)
-        {
-            return false;
-        }
-
-        // Analyze X positions to detect column separation
-        // If words cluster into distinct X regions, it's likely multi-column
-        var xPositions = words
-            .Select(w => w.BoundingBox.BottomLeft.X)
-            .OrderBy(x => x)
-            .ToList();
-
-        // Calculate gaps in X positions
-        var gaps = new List<double>();
-        for (var i = 1; i < xPositions.Count; i++)
-        {
-            var gap = xPositions[i] - xPositions[i - 1];
-            if (gap > 50) // Significant gap indicates column boundary
-            {
-                gaps.Add(gap);
-            }
-        }
-
-        // If we have multiple significant gaps, it's likely multi-column
-        return gaps.Count >= 2;
-    }
-
-    private static List<List<string>> ExtractSingleColumnLines(IReadOnlyList<Word> words)
-    {
-        // Sort by Y (descending for PDF coordinates where Y=0 is bottom)
-        // then by X (ascending for left-to-right)
+        // Sort by baseline Y descending (top to bottom), then X ascending (left to right)
         var sortedWords = words
             .OrderByDescending(w => w.BoundingBox.BottomLeft.Y)
             .ThenBy(w => w.BoundingBox.BottomLeft.X)
             .ToList();
 
-        return GroupWordsIntoLines(sortedWords);
-    }
-
-    private static List<List<string>> ExtractMultiColumnLines(IReadOnlyList<Word> words, double pageWidth)
-    {
-        // Find column boundaries by analyzing X position clusters
-        var columnBoundaries = FindColumnBoundaries(words, pageWidth);
-
-        // Sort words by Y then X (same as single column)
-        var sortedWords = words
-            .OrderByDescending(w => w.BoundingBox.BottomLeft.Y)
-            .ThenBy(w => w.BoundingBox.BottomLeft.X)
-            .ToList();
-
-        // Group into lines with column awareness
-        var lines = new List<List<string>>();
-        var currentLine = new List<Word>();
-        var currentBaseline = sortedWords.Count > 0 ? sortedWords[0].BoundingBox.BottomLeft.Y : 0;
-        var currentHeight = sortedWords.Count > 0 ? sortedWords[0].BoundingBox.Height : 0;
-        var lineTolerance = Math.Max(2.0, currentHeight * 0.5);
-
-        foreach (var word in sortedWords)
-        {
-            var baseline = word.BoundingBox.BottomLeft.Y;
-            var height = word.BoundingBox.Height;
-
-            if (currentLine.Count > 0 && Math.Abs(baseline - currentBaseline) > lineTolerance)
-            {
-                // New line detected - sort by X and add
-                var sortedLine = currentLine
-                    .OrderBy(w => GetColumnIndex(w, columnBoundaries))
-                    .ThenBy(w => w.BoundingBox.BottomLeft.X)
-                    .Select(w => w.Text.Trim())
-                    .Where(t => !string.IsNullOrEmpty(t))
-                    .ToList();
-
-                if (sortedLine.Count > 0)
-                {
-                    lines.Add(sortedLine);
-                }
-
-                currentLine.Clear();
-                currentBaseline = baseline;
-                currentHeight = height;
-                lineTolerance = Math.Max(2.0, currentHeight * 0.5);
-            }
-
-            currentLine.Add(word);
-        }
-
-        // Add remaining line
-        if (currentLine.Count > 0)
-        {
-            var sortedLine = currentLine
-                .OrderBy(w => GetColumnIndex(w, columnBoundaries))
-                .ThenBy(w => w.BoundingBox.BottomLeft.X)
-                .Select(w => w.Text.Trim())
-                .Where(t => !string.IsNullOrEmpty(t))
-                .ToList();
-
-            if (sortedLine.Count > 0)
-            {
-                lines.Add(sortedLine);
-            }
-        }
-
-        return lines;
-    }
-
-    private static List<double> FindColumnBoundaries(IReadOnlyList<Word> words, double pageWidth)
-    {
-        // Simple column detection: divide page into columns based on word distribution
-        var boundaries = new List<double>();
-
-        // Group words by rough X position
-        var xBuckets = new Dictionary<int, List<double>>();
-        foreach (var word in words)
-        {
-            var bucket = (int)(word.BoundingBox.BottomLeft.X / (pageWidth / 10));
-            if (!xBuckets.ContainsKey(bucket))
-            {
-                xBuckets[bucket] = new List<double>();
-            }
-            xBuckets[bucket].Add(word.BoundingBox.BottomLeft.X);
-        }
-
-        // Find gaps between buckets
-        var sortedBuckets = xBuckets.Keys.OrderBy(k => k).ToList();
-        for (var i = 1; i < sortedBuckets.Count; i++)
-        {
-            var currentBucketMedian = xBuckets[sortedBuckets[i - 1]].Median();
-            var nextBucketMedian = xBuckets[sortedBuckets[i]].Median();
-
-            if (nextBucketMedian - currentBucketMedian > pageWidth / 6)
-            {
-                // Significant gap - this is likely a column boundary
-                boundaries.Add((currentBucketMedian + nextBucketMedian) / 2);
-            }
-        }
-
-        return boundaries;
-    }
-
-    private static int GetColumnIndex(Word word, List<double> boundaries)
-    {
-        var x = word.BoundingBox.BottomLeft.X;
-        for (var i = 0; i < boundaries.Count; i++)
-        {
-            if (x < boundaries[i])
-            {
-                return i;
-            }
-        }
-        return boundaries.Count;
-    }
-
-    private static List<List<string>> GroupWordsIntoLines(IReadOnlyList<Word> sortedWords)
-    {
-        var lines = new List<List<string>>();
-        if (sortedWords.Count == 0)
-        {
-            return lines;
-        }
-
-        var currentLine = new List<Word>();
+        var lines = new List<PdfTextLine>();
+        var currentWords = new List<Word>();
         var currentBaseline = sortedWords[0].BoundingBox.BottomLeft.Y;
         var currentHeight = sortedWords[0].BoundingBox.Height;
-        var lineTolerance = Math.Max(2.0, currentHeight * 0.5);
+        var tolerance = Math.Max(2.0, currentHeight * 0.45);
 
         foreach (var word in sortedWords)
         {
             var baseline = word.BoundingBox.BottomLeft.Y;
             var height = word.BoundingBox.Height;
+            var prevWord = currentWords.LastOrDefault();
 
-            if (currentLine.Count > 0 && Math.Abs(baseline - currentBaseline) > lineTolerance)
+            var horizontalGap = prevWord is not null ? word.BoundingBox.Left - prevWord.BoundingBox.Right : 0;
+            var isLargeHorizontalGap = prevWord is not null && horizontalGap > Math.Max(30.0, height * 2.5);
+
+            if (currentWords.Count > 0 && (Math.Abs(baseline - currentBaseline) > tolerance || isLargeHorizontalGap))
             {
-                // New line
-                var sortedLine = currentLine
-                    .OrderBy(w => w.BoundingBox.BottomLeft.X)
-                    .Select(w => w.Text.Trim())
-                    .Where(t => !string.IsNullOrEmpty(t))
-                    .ToList();
-
-                if (sortedLine.Count > 0)
-                {
-                    lines.Add(sortedLine);
-                }
-
-                currentLine.Clear();
+                lines.Add(CreateTextLine(currentWords));
+                currentWords.Clear();
                 currentBaseline = baseline;
                 currentHeight = height;
-                lineTolerance = Math.Max(2.0, currentHeight * 0.5);
+                tolerance = Math.Max(2.0, currentHeight * 0.45);
             }
 
-            currentLine.Add(word);
+            currentWords.Add(word);
         }
 
-        // Add final line
-        if (currentLine.Count > 0)
+        if (currentWords.Count > 0)
         {
-            var sortedLine = currentLine
-                .OrderBy(w => w.BoundingBox.BottomLeft.X)
-                .Select(w => w.Text.Trim())
-                .Where(t => !string.IsNullOrEmpty(t))
-                .ToList();
-
-            if (sortedLine.Count > 0)
-            {
-                lines.Add(sortedLine);
-            }
+            lines.Add(CreateTextLine(currentWords));
         }
 
         return lines;
     }
+
+
+    private static PdfTextLine CreateTextLine(List<Word> words)
+    {
+        var sorted = words.OrderBy(w => w.BoundingBox.BottomLeft.X).ToList();
+        var text = string.Join(" ", sorted.Select(w => w.Text.Trim()).Where(t => !string.IsNullOrEmpty(t)));
+        var minX = sorted.Min(w => w.BoundingBox.BottomLeft.X);
+        var maxX = sorted.Max(w => w.BoundingBox.BottomRight.X);
+        var minY = sorted.Min(w => w.BoundingBox.BottomLeft.Y);
+        var maxY = sorted.Max(w => w.BoundingBox.TopLeft.Y);
+        var height = maxY - minY;
+
+        return new PdfTextLine(text, minX, maxX, minY, maxY, height, sorted[0].BoundingBox.BottomLeft.Y);
+    }
+
+    private static List<PdfTextLine> OrderLinesByLayout(List<PdfTextLine> lines, double pageWidth)
+    {
+        if (lines.Count <= 3)
+        {
+            return lines.OrderByDescending(l => l.BaselineY).ToList();
+        }
+
+        // Check for 2-column layout
+        var minX = lines.Min(l => l.MinX);
+        var maxX = lines.Max(l => l.MaxX);
+        var contentWidth = maxX - minX;
+
+        if (contentWidth > 150)
+        {
+            var midX = minX + contentWidth / 2.0;
+
+            // Lines that clearly sit on left or right
+            var leftLines = lines.Where(l => l.MaxX <= midX + 20 && l.Width < contentWidth * 0.7).ToList();
+            var rightLines = lines.Where(l => l.MinX >= midX - 20 && l.Width < contentWidth * 0.7).ToList();
+
+            // Multi-column confirmed if both left and right have multiple lines
+            if (leftLines.Count >= 3 && rightLines.Count >= 3)
+            {
+                var fullWidthThreshold = contentWidth * 0.75;
+                var headerLines = new List<PdfTextLine>();
+                var footerLines = new List<PdfTextLine>();
+                var colLeftLines = new List<PdfTextLine>();
+                var colRightLines = new List<PdfTextLine>();
+
+                var colTopY = Math.Max(
+                    leftLines.Max(l => l.MaxY),
+                    rightLines.Max(l => l.MaxY));
+                var colBottomY = Math.Min(
+                    leftLines.Min(l => l.MinY),
+                    rightLines.Min(l => l.MinY));
+
+                foreach (var line in lines)
+                {
+                    if (line.Width >= fullWidthThreshold && line.MinY > colTopY - 10)
+                    {
+                        headerLines.Add(line);
+                    }
+                    else if (line.Width >= fullWidthThreshold && line.MaxY < colBottomY + 10)
+                    {
+                        footerLines.Add(line);
+                    }
+                    else if (line.MaxX <= midX + 25)
+                    {
+                        colLeftLines.Add(line);
+                    }
+                    else if (line.MinX >= midX - 25)
+                    {
+                        colRightLines.Add(line);
+                    }
+                    else
+                    {
+                        // Cross-spanning line in middle: place based on vertical position
+                        if (line.MinY > (colTopY + colBottomY) / 2)
+                        {
+                            headerLines.Add(line);
+                        }
+                        else
+                        {
+                            colLeftLines.Add(line);
+                        }
+                    }
+                }
+
+                var result = new List<PdfTextLine>();
+                result.AddRange(headerLines.OrderByDescending(l => l.BaselineY));
+                result.AddRange(colLeftLines.OrderByDescending(l => l.BaselineY));
+                result.AddRange(colRightLines.OrderByDescending(l => l.BaselineY));
+                result.AddRange(footerLines.OrderByDescending(l => l.BaselineY));
+                return result;
+            }
+        }
+
+        // Single-column: top to bottom
+        return lines.OrderByDescending(l => l.BaselineY).ToList();
+    }
+
+    private static string AssemblePageText(IReadOnlyList<PdfTextLine> lines)
+    {
+        if (lines.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        // Calculate median vertical line spacing between consecutive lines
+        var lineGaps = new List<double>();
+        for (var i = 1; i < lines.Count; i++)
+        {
+            var gap = lines[i - 1].MinY - lines[i].MaxY;
+            if (gap >= 0 && gap < lines[i - 1].Height * 4)
+            {
+                lineGaps.Add(gap);
+            }
+        }
+
+        var medianGap = lineGaps.Count > 0 ? lineGaps.Median() : 4.0;
+        var paragraphGapThreshold = Math.Max(6.0, medianGap * 1.4);
+
+        var sb = new StringBuilder();
+        sb.Append(lines[0].Text);
+
+        for (var i = 1; i < lines.Count; i++)
+        {
+            var prevLine = lines[i - 1];
+            var currLine = lines[i];
+            var gap = prevLine.MinY - currLine.MaxY;
+
+            var isParagraphBreak =
+                gap > paragraphGapThreshold
+                || BulletOrNumberRegex.IsMatch(currLine.Text)
+                || IsHeadingLine(prevLine, currLine, medianGap);
+
+            if (isParagraphBreak)
+            {
+                sb.Append("\n\n");
+            }
+            else
+            {
+                // Soft wrap: join with space if prev line doesn't end with hyphen
+                if (prevLine.Text.EndsWith('-') && prevLine.Text.Length > 1 && char.IsLetter(prevLine.Text[^2]))
+                {
+                    // De-hyphenate: remove hyphen and append directly
+                    sb.Remove(sb.Length - 1, 1);
+                }
+                else
+                {
+                    sb.Append(' ');
+                }
+            }
+
+            sb.Append(currLine.Text);
+        }
+
+        return sb.ToString().Trim();
+    }
+
+    private static bool IsHeadingLine(PdfTextLine prev, PdfTextLine curr, double medianGap)
+    {
+        // If previous line is significantly taller (larger font), it's likely a heading
+        if (prev.Height > curr.Height * 1.25 && prev.Text.Length < 100)
+        {
+            return true;
+        }
+
+        // If previous line is very short and doesn't end with punctuation, might be heading
+        if (prev.Text.Length < 60 && !prev.Text.EndsWith('.') && !prev.Text.EndsWith(',') && !prev.Text.EndsWith(';') && !prev.Text.EndsWith(':'))
+        {
+            var gap = prev.MinY - curr.MaxY;
+            if (gap > medianGap * 1.1)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private sealed record PdfTextLine(
+        string Text,
+        double MinX,
+        double MaxX,
+        double MinY,
+        double MaxY,
+        double Height,
+        double BaselineY)
+    {
+        public double Width => MaxX - MinX;
+    }
 }
+

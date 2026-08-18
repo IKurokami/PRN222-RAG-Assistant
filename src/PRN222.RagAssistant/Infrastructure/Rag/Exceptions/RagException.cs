@@ -1,4 +1,5 @@
-namespace PRN222.RagAssistant.Features.Rag.Exceptions;
+namespace PRN222.RagAssistant.Infrastructure.Rag.Exceptions;
+
 
 /// <summary>
 /// Base exception for RAG-related errors.

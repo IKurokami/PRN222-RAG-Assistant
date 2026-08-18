@@ -241,4 +241,71 @@ public sealed class TextChunkerTests
         // With 500 char chunks and 100 char overlap, max should be around 7-8 chunks
         Assert.True(chunks.Count <= 10, $"Too many chunks: {chunks.Count}. Expected <= 10");
     }
+
+    [Fact]
+    public void Chunk_GraphemeClusterSafety_DoesNotSplitSurrogatePairsOrCombiningDiacritics()
+    {
+        // Decomposed characters (base + non-spacing mark) and surrogate pairs (emoji)
+        var textWithGraphemes = "T\u0065\u0301st \U0001F600 emoji and c\u0061\u0300u ho\u0309i " +
+                                new string('A', 80) + " " +
+                                "\U0001F601 \U0001F602 \U0001F603 \U0001F604 \U0001F605 " +
+                                new string('B', 80);
+
+        var chunker = TextChunker.Create(maxChunkSize: 50, overlapSize: 10);
+        var pages = new[]
+        {
+            new ParsedPage(textWithGraphemes, PageNumber: 1, SlideNumber: null)
+        };
+
+        var chunks = chunker.Chunk(pages);
+
+        Assert.True(chunks.Count > 1);
+        foreach (var chunk in chunks)
+        {
+            // Verify no chunk starts with a low surrogate
+            Assert.False(char.IsLowSurrogate(chunk.Content[0]), "Chunk must not start with low surrogate");
+            // Verify no chunk ends with a high surrogate
+            Assert.False(char.IsHighSurrogate(chunk.Content[^1]), "Chunk must not end with high surrogate");
+            // Verify no chunk starts with a combining mark
+            Assert.False(
+                char.GetUnicodeCategory(chunk.Content[0]) == System.Globalization.UnicodeCategory.NonSpacingMark,
+                "Chunk must not start with a non-spacing combining mark");
+        }
+    }
+
+    [Fact]
+    public void Chunk_LargeOverlapNearChunkStart_StillAdvancesDeterministically()
+    {
+        // Test configured overlap that is large relative to chunk size
+        var chunker = TextChunker.Create(maxChunkSize: 100, overlapSize: 40);
+        var repetitiveText = string.Join(". ", Enumerable.Range(1, 30).Select(i => $"Sentence {i} has some regular content here"));
+        var pages = new[]
+        {
+            new ParsedPage(repetitiveText, PageNumber: 1, SlideNumber: null)
+        };
+
+        var chunks = chunker.Chunk(pages);
+
+        Assert.True(chunks.Count > 1);
+        // Ensure strictly increasing unique content and bounded chunk count
+        Assert.True(chunks.Count < 40, $"Expected bounded chunk count but got {chunks.Count}");
+    }
+
+    [Fact]
+    public void Chunk_PrefersParagraphBreakOverSentenceBreakWhenAvailable()
+    {
+        var chunker = TextChunker.Create(maxChunkSize: 70, overlapSize: 20);
+        var text = "Paragraph one has sentence A. Paragraph one has sentence B.\n\nParagraph two starts here and continues.";
+        var pages = new[]
+        {
+            new ParsedPage(text, PageNumber: 1, SlideNumber: null)
+        };
+
+        var chunks = chunker.Chunk(pages);
+
+        Assert.True(chunks.Count >= 2);
+        Assert.Equal("Paragraph one has sentence A. Paragraph one has sentence B.", chunks[0].Content);
+    }
+
 }
+

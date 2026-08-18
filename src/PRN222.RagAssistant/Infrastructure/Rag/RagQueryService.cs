@@ -5,10 +5,10 @@ using PRN222.RagAssistant.Application.Models;
 using PRN222.RagAssistant.Data;
 using PRN222.RagAssistant.Domain.Entities;
 using PRN222.RagAssistant.Domain.Enums;
-using PRN222.RagAssistant.Features.Rag.Exceptions;
-using PRN222.RagAssistant.Infrastructure.Rag;
+using PRN222.RagAssistant.Infrastructure.Rag.Exceptions;
 
-namespace PRN222.RagAssistant.Features.Rag;
+namespace PRN222.RagAssistant.Infrastructure.Rag;
+
 
 public sealed class RagQueryService : IRagQueryService
 {
@@ -58,8 +58,16 @@ public sealed class RagQueryService : IRagQueryService
             .FirstOrDefaultAsync(s => s.Id == chatSessionId && s.UserId == userId, cancellationToken)
             ?? throw new ChatSessionNotFoundException(chatSessionId, userId);
 
-        // Use provided subjectId or fall back to session's subjectId
-        var effectiveSubjectId = subjectId ?? session.SubjectId;
+        // Enforce subject scope: if session has a bound SubjectId, reject conflicting subjectId
+        if (session.SubjectId.HasValue && subjectId.HasValue && session.SubjectId.Value != subjectId.Value)
+        {
+            throw new ArgumentException(
+                $"Provided subjectId '{subjectId.Value}' does not match session SubjectId '{session.SubjectId.Value}'.",
+                nameof(subjectId));
+        }
+
+        var effectiveSubjectId = session.SubjectId ?? subjectId;
+
 
         // Load history BEFORE persisting current message to avoid duplicating question
         var history = await LoadRecentHistoryAsync(session.Id, cancellationToken);
@@ -254,4 +262,47 @@ public sealed class RagQueryService : IRagQueryService
 
         return truncated + "...";
     }
+
+    public async Task<Guid> GetOrCreateUserSessionAsync(
+        Guid userId,
+        Guid? subjectId = null,
+        CancellationToken cancellationToken = default)
+    {
+        var targetSubjectId = subjectId;
+        if (!targetSubjectId.HasValue)
+        {
+            targetSubjectId = await _dbContext.Subjects
+                .Where(s => s.IsActive)
+                .OrderBy(s => s.Code)
+                .Select(s => (Guid?)s.Id)
+                .FirstOrDefaultAsync(cancellationToken);
+        }
+
+        var session = await _dbContext.ChatSessions
+            .FirstOrDefaultAsync(s => s.UserId == userId && (targetSubjectId == null || s.SubjectId == targetSubjectId), cancellationToken);
+
+        if (session is null)
+        {
+            var nowUtc = DateTime.SpecifyKind(_clock.GetUtcNow().DateTime, DateTimeKind.Utc);
+            session = new ChatSession
+            {
+                Id = Guid.CreateVersion7(),
+                UserId = userId,
+                SubjectId = targetSubjectId,
+                Title = string.Empty,
+                CreatedAtUtc = nowUtc,
+                UpdatedAtUtc = nowUtc
+            };
+            _dbContext.ChatSessions.Add(session);
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+        else if (!session.SubjectId.HasValue && targetSubjectId.HasValue)
+        {
+            session.SubjectId = targetSubjectId;
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+
+        return session.Id;
+    }
 }
+

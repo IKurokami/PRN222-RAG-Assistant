@@ -3,9 +3,8 @@ using PRN222.RagAssistant.Application.Models;
 using PRN222.RagAssistant.Data;
 using PRN222.RagAssistant.Domain.Entities;
 using PRN222.RagAssistant.Domain.Enums;
-using PRN222.RagAssistant.Features.Rag;
-using PRN222.RagAssistant.Features.Rag.Exceptions;
 using PRN222.RagAssistant.Infrastructure.Rag;
+using PRN222.RagAssistant.Infrastructure.Rag.Exceptions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -13,6 +12,7 @@ using Moq;
 using Xunit;
 
 namespace PRN222.RagAssistant.Tests;
+
 
 public sealed class RagQueryServiceTests
 {
@@ -291,7 +291,7 @@ public sealed class RagQueryServiceTests
     {
         // Arrange
         var subjectId = Guid.NewGuid();
-        var (service, dbContext) = CreateServiceWithMocks();
+        var (service, dbContext, mockRetriever) = CreateServiceWithMocksAndRetriever();
         var userId = Guid.NewGuid();
         var sessionId = Guid.NewGuid();
 
@@ -308,26 +308,54 @@ public sealed class RagQueryServiceTests
         await service.AskAsync(userId, sessionId, "What is OOP?");
 
         // Assert - The retriever should have been called with subjectId
-        // This is verified by the mock setup in CreateServiceWithMocks
-        Assert.True(true); // If no exception, the call succeeded
+        mockRetriever.Verify(
+            x => x.SearchAsync(It.IsAny<float[]>(), subjectId, It.IsAny<CancellationToken>()),
+            Times.Once);
     }
 
     [Fact]
-    public async Task AskAsync_AcceptsSubjectId_Override()
+    public async Task AskAsync_UsesProvidedSubjectId_WhenSessionSubjectIdIsNull()
     {
         // Arrange
         var providedSubjectId = Guid.NewGuid();
-        var (service, dbContext) = CreateServiceWithMocks();
+        var (service, dbContext, mockRetriever) = CreateServiceWithMocksAndRetriever();
         var userId = Guid.NewGuid();
         var sessionId = Guid.NewGuid();
 
         await SetupSessionAsync(dbContext, userId, sessionId);
 
-        // Act - Should not throw
+        // Act
         var result = await service.AskAsync(userId, sessionId, "What is OOP?", providedSubjectId);
 
         // Assert
         Assert.NotNull(result);
+        mockRetriever.Verify(
+            x => x.SearchAsync(It.IsAny<float[]>(), providedSubjectId, It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task AskAsync_ThrowsArgumentException_WhenProvidedSubjectIdDiffersFromSessionSubjectId()
+    {
+        // Arrange
+        var sessionSubjectId = Guid.NewGuid();
+        var conflictingSubjectId = Guid.NewGuid();
+        var (service, dbContext) = CreateServiceWithMocks();
+        var userId = Guid.NewGuid();
+        var sessionId = Guid.NewGuid();
+
+        dbContext.ChatSessions.Add(new ChatSession
+        {
+            Id = sessionId,
+            UserId = userId,
+            SubjectId = sessionSubjectId,
+            Title = "Existing session"
+        });
+        await dbContext.SaveChangesAsync();
+
+        // Act & Assert
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            service.AskAsync(userId, sessionId, "What is OOP?", conflictingSubjectId));
     }
 
     [Fact]
@@ -353,11 +381,156 @@ public sealed class RagQueryServiceTests
         Assert.Equal(2, citations.Count);
     }
 
+    [Fact]
+    public async Task AskAsync_DoesNotPersistMessages_WhenEmbeddingServiceThrows()
+    {
+        // Arrange
+        var dbContext = CreateInMemoryDbContext();
+        var mockEmbeddingService = new Mock<ITextEmbeddingService>();
+        var mockChatService = new Mock<IChatCompletionService>();
+        var mockRetriever = new Mock<IDocumentChunkRetriever>();
+        var options = Options.Create(new RagOptions());
+
+        mockEmbeddingService
+            .Setup(x => x.EmbedAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new HttpRequestException("Ollama unavailable"));
+
+        var service = new RagQueryService(
+            dbContext,
+            mockEmbeddingService.Object,
+            mockChatService.Object,
+            mockRetriever.Object,
+            new GroundedPromptBuilder(options),
+            options,
+            NullLogger<RagQueryService>.Instance,
+            TimeProvider.System);
+
+        var userId = Guid.NewGuid();
+        var sessionId = Guid.NewGuid();
+        await SetupSessionAsync(dbContext, userId, sessionId);
+
+        // Act & Assert
+        await Assert.ThrowsAsync<HttpRequestException>(() =>
+            service.AskAsync(userId, sessionId, "What is OOP?"));
+
+        var messageCount = await dbContext.ChatMessages.CountAsync();
+        Assert.Equal(0, messageCount);
+    }
+
+    [Fact]
+    public async Task AskAsync_DoesNotPersistMessages_WhenChatCompletionServiceThrows()
+    {
+        // Arrange
+        var dbContext = CreateInMemoryDbContext();
+        var mockEmbeddingService = new Mock<ITextEmbeddingService>();
+        var mockChatService = new Mock<IChatCompletionService>();
+        var mockRetriever = new Mock<IDocumentChunkRetriever>();
+        var options = Options.Create(new RagOptions());
+
+        mockEmbeddingService
+            .Setup(x => x.EmbedAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new float[1024]);
+
+        mockRetriever
+            .Setup(x => x.SearchAsync(It.IsAny<float[]>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[]
+            {
+                new RetrievedChunk(Guid.NewGuid(), Guid.NewGuid(), "Doc", "Content", 1, null, 0.9)
+            });
+
+        mockChatService
+            .Setup(x => x.CompleteAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("API rate limit"));
+
+        var service = new RagQueryService(
+            dbContext,
+            mockEmbeddingService.Object,
+            mockChatService.Object,
+            mockRetriever.Object,
+            new GroundedPromptBuilder(options),
+            options,
+            NullLogger<RagQueryService>.Instance,
+            TimeProvider.System);
+
+        var userId = Guid.NewGuid();
+        var sessionId = Guid.NewGuid();
+        await SetupSessionAsync(dbContext, userId, sessionId);
+
+        // Act & Assert
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.AskAsync(userId, sessionId, "What is OOP?"));
+
+        var messageCount = await dbContext.ChatMessages.CountAsync();
+        Assert.Equal(0, messageCount);
+    }
+
+    [Fact]
+    public async Task GetOrCreateUserSessionAsync_CreatesNewSession_WithActiveSubject()
+    {
+        // Arrange
+        var (service, dbContext) = CreateServiceWithMocks();
+        var userId = Guid.NewGuid();
+        var subjectId = Guid.NewGuid();
+
+        dbContext.Subjects.Add(new Subject
+        {
+            Id = subjectId,
+            Code = "PRN222",
+            Name = "C# Programming",
+            IsActive = true
+        });
+        await dbContext.SaveChangesAsync();
+
+        // Act
+        var sessionId = await service.GetOrCreateUserSessionAsync(userId);
+
+        // Assert
+        var session = await dbContext.ChatSessions.FindAsync(sessionId);
+        Assert.NotNull(session);
+        Assert.Equal(userId, session.UserId);
+        Assert.Equal(subjectId, session.SubjectId);
+    }
+
+    [Fact]
+    public async Task GetOrCreateUserSessionAsync_ReturnsExistingSession_WhenOneAlreadyExists()
+    {
+        // Arrange
+        var (service, dbContext) = CreateServiceWithMocks();
+        var userId = Guid.NewGuid();
+        var subjectId = Guid.NewGuid();
+        var existingSessionId = Guid.NewGuid();
+
+        dbContext.ChatSessions.Add(new ChatSession
+        {
+            Id = existingSessionId,
+            UserId = userId,
+            SubjectId = subjectId,
+            Title = "Existing"
+        });
+        await dbContext.SaveChangesAsync();
+
+        // Act
+        var sessionId = await service.GetOrCreateUserSessionAsync(userId, subjectId);
+
+        // Assert
+        Assert.Equal(existingSessionId, sessionId);
+    }
+
     #endregion
+
+
 
     #region Helper Methods
 
     private static (RagQueryService service, ApplicationDbContext dbContext) CreateServiceWithMocks(
+        bool noChunks = false,
+        string answerWithCitations = "Answer with citations [1].")
+    {
+        var (service, dbContext, _) = CreateServiceWithMocksAndRetriever(noChunks, answerWithCitations);
+        return (service, dbContext);
+    }
+
+    private static (RagQueryService service, ApplicationDbContext dbContext, Mock<IDocumentChunkRetriever> mockRetriever) CreateServiceWithMocksAndRetriever(
         bool noChunks = false,
         string answerWithCitations = "Answer with citations [1].")
     {
@@ -425,8 +598,9 @@ public sealed class RagQueryServiceTests
             NullLogger<RagQueryService>.Instance,
             TimeProvider.System);
 
-        return (service, dbContext);
+        return (service, dbContext, mockRetriever);
     }
+
 
     private static ApplicationDbContext CreateInMemoryDbContext()
     {

@@ -1,4 +1,5 @@
-namespace PRN222.RagAssistant.Features.Rag.Exceptions;
+namespace PRN222.RagAssistant.Infrastructure.Rag.Exceptions;
+
 
 /// <summary>
 /// Thrown when the requested chat session does not exist or does not belong to the user.

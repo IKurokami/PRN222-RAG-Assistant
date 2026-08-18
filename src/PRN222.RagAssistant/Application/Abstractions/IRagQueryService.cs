@@ -14,4 +14,10 @@ public interface IRagQueryService
         string question,
         Guid? subjectId = null,
         CancellationToken cancellationToken = default);
+
+    Task<Guid> GetOrCreateUserSessionAsync(
+        Guid userId,
+        Guid? subjectId = null,
+        CancellationToken cancellationToken = default);
 }
+
