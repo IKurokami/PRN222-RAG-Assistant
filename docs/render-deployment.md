@@ -22,7 +22,7 @@ Render is configured with `autoDeployTrigger: checksPass`, so a commit on `maste
 The Blueprint provisions:
 
 - `prn222-rag-assistant`: Docker web service;
-- `prn222-rag-db`: managed Render Postgres in the same Singapore region.
+- `prn222-rag-db`: managed Render Postgres 17 in the same Singapore region.
 
 The application receives the database connection through `fromDatabase.connectionString`. Startup normalizes Render's `postgresql://...` URL into an Npgsql connection string before registering EF Core.
 
@@ -34,24 +34,38 @@ CREATE EXTENSION IF NOT EXISTS vector;
 
 and then applies EF Core migrations. This is required because the application stores embeddings in pgvector columns.
 
-## Environment variables entered manually
+## OpenRouter-only AI runtime
 
-The initial Blueprint setup intentionally prompts for these secrets and does not commit their values:
+Render uses OpenRouter for both chat and embeddings:
 
 ```text
-Rag__Gemini__ApiKey
+Rag__Provider=OpenRouter
+Rag__ChatProvider=OpenRouter
+Rag__EmbeddingProvider=OpenRouter
+Rag__EmbeddingDimensions=1024
+```
+
+Configured models:
+
+```text
+Chat:
+  nvidia/nemotron-3.5-lightning:free
+
+Embedding:
+  nvidia/llama-nemotron-embed-vl-1b-v2:free
+```
+
+The embedding model intentionally remains the Llama Nemotron Embed VL 1B V2 free variant because the existing pgvector corpus is 1024-dimensional and this model supports 1024-dimensional output. Changing to an embedding model that only emits a different dimension requires a schema/corpus migration and a complete re-index.
+
+## Environment variable entered manually
+
+Only one AI secret is required for the default Render deployment:
+
+```text
 Rag__OpenRouter__ApiKey
 ```
 
-Recommended Render provider split:
-
-```text
-Rag__Provider=Gemini
-Rag__ChatProvider=OpenRouter
-Rag__EmbeddingProvider=Gemini
-```
-
-This keeps one stable embedding provider while OpenRouter handles the chat fallback chain.
+`render.yaml` declares it with `sync: false`, so the real key is entered in the Render Dashboard during initial Blueprint setup and is never committed to GitHub.
 
 ### Optional seed users
 
@@ -68,7 +82,7 @@ If demo accounts are intentionally needed, enable it in the Render Dashboard and
 1. Merge the Render CD PR into `master`.
 2. Open Render Dashboard -> New -> Blueprint.
 3. Connect this repository and let Render read `render.yaml`.
-4. Enter the two `sync: false` AI API keys when prompted.
+4. Enter `Rag__OpenRouter__ApiKey` when prompted.
 5. Review the `prn222-rag-assistant` web service and `prn222-rag-db` database.
 6. Apply the Blueprint.
 7. Confirm `/healthz` returns HTTP 200.
@@ -95,7 +109,7 @@ Do not treat the free filesystem as durable document storage.
 
 ## Free-tier database warning
 
-The Blueprint uses the Render Postgres Free instance for development/demo convenience. Free Render Postgres is temporary and should not be treated as production persistence. Upgrade the database before relying on it for long-lived data.
+The Blueprint uses the Render Postgres Free instance for development/demo convenience. Free Render Postgres should not be treated as production persistence. Upgrade the database before relying on it for long-lived data.
 
 ## Port and proxy behavior
 
@@ -123,7 +137,7 @@ The endpoint is intentionally lightweight and anonymous. It verifies the web pro
 
 Never commit:
 
-- Gemini/OpenRouter/OpenAI API keys;
+- OpenRouter/Gemini/OpenAI API keys;
 - Render database credentials;
 - seeded-user passwords;
 - `.env` production files;
