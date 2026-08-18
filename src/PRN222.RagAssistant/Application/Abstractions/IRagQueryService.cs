@@ -12,5 +12,6 @@ public interface IRagQueryService
         Guid userId,
         Guid chatSessionId,
         string question,
+        Guid? subjectId = null,
         CancellationToken cancellationToken = default);
 }

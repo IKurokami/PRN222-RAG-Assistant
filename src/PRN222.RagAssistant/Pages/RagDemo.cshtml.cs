@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using PRN222.RagAssistant.Application.Abstractions;
@@ -5,22 +6,27 @@ using PRN222.RagAssistant.Application.Models;
 using PRN222.RagAssistant.Data;
 using PRN222.RagAssistant.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Identity;
 
 namespace PRN222.RagAssistant.Pages;
 
+[Authorize]
 public class RagDemoModel : PageModel
 {
     private readonly IRagQueryService _ragService;
     private readonly ApplicationDbContext _dbContext;
+    private readonly UserManager<ApplicationUser> _userManager;
     private readonly ILogger<RagDemoModel> _logger;
 
     public RagDemoModel(
         IRagQueryService ragService,
         ApplicationDbContext dbContext,
+        UserManager<ApplicationUser> userManager,
         ILogger<RagDemoModel> logger)
     {
         _ragService = ragService;
         _dbContext = dbContext;
+        _userManager = userManager;
         _logger = logger;
     }
 
@@ -44,8 +50,9 @@ public class RagDemoModel : PageModel
 
         try
         {
-        var user = await GetOrCreateDemoUserAsync();
-        var session = await GetOrCreateDemoSessionAsync(user.Id);
+            var user = await _userManager.GetUserAsync(User)
+                ?? throw new UnauthorizedAccessException("User not found");
+            var session = await GetOrCreateUserSessionAsync(user.Id);
 
             var result = await _ragService.AskAsync(
                 user.Id,
@@ -57,15 +64,22 @@ public class RagDemoModel : PageModel
             Error = null;
 
             _logger.LogInformation(
-                "RAG demo answered. Question={Question}, Chunks={Chunks}, Citations={Citations}",
+                "RAG demo answered. User={UserId}, Question={Question}, Chunks={Chunks}",
+                user.Id,
                 Question.Length > 50 ? Question[..50] + "..." : Question,
-                Citations.Count,
                 Citations.Count);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            _logger.LogWarning("RAG demo unauthorized access attempt");
+            Error = "Vui lòng đăng nhập để sử dụng tính năng này.";
+            Answer = null;
+            Citations = null;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "RAG demo failed");
-            Error = $"Lỗi: {ex.Message}";
+            Error = "Đã xảy ra lỗi khi xử lý câu hỏi. Vui lòng thử lại sau.";
             Answer = null;
             Citations = null;
         }
@@ -74,31 +88,10 @@ public class RagDemoModel : PageModel
         return Page();
     }
 
-    private async Task<ApplicationUser> GetOrCreateDemoUserAsync()
-    {
-        var email = "demo@prn222.local";
-        var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.Email == email);
-
-        if (user is null)
-        {
-            user = new ApplicationUser
-            {
-                Id = Guid.CreateVersion7(),
-                UserName = email,
-                Email = email,
-                EmailConfirmed = true
-            };
-            _dbContext.Users.Add(user);
-            await _dbContext.SaveChangesAsync();
-        }
-
-        return user;
-    }
-
-    private async Task<ChatSession> GetOrCreateDemoSessionAsync(Guid userId)
+    private async Task<ChatSession> GetOrCreateUserSessionAsync(Guid userId)
     {
         var session = await _dbContext.ChatSessions
-            .FirstOrDefaultAsync(s => s.UserId == userId && s.Title == "Demo Session");
+            .FirstOrDefaultAsync(s => s.UserId == userId);
 
         if (session is null)
         {
@@ -106,7 +99,7 @@ public class RagDemoModel : PageModel
             {
                 Id = Guid.CreateVersion7(),
                 UserId = userId,
-                Title = "Demo Session",
+                Title = string.Empty,
                 CreatedAtUtc = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Utc),
                 UpdatedAtUtc = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Utc)
             };

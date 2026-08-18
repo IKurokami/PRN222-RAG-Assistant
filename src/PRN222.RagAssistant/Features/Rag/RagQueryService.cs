@@ -45,6 +45,7 @@ public sealed class RagQueryService : IRagQueryService
         Guid userId,
         Guid chatSessionId,
         string question,
+        Guid? subjectId = null,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(question))
@@ -57,10 +58,14 @@ public sealed class RagQueryService : IRagQueryService
             .FirstOrDefaultAsync(s => s.Id == chatSessionId && s.UserId == userId, cancellationToken)
             ?? throw new ChatSessionNotFoundException(chatSessionId, userId);
 
-        var userMessage = await PersistUserMessageAsync(session.Id, question, cancellationToken);
+        // Use provided subjectId or fall back to session's subjectId
+        var effectiveSubjectId = subjectId ?? session.SubjectId;
+
+        // Load history BEFORE persisting current message to avoid duplicating question
+        var history = await LoadRecentHistoryAsync(session.Id, cancellationToken);
 
         var questionEmbedding = await _embeddingService.EmbedAsync(question, cancellationToken);
-        var allChunks = await _retriever.SearchAsync(questionEmbedding, cancellationToken);
+        var allChunks = await _retriever.SearchAsync(questionEmbedding, effectiveSubjectId, cancellationToken);
 
         var topChunks = allChunks
             .Where(c => c.SimilarityScore >= _options.Retrieval.MinimumSimilarityScore)
@@ -79,12 +84,13 @@ public sealed class RagQueryService : IRagQueryService
         }
         else
         {
-            var history = await LoadRecentHistoryAsync(session.Id, cancellationToken);
             var (systemPrompt, userPrompt) = _promptBuilder.Build(question, topChunks, history);
             answer = await _chatService.CompleteAsync(systemPrompt, userPrompt, cancellationToken);
-            citations = BuildCitations(topChunks);
+            citations = ParseCitationsFromAnswer(answer, topChunks);
         }
 
+        // Persist messages AFTER processing to avoid including current question in history
+        var userMessage = await PersistUserMessageAsync(session.Id, question, cancellationToken);
         var assistantMessage = await PersistAssistantMessageAsync(session.Id, answer, citations, cancellationToken);
 
         await EnsureSessionTitleAsync(session, question, cancellationToken);
@@ -191,17 +197,49 @@ public sealed class RagQueryService : IRagQueryService
                 cancellationToken);
     }
 
-    private IReadOnlyList<RagCitation> BuildCitations(IReadOnlyList<RetrievedChunk> chunks)
+    private IReadOnlyList<RagCitation> ParseCitationsFromAnswer(string answer, IReadOnlyList<RetrievedChunk> chunks)
     {
-        return chunks.Select((chunk, index) => new RagCitation(
-            chunk.DocumentId,
-            chunk.DocumentChunkId,
-            chunk.DocumentTitle,
-            index + 1,
-            TruncateExcerpt(chunk.Content, _options.Retrieval.ExcerptChars),
-            chunk.PageNumber,
-            chunk.SlideNumber))
-            .ToList();
+        if (string.IsNullOrEmpty(answer) || chunks.Count == 0)
+            return Array.Empty<RagCitation>();
+
+        // Parse citation markers [n] from the answer
+        var citationPattern = new System.Text.RegularExpressions.Regex(@"\[(\d+)\]");
+        var matches = citationPattern.Matches(answer);
+
+        if (matches.Count == 0)
+            return Array.Empty<RagCitation>();
+
+        var usedIndices = new HashSet<int>();
+        foreach (System.Text.RegularExpressions.Match match in matches)
+        {
+            if (int.TryParse(match.Groups[1].Value, out int index) && index > 0 && index <= chunks.Count)
+            {
+                usedIndices.Add(index);
+            }
+        }
+
+        if (usedIndices.Count == 0)
+            return Array.Empty<RagCitation>();
+
+        // Sort indices to maintain original ranking
+        var sortedIndices = usedIndices.OrderBy(i => i).ToList();
+        var citations = new List<RagCitation>();
+
+        for (int rank = 0; rank < sortedIndices.Count; rank++)
+        {
+            var index = sortedIndices[rank] - 1; // Convert to 0-based
+            var chunk = chunks[index];
+            citations.Add(new RagCitation(
+                chunk.DocumentId,
+                chunk.DocumentChunkId,
+                chunk.DocumentTitle,
+                rank + 1,
+                TruncateExcerpt(chunk.Content, _options.Retrieval.ExcerptChars),
+                chunk.PageNumber,
+                chunk.SlideNumber));
+        }
+
+        return citations;
     }
 
     private static string TruncateExcerpt(string content, int maxChars)

@@ -8,6 +8,7 @@ public interface IDocumentChunkRetriever
 {
     Task<IReadOnlyList<RetrievedChunk>> SearchAsync(
         float[] questionEmbedding,
+        Guid? subjectId = null,
         CancellationToken cancellationToken = default);
 }
 
