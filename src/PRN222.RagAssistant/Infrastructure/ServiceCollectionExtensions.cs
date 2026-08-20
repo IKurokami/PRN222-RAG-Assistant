@@ -34,6 +34,8 @@ public static class ServiceCollectionExtensions
 
         services.AddDbContext<ApplicationDbContext>(options =>
             options.UseNpgsql(connectionString, npgsql => npgsql.UseVector()));
+        services.AddDbContext<DataProtectionKeyDbContext>(options =>
+            options.UseNpgsql(connectionString));
 
         services.AddIdentity<ApplicationUser, IdentityRole<Guid>>(options =>
             {
@@ -99,8 +101,6 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IEvaluationService, Infrastructure.Services.EvaluationService>();
 
         return services;
-
-
     }
 
     private static void AddAiProviders(
