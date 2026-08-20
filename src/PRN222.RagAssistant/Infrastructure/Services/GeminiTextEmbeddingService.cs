@@ -51,10 +51,10 @@ public sealed class GeminiTextEmbeddingService : ITextEmbeddingService
             {
                 parts = new[] { new { text } }
             },
-            embedContentConfig = new
-            {
-                outputDimensionality = _expectedDimensions
-            }
+            // For the REST batchEmbedContents endpoint, Google's GenAI SDK
+            // serializes EmbedContentConfig.outputDimensionality onto each
+            // EmbedContentRequest as this top-level field.
+            outputDimensionality = _expectedDimensions
         });
 
         var client = _httpClientFactory.CreateClient("Gemini");

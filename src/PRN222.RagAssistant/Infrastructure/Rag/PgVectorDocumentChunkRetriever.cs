@@ -1,9 +1,6 @@
 using Microsoft.EntityFrameworkCore;
-using Npgsql;
-using NpgsqlTypes;
 using Pgvector;
 using PRN222.RagAssistant.Data;
-using PRN222.RagAssistant.Infrastructure.Rag;
 
 namespace PRN222.RagAssistant.Infrastructure.Rag;
 
@@ -32,6 +29,8 @@ public sealed class PgVectorDocumentChunkRetriever : IDocumentChunkRetriever
         CancellationToken cancellationToken = default)
     {
         var topK = _options.Retrieval.TopK;
+        var queryVector = new Vector(questionEmbedding);
+        var queryDimensions = questionEmbedding.Length;
 
         string sql;
         object[] sqlParams;
@@ -51,13 +50,15 @@ public sealed class PgVectorDocumentChunkRetriever : IDocumentChunkRetriever
                 JOIN "Documents" d ON d."Id" = dc."DocumentId"
                 WHERE d."IndexStatus" = 'Indexed'
                   AND dc."Embedding" IS NOT NULL
-                  AND d."SubjectId" = {1}
+                  AND vector_dims(dc."Embedding") = {1}
+                  AND d."SubjectId" = {2}
                 ORDER BY dc."Embedding" <=> {0}
-                LIMIT {2}
+                LIMIT {3}
                 """;
             sqlParams = new object[]
             {
-                new Vector(questionEmbedding),
+                queryVector,
+                queryDimensions,
                 subjectId.Value,
                 topK
             };
@@ -78,12 +79,14 @@ public sealed class PgVectorDocumentChunkRetriever : IDocumentChunkRetriever
                 JOIN "Documents" d ON d."Id" = dc."DocumentId"
                 WHERE d."IndexStatus" = 'Indexed'
                   AND dc."Embedding" IS NOT NULL
+                  AND vector_dims(dc."Embedding") = {1}
                 ORDER BY dc."Embedding" <=> {0}
-                LIMIT {1}
+                LIMIT {2}
                 """;
             sqlParams = new object[]
             {
-                new Vector(questionEmbedding),
+                queryVector,
+                queryDimensions,
                 topK
             };
         }
@@ -105,8 +108,10 @@ public sealed class PgVectorDocumentChunkRetriever : IDocumentChunkRetriever
             .ToList();
 
         _logger.LogDebug(
-            "Retrieved {Count} chunks for query (TopK={TopK})",
-            chunks.Count, topK);
+            "Retrieved {Count} chunks for query (TopK={TopK}, Dimensions={Dimensions})",
+            chunks.Count,
+            topK,
+            queryDimensions);
 
         return chunks;
     }
