@@ -9,3 +9,10 @@ public sealed record RagAnswer(
     Guid AssistantMessageId,
     string Answer,
     IReadOnlyList<RagCitation> Citations);
+
+/// <summary>
+/// RAG answer generated without loading or persisting chat history.
+/// </summary>
+public sealed record RagQueryResult(
+    string Answer,
+    IReadOnlyList<RagCitation> Citations);

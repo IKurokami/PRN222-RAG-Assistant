@@ -25,4 +25,10 @@
     <PackageReference Include="DocumentFormat.OpenXml" Version="3.3.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Update="Infrastructure\Data\evaluation_dataset_50.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>
