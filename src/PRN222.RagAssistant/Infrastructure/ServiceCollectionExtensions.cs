@@ -96,6 +96,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<Infrastructure.Rag.GroundedPromptBuilder>();
         services.AddScoped<Infrastructure.Rag.IDocumentChunkRetriever, Infrastructure.Rag.PgVectorDocumentChunkRetriever>();
         services.AddScoped<IRagQueryService, Infrastructure.Rag.RagQueryService>();
+        services.AddScoped<IEvaluationService, Infrastructure.Services.EvaluationService>();
 
         return services;
 
