@@ -40,6 +40,7 @@ jobs:
       - name: Check EF Core model matches migrations
         run: >-
           dotnet ef migrations has-pending-model-changes
+          --context ApplicationDbContext
           --project src/PRN222.RagAssistant
           --startup-project src/PRN222.RagAssistant
 
@@ -64,6 +65,7 @@ jobs:
           ConnectionStrings__Postgres: Host=localhost;Port=5432;Database=prn222_rag;Username=postgres;Password=postgres
         run: >-
           dotnet ef database update
+          --context ApplicationDbContext
           --project src/PRN222.RagAssistant
           --startup-project src/PRN222.RagAssistant
 
@@ -72,6 +74,7 @@ jobs:
           docker compose exec -T postgres psql -U postgres -d prn222_rag -v ON_ERROR_STOP=1 -c "SELECT extversion FROM pg_extension WHERE extname = 'vector';"
           docker compose exec -T postgres psql -U postgres -d prn222_rag -v ON_ERROR_STOP=1 -c "SELECT \"Code\", \"Name\" FROM \"Subjects\" WHERE \"Code\" = 'PRN222';"
           docker compose exec -T postgres psql -U postgres -d prn222_rag -v ON_ERROR_STOP=1 -c "SELECT COUNT(*) FROM \"__EFMigrationsHistory\";"
+          docker compose exec -T postgres psql -U postgres -d prn222_rag -v ON_ERROR_STOP=1 -c "SELECT \"Id\", \"FriendlyName\", \"Xml\" FROM \"DataProtectionKeys\" LIMIT 0;"
 
       - name: Verify pgvector mixed-dimension reindex compatibility
         run: >-
