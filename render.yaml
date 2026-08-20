@@ -48,7 +48,7 @@ services:
       - key: Rag__OpenRouter__ApiKey
         sync: false
       - key: Rag__OpenRouter__ChatModels
-        value: nvidia/nemotron-3.5-lightning:free
+        value: nvidia/nemotron-3.5-lightning:free,nvidia/nemotron-3-ultra-550b-a55b:free,nvidia/nemotron-3-super-120b-a12b:free,google/gemma-4-26b-a4b-it:free,openai/gpt-oss-20b:free,openrouter/free
       - key: Rag__OpenRouter__EmbeddingModel
         value: nvidia/llama-nemotron-embed-vl-1b-v2:free
       - key: Rag__OpenRouter__AppTitle

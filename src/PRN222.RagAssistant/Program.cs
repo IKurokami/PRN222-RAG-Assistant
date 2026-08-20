@@ -1,3 +1,5 @@
+using Microsoft.AspNetCore.DataProtection;
+using PRN222.RagAssistant.Data;
 using PRN222.RagAssistant.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -12,6 +14,10 @@ builder.Configuration["ConnectionStrings:Postgres"] =
 builder.Services.AddControllersWithViews();
 builder.Services.AddRazorPages();
 builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services
+    .AddDataProtection()
+    .PersistKeysToDbContext<DataProtectionKeyDbContext>()
+    .SetApplicationName("PRN222-RAG-Assistant");
 
 var app = builder.Build();
 
