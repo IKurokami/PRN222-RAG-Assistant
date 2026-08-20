@@ -1,0 +1,456 @@
+[
+  {
+    "Id": 1,
+    "Module": "Module 1: C# Advanced Language Features",
+    "Topic": "Delegates & MulticastDelegate",
+    "QuestionText": "Delegate trong C# là gì và cơ chế Multicast Delegate hoạt động như thế nào khi kết hợp nhiều phương thức?",
+    "GroundTruthAnswer": "Delegate là type-safe function pointer kế thừa từ System.MulticastDelegate. Multicast Delegate cho phép liên kết nhiều phương thức thông qua toán tử +=. Khi thực thi, các phương thức trong danh sách _invocationList được gọi tuần tự theo thứ tự đăng ký.",
+    "ExpectedKeywords": ["function pointer", "MulticastDelegate", "+=", "invocationList", "tuần tự"],
+    "SubjectCode": "PRN222"
+  },
+  {
+    "Id": 2,
+    "Module": "Module 1: C# Advanced Language Features",
+    "Topic": "Func, Action & Predicate",
+    "QuestionText": "Sự khác biệt cơ bản giữa Func, Action và Predicate trong C# là gì?",
+    "GroundTruthAnswer": "Func<T,...,TResult> có giá trị trả về TResult; Action<T,...> trả về void (không có giá trị trả về); Predicate<T> là delegate nhận 1 tham số kiểu T và luôn trả về giá trị bool.",
+    "ExpectedKeywords": ["Func", "Action", "Predicate", "void", "bool"],
+    "SubjectCode": "PRN222"
+  },
+  {
+    "Id": 3,
+    "Module": "Module 1: C# Advanced Language Features",
+    "Topic": "Lambda & Closures",
+    "QuestionText": "Khái niệm Closure trong C# là gì và cạm bẫy Variable Capture trong vòng lặp phát sinh như thế nào?",
+    "GroundTruthAnswer": "Closure là cơ chế compiler tự sinh ra class ẩn để lưu trữ các biến bị capture ngoài phạm vi lambda. Cạm bẫy xảy ra khi capture biến đếm vòng lặp (for/foreach) khiến tất cả lambda tham chiếu chung một biến bị thay đổi qua các vòng lặp.",
+    "ExpectedKeywords": ["Closure", "compiler", "capture", "vòng lặp", "biến cục bộ"],
+    "SubjectCode": "PRN222"
+  },
+  {
+    "Id": 4,
+    "Module": "Module 1: C# Advanced Language Features",
+    "Topic": "Yield Return & Deferred Execution",
+    "QuestionText": "Từ khóa yield return hoạt động như thế nào trong C# và mang lại lợi ích gì về mặt bộ nhớ?",
+    "GroundTruthAnswer": "yield return triển khai mô hình State Machine cho IEnumerable, thực hiện hoãn thực thi (Deferred Execution). Phần tử chỉ được tính toán và trả về từng phần khi được duyệt qua MoveNext(), giúp tiết kiệm bộ nhớ khi xử lý tập dữ liệu lớn.",
+    "ExpectedKeywords": ["yield return", "State Machine", "Deferred Execution", "IEnumerable", "bộ nhớ"],
+    "SubjectCode": "PRN222"
+  },
+  {
+    "Id": 5,
+    "Module": "Module 1: C# Advanced Language Features",
+    "Topic": "Pattern Matching & Switch Expressions",
+    "QuestionText": "Pattern Matching trong C# hỗ trợ các dạng pattern chính nào?",
+    "GroundTruthAnswer": "Pattern Matching hỗ trợ Type Pattern, Property Pattern, Relational Pattern, Logical Pattern (and/or/not), Positional Pattern (Tuple Deconstruction) và Var Pattern.",
+    "ExpectedKeywords": ["Pattern Matching", "Property Pattern", "Relational Pattern", "Switch Expression", "Logical Pattern"],
+    "SubjectCode": "PRN222"
+  },
+  {
+    "Id": 6,
+    "Module": "Module 1: C# Advanced Language Features",
+    "Topic": "Records & Immutable Types",
+    "QuestionText": "Record trong C# khác gì so với Class thông thường về tính bất biến và so sánh bằng?",
+    "GroundTruthAnswer": "Record hỗ trợ Value-based equality (so sánh bằng theo giá trị thuộc tính thay vì tham chiếu địa chỉ bộ nhớ) và hỗ trợ cú pháp init-only properties cùng biểu thức with để tạo đối tượng sao chép bất biến (Immutability).",
+    "ExpectedKeywords": ["Record", "Value-based equality", "bất biến", "Immutability", "with"],
+    "SubjectCode": "PRN222"
+  },
+  {
+    "Id": 7,
+    "Module": "Module 1: C# Advanced Language Features",
+    "Topic": "Indexers & Index/Range",
+    "QuestionText": "Cú pháp Indexer và các kiểu System.Index (^1) / System.Range (1..5) được dùng để làm gì?",
+    "GroundTruthAnswer": "Indexer cho phép truy cập đối tượng dạng mảng qua toán tử []. Ký hiệu ^1 biểu diễn phần tử cuối cùng từ cuối danh sách (System.Index), còn 1..5 biểu diễn phạm vi cắt lát mảng (System.Range).",
+    "ExpectedKeywords": ["Indexer", "Index", "Range", "^", "cắt lát"],
+    "SubjectCode": "PRN222"
+  },
+  {
+    "Id": 8,
+    "Module": "Module 1: C# Advanced Language Features",
+    "Topic": "Extension Methods",
+    "QuestionText": "Điều kiện để định nghĩa một Extension Method hợp lệ trong C# là gì?",
+    "GroundTruthAnswer": "Extension Method phải được khai báo trong một static class không phải generic, phương thức phải là static và tham số đầu tiên phải có từ khóa 'this' đứng trước kiểu dữ liệu cần mở rộng.",
+    "ExpectedKeywords": ["Extension Method", "static class", "static method", "this", "mở rộng"],
+    "SubjectCode": "PRN222"
+  },
+  {
+    "Id": 9,
+    "Module": "Module 1: C# Advanced Language Features",
+    "Topic": "Span<T> & Memory<T>",
+    "QuestionText": "Lợi ích của Span<T> và ReadOnlySpan<T> trong tối ưu hiệu năng C# là gì?",
+    "GroundTruthAnswer": "Span<T> là ref struct đại diện cho vùng nhớ liên tục (stack, heap, unmanaged) giúp thao tác cắt lát (slicing) dữ liệu mà không cần cấp phát thêm bộ nhớ heap, loại bỏ thao tác allocate mảng mới và giảm tải cho Garbage Collector.",
+    "ExpectedKeywords": ["Span", "ref struct", "heap", "cắt lát", "Garbage Collector"],
+    "SubjectCode": "PRN222"
+  },
+  {
+    "Id": 10,
+    "Module": "Module 1: C# Advanced Language Features",
+    "Topic": "Nullable Reference Types",
+    "QuestionText": "Hệ thống Nullable Reference Types (#nullable enable) giúp phòng tránh lỗi gì?",
+    "GroundTruthAnswer": "Nullable Reference Types giúp cảnh báo thời gian biên dịch (compile-time warning) để ngăn ngừa ngoại lệ NullReferenceException bằng cách phân biệt rõ ràng giữa kiểu tham chiếu cho phép null (T?) và không cho phép null (T).",
+    "ExpectedKeywords": ["Nullable Reference Types", "NullReferenceException", "compile-time", "T?", "cảnh báo"],
+    "SubjectCode": "PRN222"
+  },
+
+  {
+    "Id": 11,
+    "Module": "Module 2: Asynchronous Programming & Concurrency",
+    "Topic": "Async / Await Mechanism",
+    "QuestionText": "Từ khóa async và await hoạt động như thế nào bên dưới Compiler?",
+    "GroundTruthAnswer": "Compiler sẽ biến đổi phương thức async thành một State Machine (IAsyncStateMachine). Khi gặp await, nếu Task chưa hoàn thành, State Machine sẽ đăng ký Continuation và giải phóng luồng hiện tại quay lại ThreadPool thay vì block luồng.",
+    "ExpectedKeywords": ["async", "await", "State Machine", "Continuation", "ThreadPool"],
+    "SubjectCode": "PRN222"
+  },
+  {
+    "Id": 12,
+    "Module": "Module 2: Asynchronous Programming & Concurrency",
+    "Topic": "Task vs ValueTask",
+    "QuestionText": "Khi nào nên dùng ValueTask<T> thay vì Task<T>?",
+    "GroundTruthAnswer": "Nên dùng ValueTask<T> cho các phương thức bất đồng bộ thường xuyên trả về kết quả đồng bộ (synchronous completion) hoặc nằm trên hot-path để tránh cấp phát đối tượng Task trên bộ nhớ Heap.",
+    "ExpectedKeywords": ["ValueTask", "Task", "synchronous", "Heap", "cấp phát"],
+    "SubjectCode": "PRN222"
+  },
+  {
+    "Id": 13,
+    "Module": "Module 2: Asynchronous Programming & Concurrency",
+    "Topic": "CancellationToken",
+    "QuestionText": "Cách hủy một tác vụ bất đồng bộ đúng chuẩn trong .NET là gì?",
+    "GroundTruthAnswer": "Sử dụng CancellationTokenSource để phát tín hiệu hủy và truyền CancellationToken vào các phương thức async. Bên trong phương thức, gọi cancellationToken.ThrowIfCancellationRequested() để ngắt tác vụ an toàn.",
+    "ExpectedKeywords": ["CancellationToken", "CancellationTokenSource", "ThrowIfCancellationRequested", "hủy", "ngắt"],
+    "SubjectCode": "PRN222"
+  },
+  {
+    "Id": 14,
+    "Module": "Module 2: Asynchronous Programming & Concurrency",
+    "Topic": "Task.WhenAll vs Task.WhenAny",
+    "QuestionText": "Phân biệt Task.WhenAll và Task.WhenAny trong lập trình song song?",
+    "GroundTruthAnswer": "Task.WhenAll chờ tất cả các Task trong danh sách hoàn thành và gom kết quả/ngoại lệ. Task.WhenAny chờ Task đầu tiên hoàn thành và trả về chính Task đó ngay lập tức.",
+    "ExpectedKeywords": ["Task.WhenAll", "Task.WhenAny", "hoàn thành", "tất cả", "đầu tiên"],
+    "SubjectCode": "PRN222"
+  },
+  {
+    "Id": 15,
+    "Module": "Module 2: Asynchronous Programming & Concurrency",
+    "Topic": "ConfigureAwait(false)",
+    "QuestionText": "Tại sao nên gọi ConfigureAwait(false) trong mã thư viện (Library Code)?",
+    "GroundTruthAnswer": "ConfigureAwait(false) thông báo cho await không cần capture và quay trở lại SynchronizationContext ban đầu, giúp tránh nguy cơ Deadlock trong ứng dụng UI/Legacy và cải thiện hiệu năng chuyển đổi luồng.",
+    "ExpectedKeywords": ["ConfigureAwait", "SynchronizationContext", "Deadlock", "luồng", "hiệu năng"],
+    "SubjectCode": "PRN222"
+  },
+  {
+    "Id": 16,
+    "Module": "Module 2: Asynchronous Programming & Concurrency",
+    "Topic": "SemaphoreSlim for Concurrency Control",
+    "QuestionText": "Cách giới hạn số lượng request đồng thời bằng SemaphoreSlim?",
+    "GroundTruthAnswer": "Khai báo SemaphoreSlim với initialCount và maxCount. Khi truy cập tài nguyên, gọi await semaphore.WaitAsync(), sau đó thực thi công việc trong khối try/finally và gọi semaphore.Release() trong khối finally.",
+    "ExpectedKeywords": ["SemaphoreSlim", "WaitAsync", "Release", "try/finally", "đồng thời"],
+    "SubjectCode": "PRN222"
+  },
+  {
+    "Id": 17,
+    "Module": "Module 2: Asynchronous Programming & Concurrency",
+    "Topic": "Async Void Danger",
+    "QuestionText": "Tại sao cần tránh viết 'async void' trừ ngoại lệ Event Handlers?",
+    "GroundTruthAnswer": "async void không trả về Task nên caller không thể await hay bắt ngoại lệ bằng try-catch. Ngoại lệ không được xử lý trong async void sẽ làm crash ứng dụng (Unhandled Exception).",
+    "ExpectedKeywords": ["async void", "try-catch", "Task", "Unhandled Exception", "crash"],
+    "SubjectCode": "PRN222"
+  },
+  {
+    "Id": 18,
+    "Module": "Module 2: Asynchronous Programming & Concurrency",
+    "Topic": "IAsyncEnumerable",
+    "QuestionText": "IAsyncEnumerable<T> giải quyết bài toán nào trong xử lý luồng dữ liệu?",
+    "GroundTruthAnswer": "IAsyncEnumerable<T> cho phép stream dữ liệu bất đồng bộ theo từng phần (yield return async) bằng cú pháp await foreach, giúp xử lý dữ liệu lớn mà không phải nạp toàn bộ danh sách vào bộ nhớ.",
+    "ExpectedKeywords": ["IAsyncEnumerable", "stream", "await foreach", "yield return", "bộ nhớ"],
+    "SubjectCode": "PRN222"
+  },
+  {
+    "Id": 19,
+    "Module": "Module 2: Asynchronous Programming & Concurrency",
+    "Topic": "Concurrent Collections",
+    "QuestionText": "Các bộ sưu tập như ConcurrentDictionary hay Channel<T> có vai trò gì trong đa luồng?",
+    "GroundTruthAnswer": "Các Concurrent collection được thiết kế thread-safe sẵn, giúp nhiều luồng đọc/ghi dữ liệu an toàn mà không cần tự quản lý lock thủ công, giảm nguy cơ race condition.",
+    "ExpectedKeywords": ["ConcurrentDictionary", "Channel", "thread-safe", "lock", "race condition"],
+    "SubjectCode": "PRN222"
+  },
+  {
+    "Id": 20,
+    "Module": "Module 2: Asynchronous Programming & Concurrency",
+    "Topic": "TaskCompletionSource",
+    "QuestionText": "TaskCompletionSource<T> được sử dụng trong tình huống nào?",
+    "GroundTruthAnswer": "TaskCompletionSource<T> dùng để chuyển đổi một thao tác dựa trên event callback hoặc mã bất đồng bộ cũ không có Task thành một Task chuẩn có thể await được.",
+    "ExpectedKeywords": ["TaskCompletionSource", "callback", "event", "await", "Task"],
+    "SubjectCode": "PRN222"
+  },
+
+  {
+    "Id": 21,
+    "Module": "Module 3: ASP.NET Core MVC & Architecture",
+    "Topic": "Middleware Pipeline",
+    "QuestionText": "Middleware Pipeline trong ASP.NET Core hoạt động theo cơ chế nào?",
+    "GroundTruthAnswer": "Middleware Pipeline hoạt động theo mô hình chuỗi xử lý (Chain of Responsibility) hai chiều. Mỗi middleware nhận HttpContext, thực thi tiền xử lý, gọi next() để chuyển giao cho middleware tiếp theo và thực thi hậu xử lý khi response quay lại.",
+    "ExpectedKeywords": ["Middleware", "Pipeline", "HttpContext", "next", "Chain of Responsibility"],
+    "SubjectCode": "PRN222"
+  },
+  {
+    "Id": 22,
+    "Module": "Module 3: ASP.NET Core MVC & Architecture",
+    "Topic": "Dependency Injection Lifetimes",
+    "QuestionText": "Phân biệt 3 vòng đời Dependency Injection: Transient, Scoped và Singleton?",
+    "GroundTruthAnswer": "Transient tạo mới instance mỗi lần được resolve; Scoped tạo mới instance cho mỗi HTTP Request; Singleton tạo 1 instance duy nhất cho toàn bộ vòng đời ứng dụng.",
+    "ExpectedKeywords": ["Transient", "Scoped", "Singleton", "HTTP Request", "instance"],
+    "SubjectCode": "PRN222"
+  },
+  {
+    "Id": 23,
+    "Module": "Module 3: ASP.NET Core MVC & Architecture",
+    "Topic": "ASP.NET Core Identity & Roles",
+    "QuestionText": "Hệ thống ASP.NET Core Identity quản lý Authentication và Role-Based Access Control (RBAC) như thế nào?",
+    "GroundTruthAnswer": "Identity sử dụng Cookie Authentication để duy trì phiên làm việc. Người dùng được gán Roles (Admin, SubjectLeader, Student) và Claims, được bảo vệ qua các Policy ủy quyền ([Authorize(Policy = \"...\")]).",
+    "ExpectedKeywords": ["Identity", "Authentication", "RBAC", "Roles", "Policy"],
+    "SubjectCode": "PRN222"
+  },
+  {
+    "Id": 24,
+    "Module": "Module 3: ASP.NET Core MVC & Architecture",
+    "Topic": "Model Binding & Validation",
+    "QuestionText": "Model Binding trong ASP.NET Core thu thập dữ liệu từ những nguồn nào?",
+    "GroundTruthAnswer": "Model Binding tự động map dữ liệu từ Form Fields ([FromForm]), Route Values ([FromRoute]), Query String ([FromQuery]), Request Body ([FromBody]) và Headers ([FromHeader]).",
+    "ExpectedKeywords": ["Model Binding", "FromForm", "FromRoute", "FromQuery", "FromBody"],
+    "SubjectCode": "PRN222"
+  },
+  {
+    "Id": 25,
+    "Module": "Module 3: ASP.NET Core MVC & Architecture",
+    "Topic": "Action Filters",
+    "QuestionText": "Vòng đời của Action Filter trong ASP.NET Core gồm các giai đoạn nào?",
+    "GroundTruthAnswer": "Action Filter triển khai IActionFilter hoặc IAsyncActionFilter, bao gồm giai đoạn OnActionExecuting (chạy trước khi Controller Action thi hành) và OnActionExecuted (chạy sau khi Action thi hành xong).",
+    "ExpectedKeywords": ["Action Filter", "OnActionExecuting", "OnActionExecuted", "Controller Action", "IAsyncActionFilter"],
+    "SubjectCode": "PRN222"
+  },
+  {
+    "Id": 26,
+    "Module": "Module 3: ASP.NET Core MVC & Architecture",
+    "Topic": "Razor Pages vs MVC",
+    "QuestionText": "Sự khác biệt về cấu trúc giữa ASP.NET Core MVC Controllers và Razor Pages là gì?",
+    "GroundTruthAnswer": "MVC tách biệt Controller, ViewModel và View riêng. Razor Pages gắn liền file .cshtml với PageModel (.cshtml.cs), tập trung kiến trúc xung quanh trang và các HTTP Handler (OnGet, OnPost).",
+    "ExpectedKeywords": ["MVC", "Razor Pages", "PageModel", "Controller", "OnGet/OnPost"],
+    "SubjectCode": "PRN222"
+  },
+  {
+    "Id": 27,
+    "Module": "Module 3: ASP.NET Core MVC & Architecture",
+    "Topic": "Custom Authorization Policy",
+    "QuestionText": "Cách tạo một Custom Authorization Requirement và RequirementHandler trong ASP.NET Core?",
+    "GroundTruthAnswer": "Tạo class kế thừa IAuthorizationRequirement, sau đó viết AuthorizationHandler<TRequirement> triển khai HandleRequirementAsync để kiểm tra các điều kiện ủy quyền phức tạp (ví dụ: ISubjectAccessService).",
+    "ExpectedKeywords": ["IAuthorizationRequirement", "AuthorizationHandler", "HandleRequirementAsync", "Policy", "Ủy quyền"],
+    "SubjectCode": "PRN222"
+  },
+  {
+    "Id": 28,
+    "Module": "Module 3: ASP.NET Core MVC & Architecture",
+    "Topic": "ViewComponents",
+    "QuestionText": "ViewComponent trong ASP.NET Core khác gì so với Partial View?",
+    "GroundTruthAnswer": "ViewComponent là một thành phần giao diện độc lập có logic C# riêng (InvokeAsync) và không phụ thuộc vào Controller, trong khi Partial View chỉ đơn thuần là file Razor render lại model được truyền sang.",
+    "ExpectedKeywords": ["ViewComponent", "Partial View", "InvokeAsync", "độc lập", "logic"],
+    "SubjectCode": "PRN222"
+  },
+  {
+    "Id": 29,
+    "Module": "Module 3: ASP.NET Core MVC & Architecture",
+    "Topic": "SignalR Real-time",
+    "QuestionText": "SignalR hỗ trợ các Transport Protocol nào để truyền dữ liệu thời gian thực?",
+    "GroundTruthAnswer": "SignalR tự động thương lượng transport protocol theo thứ tự ưu tiên: WebSockets (tốt nhất), Server-Sent Events (SSE) và Long Polling.",
+    "ExpectedKeywords": ["SignalR", "WebSockets", "Server-Sent Events", "Long Polling", "thời gian thực"],
+    "SubjectCode": "PRN222"
+  },
+  {
+    "Id": 30,
+    "Module": "Module 3: ASP.NET Core MVC & Architecture",
+    "Topic": "Exception Handling Middleware",
+    "QuestionText": "Cách xử lý ngoại lệ tập trung trong ứng dụng ASP.NET Core?",
+    "GroundTruthAnswer": "Sử dụng UseExceptionHandler() middleware hoặc custom middleware bắt ngoại lệ ở tầng trên cùng của Pipeline để log lỗi và trả về phản hồi chuẩn (Error View hoặc ProblemDetails JSON).",
+    "ExpectedKeywords": ["UseExceptionHandler", "Middleware", "ngoại lệ", "ProblemDetails", "log lỗi"],
+    "SubjectCode": "PRN222"
+  },
+
+  {
+    "Id": 31,
+    "Module": "Module 4: EF Core & Database Architecture",
+    "Topic": "DbContext & Change Tracker",
+    "QuestionText": "Change Tracker trong EF Core theo dõi trạng thái các Entity qua những Enum nào?",
+    "GroundTruthAnswer": "Change Tracker theo dõi qua EntityState: Detached, Unchanged, Added, Modified và Deleted. Gọi SaveChangesAsync() sẽ phát sinh các câu lệnh SQL tương ứng.",
+    "ExpectedKeywords": ["DbContext", "Change Tracker", "EntityState", "Added", "Modified"],
+    "SubjectCode": "PRN222"
+  },
+  {
+    "Id": 32,
+    "Module": "Module 4: EF Core & Database Architecture",
+    "Topic": "AsNoTracking Optimization",
+    "QuestionText": "Tại sao nên dùng .AsNoTracking() cho các truy vấn đọc dữ liệu (Read-Only queries)?",
+    "GroundTruthAnswer": "AsNoTracking() bỏ qua việc đăng ký Entity vào Change Tracker của DbContext, giúp giảm bộ nhớ cấp phát và tăng tốc độ thực thi truy vấn đọc dữ liệu đáng kể.",
+    "ExpectedKeywords": ["AsNoTracking", "Read-Only", "Change Tracker", "bộ nhớ", "hiệu năng"],
+    "SubjectCode": "PRN222"
+  },
+  {
+    "Id": 33,
+    "Module": "Module 4: EF Core & Database Architecture",
+    "Topic": "N+1 Query Problem & Eager Loading",
+    "QuestionText": "Vấn đề N+1 Query là gì và cách khắc phục bằng Include / ThenInclude?",
+    "GroundTruthAnswer": "Vấn đề N+1 xảy ra khi truy vấn nạp danh sách cha sau đó lặp qua từng phần tử để truy vấn bảng con. Khắc phục bằng Eager Loading qua .Include() và .ThenInclude() để EF Core JOIN bảng trong 1 câu SQL duy nhất.",
+    "ExpectedKeywords": ["N+1 Query", "Eager Loading", "Include", "ThenInclude", "JOIN"],
+    "SubjectCode": "PRN222"
+  },
+  {
+    "Id": 34,
+    "Module": "Module 4: EF Core & Database Architecture",
+    "Topic": "PostgreSQL & pgvector Extension",
+    "QuestionText": "Extension pgvector trong PostgreSQL cho phép lưu trữ và tìm kiếm dữ liệu gì?",
+    "GroundTruthAnswer": "pgvector cho phép lưu trữ kiểu dữ liệu vector (mảng số thực đại diện cho Embeddings) và hỗ trợ tìm kiếm độ tương đồng vector (Cosine Distance / Vector Similarity) bằng toán tử <=> hoặc <->.",
+    "ExpectedKeywords": ["pgvector", "PostgreSQL", "vector", "Embeddings", "Cosine Distance"],
+    "SubjectCode": "PRN222"
+  },
+  {
+    "Id": 35,
+    "Module": "Module 4: EF Core & Database Architecture",
+    "Topic": "EF Core Mapping Configurations",
+    "QuestionText": "Quy tắc thiết kế Entity Configuration trong ứng dụng Clean Architecture?",
+    "GroundTruthAnswer": "Không khai báo Navigation properties trực tiếp nếu muốn giữ domain thin, tách biệt mapping vào từng class riêng triển khai IEntityTypeConfiguration<TEntity> và giữ ApplicationDbContext gọn gàng.",
+    "ExpectedKeywords": ["IEntityTypeConfiguration", "ApplicationDbContext", "Clean Architecture", "mapping", "thin"],
+    "SubjectCode": "PRN222"
+  },
+  {
+    "Id": 36,
+    "Module": "Module 4: EF Core & Database Architecture",
+    "Topic": "EF Migrations Pipeline",
+    "QuestionText": "Quy trình tạo và áp dụng EF Core Migrations chuẩn?",
+    "GroundTruthAnswer": "Chạy 'dotnet ef migrations add <Name>' để tạo mã migration trong C#, sau đó dùng Database.MigrateAsync() hoặc 'dotnet ef database update' để cập nhật schema cơ sở dữ liệu thật.",
+    "ExpectedKeywords": ["EF Migrations", "dotnet ef migrations add", "Database.MigrateAsync", "schema"],
+    "SubjectCode": "PRN222"
+  },
+  {
+    "Id": 37,
+    "Module": "Module 4: EF Core & Database Architecture",
+    "Topic": "Shadow Properties & Global Query Filters",
+    "QuestionText": "Global Query Filter trong EF Core thường được ứng dụng vào mục đích gì?",
+    "GroundTruthAnswer": "Global Query Filter tự động bổ sung điều kiện WHERE vào mọi truy vấn của Entity, thường được dùng để triển khai tính năng Xóa mềm (Soft Delete - IsDeleted) hoặc cô lập dữ liệu Multi-Tenancy.",
+    "ExpectedKeywords": ["Global Query Filter", "Soft Delete", "IsDeleted", "Multi-Tenancy", "WHERE"],
+    "SubjectCode": "PRN222"
+  },
+  {
+    "Id": 38,
+    "Module": "Module 4: EF Core & Database Architecture",
+    "Topic": "Raw SQL & FromSqlInterpolated",
+    "QuestionText": "Cách thực thi truy vấn SQL thuần an toàn chống SQL Injection trong EF Core?",
+    "GroundTruthAnswer": "Sử dụng FromSqlInterpolated$\"...\" hoặc FromSqlRaw với tham số SqlParameter. EF Core sẽ tự động chuyển đổi string interpolation thành parameterized SQL query chống SQL Injection.",
+    "ExpectedKeywords": ["FromSqlInterpolated", "FromSqlRaw", "SQL Injection", "parameterized", "SQL thuần"],
+    "SubjectCode": "PRN222"
+  },
+  {
+    "Id": 39,
+    "Module": "Module 4: EF Core & Database Architecture",
+    "Topic": "Transactions & Execution Strategy",
+    "QuestionText": "Cách quản lý Transaction và Retry Policy khi kết nối cơ sở dữ liệu bị chập chờn?",
+    "GroundTruthAnswer": "Sử dụng dbContext.Database.CreateExecutionStrategy() kết hợp ExecuteAsync() cùng BeginTransactionAsync() để EF Core tự động retry transaction khi gặp lỗi tạm thời (Transient Error).",
+    "ExpectedKeywords": ["Transaction", "CreateExecutionStrategy", "ExecuteAsync", "Retry", "Transient Error"],
+    "SubjectCode": "PRN222"
+  },
+  {
+    "Id": 40,
+    "Module": "Module 4: EF Core & Database Architecture",
+    "Topic": "Vector Indexing (HNSW / IVFFlat)",
+    "QuestionText": "Chỉ mục Vector (Vector Indexing) như HNSW có tác dụng gì trong pgvector?",
+    "GroundTruthAnswer": "HNSW (Hierarchical Navigable Small World) xây dựng đồ thị tìm kiếm vector láng giềng gần nhất, giúp tăng tốc độ truy vấn độ tương đồng vector lên hàng trăm lần so với tìm kiếm vét cạn (exact scan).",
+    "ExpectedKeywords": ["HNSW", "pgvector", "Index", "láng giềng", "tương đồng"],
+    "SubjectCode": "PRN222"
+  },
+
+  {
+    "Id": 41,
+    "Module": "Module 5: RAG & AI Architecture",
+    "Topic": "RAG Architecture Flow",
+    "QuestionText": "Quy trình RAG (Retrieval-Augmented Generation) diễn ra theo các bước cơ bản nào?",
+    "GroundTruthAnswer": "1. Tạo embedding cho câu hỏi của người dùng. 2. Truy vấn vector trong pgvector để tìm các đoạn văn bản (DocumentChunks) tương đồng nhất. 3. Đưa văn bản retrieved làm ngữ cảnh vào Grounded Prompt. 4. Gọi LLM để sinh câu trả lời có trích dẫn.",
+    "ExpectedKeywords": ["RAG", "embedding", "pgvector", "DocumentChunks", "Grounded Prompt", "LLM"],
+    "SubjectCode": "PRN222"
+  },
+  {
+    "Id": 42,
+    "Module": "Module 5: RAG & AI Architecture",
+    "Topic": "Text Chunking & Bounded Overlap",
+    "QuestionText": "Tại sao cần cắt nhỏ tài liệu (Chunking) và tại sao lại cần độ gối (Bounded Overlap)?",
+    "GroundTruthAnswer": "Cắt nhỏ tài liệu giúp kích thước ngữ cảnh phù hợp với Embedding Model và Context Window của LLM. Bounded Overlap giữ cho các đoạn thông tin nằm ở ranh giới giữa 2 chunk không bị đứt đoạn ý nghĩa.",
+    "ExpectedKeywords": ["Chunking", "Bounded Overlap", "Context Window", "ranh giới", "Embedding"],
+    "SubjectCode": "PRN222"
+  },
+  {
+    "Id": 43,
+    "Module": "Module 5: RAG & AI Architecture",
+    "Topic": "Embedding Model Dimension Invariant",
+    "QuestionText": "Bắt buộc quy tắc gì khi thay đổi Embedding Provider hoặc Model trong RAG?",
+    "GroundTruthAnswer": "Không được trộn lẫn Embedding từ các Model/Provider khác nhau trong cùng một Corpus. Khi thay đổi Model hoặc chiều Vector (Embedding Dimensions), bắt buộc phải Re-index lại toàn bộ tài liệu.",
+    "ExpectedKeywords": ["Embedding", "Re-index", "Dimensions", "Corpus", "Model"],
+    "SubjectCode": "PRN222"
+  },
+  {
+    "Id": 44,
+    "Module": "Module 5: RAG & AI Architecture",
+    "Topic": "No-Evidence Fallback",
+    "QuestionText": "Hệ thống RAG xử lý như thế nào khi tìm kiếm vector không thấy đoạn văn bản nào vượt qua ngưỡng tương đồng?",
+    "GroundTruthAnswer": "Hệ thống trả về thông báo NoEvidenceMessage ('Tôi chỉ có thể trả lời dựa trên tài liệu đã được index...'), không gọi LLM hoặc trả về câu trả lời không kèm theo trích dẫn giả mạo.",
+    "ExpectedKeywords": ["NoEvidenceMessage", "ngưỡng tương đồng", "không trích dẫn", "fallback", "index"],
+    "SubjectCode": "PRN222"
+  },
+  {
+    "Id": 45,
+    "Module": "Module 5: RAG & AI Architecture",
+    "Topic": "Citation Marker Parsing",
+    "QuestionText": "Cách hệ thống RAG trích xuất và hiển thị các trích dẫn (Citations) chính xác từ câu trả lời LLM?",
+    "GroundTruthAnswer": "LLM được yêu cầu chèn marker dạng [Doc X, Page Y] vào câu trả lời. Hệ thống parse các marker này, khớp với danh sách chunk đã retrieve và lưu vào bảng MessageCitations để hiển thị cho người dùng.",
+    "ExpectedKeywords": ["Citations", "marker", "Parse", "MessageCitations", "trích dẫn"],
+    "SubjectCode": "PRN222"
+  },
+  {
+    "Id": 46,
+    "Module": "Module 5: RAG & AI Architecture",
+    "Topic": "Multi-Subject Scope Boundary",
+    "QuestionText": "Tính năng Multi-Subject đảm bảo tính cô lập dữ liệu RAG như thế nào?",
+    "GroundTruthAnswer": "Mỗi ChatSession gắn với SubjectId. Khi truy vấn RAG, pgvector filter chỉ lấy các DocumentChunk thuộc về Document của đúng SubjectId đó, không để lộ thông tin của môn học khác.",
+    "ExpectedKeywords": ["Multi-Subject", "SubjectId", "ChatSession", "DocumentChunk", "cô lập"],
+    "SubjectCode": "PRN222"
+  },
+  {
+    "Id": 47,
+    "Module": "Module 5: RAG & AI Architecture",
+    "Topic": "Provider Neutrality",
+    "QuestionText": "Kiến trúc Provider-Neutral AI cho phép ứng dụng linh hoạt những AI Provider nào?",
+    "GroundTruthAnswer": "Ứng dụng giao tiếp qua interface ITextEmbeddingService và IChatCompletionService, hỗ trợ chuyển đổi linh hoạt giữa Ollama (Local), Google Gemini (Free Online), OpenRouter và OpenAI.",
+    "ExpectedKeywords": ["Provider-Neutral", "ITextEmbeddingService", "IChatCompletionService", "Ollama", "Gemini", "OpenRouter"],
+    "SubjectCode": "PRN222"
+  },
+  {
+    "Id": 48,
+    "Module": "Module 5: RAG & AI Architecture",
+    "Topic": "PDF Reading Order & Extraction",
+    "QuestionText": "Thách thức khi bóc tách văn bản PDF nhiều cột (Multi-Column Layout) và cách xử lý?",
+    "GroundTruthAnswer": "Các thư viện PDF thông thường dễ làm xáo trộn thứ tự đọc của văn bản 2 cột. Sử dụng PdfPig phân tích vị trí tọa độ chữ giúp duy trì thứ tự đọc chính xác theo dòng và cột.",
+    "ExpectedKeywords": ["PDF", "PdfPig", "Multi-Column", "thứ tự đọc", "bóc tách"],
+    "SubjectCode": "PRN222"
+  },
+  {
+    "Id": 49,
+    "Module": "Module 5: RAG & AI Architecture",
+    "Topic": "Conversation History Context Window",
+    "QuestionText": "Cách quản lý lịch sử trò chuyện (Conversation History) trong RAG để không vượt quá giới hạn Tokens?",
+    "GroundTruthAnswer": "Hệ thống chỉ tải số lượng câu hỏi/câu trả lời gần nhất (configurable MaxHistoryCount), loại bỏ câu hỏi hiện tại khỏi lịch sử nạp vào prompt để tránh lặp lại dữ liệu.",
+    "ExpectedKeywords": ["Conversation History", "MaxHistoryCount", "Tokens", "prompt", "lịch sử"],
+    "SubjectCode": "PRN222"
+  },
+  {
+    "Id": 50,
+    "Module": "Module 5: RAG & AI Architecture",
+    "Topic": "RAG Evaluation Metrics",
+    "QuestionText": "Các chỉ số chính để đánh giá chất lượng hệ thống RAG là gì?",
+    "GroundTruthAnswer": "Đánh giá chất lượng RAG dựa trên: Retrieval Recall (độ phủ tài liệu trích xuất), Groundedness (câu trả lời bám sát ngữ cảnh), Answer Accuracy (độ chính xác theo Ground Truth) và Latency/Execution Time.",
+    "ExpectedKeywords": ["RAG Evaluation", "Retrieval Recall", "Groundedness", "Accuracy", "Ground Truth"],
+    "SubjectCode": "PRN222"
+  }
+]
