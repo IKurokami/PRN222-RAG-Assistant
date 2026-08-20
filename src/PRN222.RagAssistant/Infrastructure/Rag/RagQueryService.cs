@@ -133,6 +133,28 @@ public sealed class RagQueryService : IRagQueryService
             .Take(_options.Retrieval.TopK)
             .ToList();
 
+        // If no chunks match and there is conversation history, try contextual search with recent topic
+        if (topChunks.Count == 0 && history.Count > 0)
+        {
+            var recentUserQuestion = history
+                .Where(h => string.Equals(h.Role, "user", StringComparison.OrdinalIgnoreCase))
+                .Select(h => h.Content)
+                .LastOrDefault();
+
+            if (!string.IsNullOrWhiteSpace(recentUserQuestion) &&
+                !string.Equals(recentUserQuestion.Trim(), question.Trim(), StringComparison.OrdinalIgnoreCase))
+            {
+                var contextualQuery = $"{recentUserQuestion} {question}";
+                var contextualEmbedding = await _embeddingService.EmbedAsync(contextualQuery, cancellationToken);
+                var contextualChunks = await _retriever.SearchAsync(contextualEmbedding, subjectId, cancellationToken);
+
+                topChunks = contextualChunks
+                    .Where(c => c.SimilarityScore >= _options.Retrieval.MinimumSimilarityScore)
+                    .Take(_options.Retrieval.TopK)
+                    .ToList();
+            }
+        }
+
         cancellationToken.ThrowIfCancellationRequested();
 
         if (topChunks.Count == 0)

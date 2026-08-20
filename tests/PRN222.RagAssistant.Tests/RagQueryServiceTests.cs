@@ -239,6 +239,100 @@ public sealed class RagQueryServiceTests
     }
 
     [Fact]
+    public async Task AskAsync_ExpandsContextualQuery_WhenStandaloneQueryYieldsNoChunks()
+    {
+        // Arrange
+        var dbContext = CreateInMemoryDbContext();
+        var mockEmbeddingService = new Mock<ITextEmbeddingService>();
+        var mockChatService = new Mock<IChatCompletionService>();
+        var mockRetriever = new Mock<IDocumentChunkRetriever>();
+        var options = Options.Create(new RagOptions
+        {
+            Retrieval = new RagOptions.RetrievalOptions
+            {
+                TopK = 5,
+                MinimumSimilarityScore = 0.3,
+                HistoryTurns = 5,
+                ExcerptChars = 200,
+                IncludeConversationHistory = true
+            },
+            Chat = new RagOptions.ChatOptions
+            {
+                NoEvidenceMessage = "Không tìm thấy thông tin liên quan."
+            }
+        });
+
+        var standaloneVector = new float[] { 0.1f };
+        var contextualVector = new float[] { 0.9f };
+
+        mockEmbeddingService
+            .Setup(x => x.EmbedAsync("Who is the author?", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(standaloneVector);
+
+        mockEmbeddingService
+            .Setup(x => x.EmbedAsync("What is C# in a Nutshell? Who is the author?", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(contextualVector);
+
+        // Standalone search returns no chunks
+        mockRetriever
+            .Setup(x => x.SearchAsync(standaloneVector, It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<RetrievedChunk>());
+
+        // Contextual search returns matching chunk
+        var matchingChunk = new RetrievedChunk(
+            Guid.NewGuid(), Guid.NewGuid(), "C# in a Nutshell", "Author is Joseph Albahari.", 1, null, 0.85);
+
+        mockRetriever
+            .Setup(x => x.SearchAsync(contextualVector, It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] { matchingChunk });
+
+        mockChatService
+            .Setup(x => x.CompleteAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("The author is Joseph Albahari [1].");
+
+        var service = new RagQueryService(
+            dbContext,
+            mockEmbeddingService.Object,
+            mockChatService.Object,
+            mockRetriever.Object,
+            new GroundedPromptBuilder(options),
+            options,
+            NullLogger<RagQueryService>.Instance,
+            TimeProvider.System);
+
+        var userId = Guid.NewGuid();
+        var sessionId = Guid.NewGuid();
+        await SetupSessionAsync(dbContext, userId, sessionId);
+
+        // Prior conversation turn
+        dbContext.ChatMessages.Add(new ChatMessage
+        {
+            Id = Guid.CreateVersion7(),
+            ChatSessionId = sessionId,
+            Role = ChatMessageRole.User,
+            Content = "What is C# in a Nutshell?",
+            CreatedAtUtc = DateTime.UtcNow.AddMinutes(-2)
+        });
+        dbContext.ChatMessages.Add(new ChatMessage
+        {
+            Id = Guid.CreateVersion7(),
+            ChatSessionId = sessionId,
+            Role = ChatMessageRole.Assistant,
+            Content = "It is a C# reference book [1].",
+            CreatedAtUtc = DateTime.UtcNow.AddMinutes(-1)
+        });
+        await dbContext.SaveChangesAsync();
+
+        // Act - Follow-up query that on its own has 0 matches
+        var result = await service.AskAsync(userId, sessionId, "Who is the author?");
+
+        // Assert - Successfully retrieved via contextual expansion
+        Assert.Equal("The author is Joseph Albahari [1].", result.Answer);
+        Assert.Single(result.Citations);
+        Assert.Equal("C# in a Nutshell", result.Citations[0].DocumentTitle);
+    }
+
+    [Fact]
     public async Task AskAsync_DoesNotIncludeCurrentQuestion_InHistory()
     {
         // Arrange

@@ -17,7 +17,7 @@ public sealed class RagOptions
         public int MaxContextChars { get; set; } = 4000;
         public bool IncludeConversationHistory { get; set; } = true;
         public int HistoryTurns { get; set; } = 5;
-        public int ExcerptChars { get; set; } = 240;
+        public int ExcerptChars { get; set; } = 4000;
     }
 
     public sealed class ChatOptions
