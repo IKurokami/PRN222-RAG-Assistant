@@ -192,13 +192,15 @@ public sealed class ChatController : Controller
             return Challenge();
         }
 
+        var nowUtc = DateTime.UtcNow;
         var session = new ChatSession
         {
-            Id = Guid.NewGuid(),
+            Id = Guid.CreateVersion7(),
             UserId = user.Id,
             SubjectId = subjectId,
-            Title = "Cuộc trò chuyện mới",
-            CreatedAtUtc = DateTime.UtcNow
+            Title = string.Empty,
+            CreatedAtUtc = nowUtc,
+            UpdatedAtUtc = nowUtc
         };
 
         _dbContext.ChatSessions.Add(session);

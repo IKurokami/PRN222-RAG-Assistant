@@ -34,15 +34,22 @@ public sealed class EvaluationService : IEvaluationService
         var question = _questions.FirstOrDefault(q => q.Id == questionId)
             ?? throw new ArgumentException($"Evaluation question with ID '{questionId}' not found.", nameof(questionId));
 
-        var sessionId = await _ragService.GetOrCreateUserSessionAsync(userId, subjectId, cancellationToken);
+        if (!subjectId.HasValue)
+        {
+            throw new ArgumentException("Evaluation requires a concrete subject scope.", nameof(subjectId));
+        }
 
+        // Evaluation must be isolated from normal chat sessions. Do not load conversation
+        // history and do not persist benchmark questions/answers into the user's chat history.
         var stopwatch = Stopwatch.StartNew();
-        var answer = await _ragService.AskAsync(userId, sessionId, question.QuestionText, subjectId, cancellationToken);
+        var answer = await _ragService.AskStatelessAsync(
+            question.QuestionText,
+            subjectId.Value,
+            cancellationToken);
         stopwatch.Stop();
 
         var matchedKeywords = new List<string>();
         var missingKeywords = new List<string>();
-
         var systemAnswerText = answer.Answer ?? string.Empty;
 
         foreach (var keyword in question.ExpectedKeywords)

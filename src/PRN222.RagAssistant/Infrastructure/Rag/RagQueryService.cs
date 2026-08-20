@@ -9,7 +9,6 @@ using PRN222.RagAssistant.Infrastructure.Rag.Exceptions;
 
 namespace PRN222.RagAssistant.Infrastructure.Rag;
 
-
 public sealed class RagQueryService : IRagQueryService
 {
     private readonly ApplicationDbContext _dbContext;
@@ -48,17 +47,14 @@ public sealed class RagQueryService : IRagQueryService
         Guid? subjectId = null,
         CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(question))
-        {
-            throw new ArgumentException("Question cannot be null or whitespace.", nameof(question));
-        }
+        ValidateQuestion(question);
 
         var session = await _dbContext.ChatSessions
             .AsNoTracking()
             .FirstOrDefaultAsync(s => s.Id == chatSessionId && s.UserId == userId, cancellationToken)
             ?? throw new ChatSessionNotFoundException(chatSessionId, userId);
 
-        // Enforce subject scope: if session has a bound SubjectId, reject conflicting subjectId
+        // Enforce subject scope: if session has a bound SubjectId, reject conflicting subjectId.
         if (session.SubjectId.HasValue && subjectId.HasValue && session.SubjectId.Value != subjectId.Value)
         {
             throw new ArgumentException(
@@ -68,12 +64,69 @@ public sealed class RagQueryService : IRagQueryService
 
         var effectiveSubjectId = session.SubjectId ?? subjectId;
 
-
-        // Load history BEFORE persisting current message to avoid duplicating question
+        // Load history BEFORE persisting current message to avoid duplicating the question.
         var history = await LoadRecentHistoryAsync(session.Id, cancellationToken);
+        var queryResult = await GenerateAnswerAsync(
+            question,
+            effectiveSubjectId,
+            history,
+            cancellationToken);
 
+        // Persist messages AFTER processing to avoid including current question in history.
+        var userMessage = await PersistUserMessageAsync(session.Id, question, cancellationToken);
+        var assistantMessage = await PersistAssistantMessageAsync(
+            session.Id,
+            queryResult.Answer,
+            queryResult.Citations,
+            cancellationToken);
+
+        await EnsureSessionTitleAsync(session, question, cancellationToken);
+
+        _logger.LogInformation(
+            "RAG query completed. SessionId={SessionId}, UserId={UserId}, ChunksFound={ChunkCount}, Citations={CitationCount}",
+            session.Id,
+            userId,
+            queryResult.ChunkCount,
+            queryResult.Citations.Count);
+
+        return new RagAnswer(
+            session.Id,
+            userMessage.Id,
+            assistantMessage.Id,
+            queryResult.Answer,
+            queryResult.Citations);
+    }
+
+    public async Task<RagQueryResult> AskStatelessAsync(
+        string question,
+        Guid subjectId,
+        CancellationToken cancellationToken = default)
+    {
+        ValidateQuestion(question);
+
+        var queryResult = await GenerateAnswerAsync(
+            question,
+            subjectId,
+            Array.Empty<ChatHistoryEntry>(),
+            cancellationToken);
+
+        _logger.LogInformation(
+            "Stateless RAG query completed. SubjectId={SubjectId}, ChunksFound={ChunkCount}, Citations={CitationCount}",
+            subjectId,
+            queryResult.ChunkCount,
+            queryResult.Citations.Count);
+
+        return new RagQueryResult(queryResult.Answer, queryResult.Citations);
+    }
+
+    private async Task<(string Answer, IReadOnlyList<RagCitation> Citations, int ChunkCount)> GenerateAnswerAsync(
+        string question,
+        Guid? subjectId,
+        IReadOnlyList<ChatHistoryEntry> history,
+        CancellationToken cancellationToken)
+    {
         var questionEmbedding = await _embeddingService.EmbedAsync(question, cancellationToken);
-        var allChunks = await _retriever.SearchAsync(questionEmbedding, effectiveSubjectId, cancellationToken);
+        var allChunks = await _retriever.SearchAsync(questionEmbedding, subjectId, cancellationToken);
 
         var topChunks = allChunks
             .Where(c => c.SimilarityScore >= _options.Retrieval.MinimumSimilarityScore)
@@ -82,37 +135,27 @@ public sealed class RagQueryService : IRagQueryService
 
         cancellationToken.ThrowIfCancellationRequested();
 
-        string answer;
-        IReadOnlyList<RagCitation> citations;
-
         if (topChunks.Count == 0)
         {
-            answer = _options.Chat.NoEvidenceMessage;
-            citations = Array.Empty<RagCitation>();
+            return (
+                _options.Chat.NoEvidenceMessage,
+                Array.Empty<RagCitation>(),
+                0);
         }
-        else
+
+        var (systemPrompt, userPrompt) = _promptBuilder.Build(question, topChunks, history);
+        var answer = await _chatService.CompleteAsync(systemPrompt, userPrompt, cancellationToken);
+        var citations = ParseCitationsFromAnswer(answer, topChunks);
+
+        return (answer, citations, topChunks.Count);
+    }
+
+    private static void ValidateQuestion(string question)
+    {
+        if (string.IsNullOrWhiteSpace(question))
         {
-            var (systemPrompt, userPrompt) = _promptBuilder.Build(question, topChunks, history);
-            answer = await _chatService.CompleteAsync(systemPrompt, userPrompt, cancellationToken);
-            citations = ParseCitationsFromAnswer(answer, topChunks);
+            throw new ArgumentException("Question cannot be null or whitespace.", nameof(question));
         }
-
-        // Persist messages AFTER processing to avoid including current question in history
-        var userMessage = await PersistUserMessageAsync(session.Id, question, cancellationToken);
-        var assistantMessage = await PersistAssistantMessageAsync(session.Id, answer, citations, cancellationToken);
-
-        await EnsureSessionTitleAsync(session, question, cancellationToken);
-
-        _logger.LogInformation(
-            "RAG query completed. SessionId={SessionId}, UserId={UserId}, ChunksFound={ChunkCount}, Citations={CitationCount}",
-            session.Id, userId, topChunks.Count, citations.Count);
-
-        return new RagAnswer(
-            session.Id,
-            userMessage.Id,
-            assistantMessage.Id,
-            answer,
-            citations);
     }
 
     private async Task<ChatMessage> PersistUserMessageAsync(
@@ -210,7 +253,7 @@ public sealed class RagQueryService : IRagQueryService
         if (string.IsNullOrEmpty(answer) || chunks.Count == 0)
             return Array.Empty<RagCitation>();
 
-        // Parse citation markers [n] from the answer
+        // Parse citation markers [n] from the answer.
         var citationPattern = new System.Text.RegularExpressions.Regex(@"\[(\d+)\]");
         var matches = citationPattern.Matches(answer);
 
@@ -229,13 +272,13 @@ public sealed class RagQueryService : IRagQueryService
         if (usedIndices.Count == 0)
             return Array.Empty<RagCitation>();
 
-        // Sort indices to maintain original ranking
+        // Sort indices to maintain original ranking.
         var sortedIndices = usedIndices.OrderBy(i => i).ToList();
         var citations = new List<RagCitation>();
 
         for (int rank = 0; rank < sortedIndices.Count; rank++)
         {
-            var index = sortedIndices[rank] - 1; // Convert to 0-based
+            var index = sortedIndices[rank] - 1; // Convert to 0-based.
             var chunk = chunks[index];
             citations.Add(new RagCitation(
                 chunk.DocumentId,
@@ -279,7 +322,9 @@ public sealed class RagQueryService : IRagQueryService
         }
 
         var session = await _dbContext.ChatSessions
-            .FirstOrDefaultAsync(s => s.UserId == userId && (targetSubjectId == null || s.SubjectId == targetSubjectId), cancellationToken);
+            .Where(s => s.UserId == userId && (targetSubjectId == null || s.SubjectId == targetSubjectId))
+            .OrderByDescending(s => s.CreatedAtUtc)
+            .FirstOrDefaultAsync(cancellationToken);
 
         if (session is null)
         {
@@ -305,4 +350,3 @@ public sealed class RagQueryService : IRagQueryService
         return session.Id;
     }
 }
-

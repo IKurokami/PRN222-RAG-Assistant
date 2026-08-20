@@ -33,23 +33,19 @@ public sealed class EvaluationServiceTests
     }
 
     [Fact]
-    public async Task EvaluateQuestionAsync_CalculatesKeywordAccuracy()
+    public async Task EvaluateQuestionAsync_CalculatesKeywordAccuracy_WithoutPersistingChatHistory()
     {
         // Arrange
         var mockRagService = new Mock<IRagQueryService>();
         var userId = Guid.NewGuid();
-        var sessionId = Guid.NewGuid();
+        var subjectId = Guid.NewGuid();
 
         mockRagService
-            .Setup(s => s.GetOrCreateUserSessionAsync(userId, It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(sessionId);
-
-        mockRagService
-            .Setup(s => s.AskAsync(userId, sessionId, It.IsAny<string>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new RagAnswer(
-                sessionId,
-                Guid.NewGuid(),
-                Guid.NewGuid(),
+            .Setup(s => s.AskStatelessAsync(
+                It.IsAny<string>(),
+                subjectId,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new RagQueryResult(
                 "MulticastDelegate kết hợp các phương thức bằng toán tử += và gọi tuần tự qua _invocationList trong C#.",
                 new List<RagCitation>
                 {
@@ -59,7 +55,7 @@ public sealed class EvaluationServiceTests
         var service = new EvaluationService(mockRagService.Object, NullLogger<EvaluationService>.Instance);
 
         // Act
-        var result = await service.EvaluateQuestionAsync(userId, 1);
+        var result = await service.EvaluateQuestionAsync(userId, 1, subjectId);
 
         // Assert
         Assert.NotNull(result);
@@ -67,5 +63,37 @@ public sealed class EvaluationServiceTests
         Assert.True(result.KeywordAccuracyPercent > 0);
         Assert.True(result.HasCitations);
         Assert.Equal(1, result.CitationsCount);
+
+        mockRagService.Verify(
+            s => s.AskStatelessAsync(It.IsAny<string>(), subjectId, It.IsAny<CancellationToken>()),
+            Times.Once);
+        mockRagService.Verify(
+            s => s.GetOrCreateUserSessionAsync(It.IsAny<Guid>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+        mockRagService.Verify(
+            s => s.AskAsync(
+                It.IsAny<Guid>(),
+                It.IsAny<Guid>(),
+                It.IsAny<string>(),
+                It.IsAny<Guid?>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task EvaluateQuestionAsync_RejectsMissingSubjectScope()
+    {
+        var mockRagService = new Mock<IRagQueryService>();
+        var service = new EvaluationService(mockRagService.Object, NullLogger<EvaluationService>.Instance);
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            service.EvaluateQuestionAsync(Guid.NewGuid(), 1, subjectId: null));
+
+        mockRagService.Verify(
+            s => s.AskStatelessAsync(
+                It.IsAny<string>(),
+                It.IsAny<Guid>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
     }
 }

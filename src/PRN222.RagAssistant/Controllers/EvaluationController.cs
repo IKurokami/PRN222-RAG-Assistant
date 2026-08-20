@@ -38,11 +38,18 @@ public sealed class EvaluationController : Controller
             .OrderBy(s => s.Code)
             .ToListAsync(cancellationToken);
 
+        var datasetSubjectCodes = questions
+            .Select(q => q.SubjectCode)
+            .Where(code => !string.IsNullOrWhiteSpace(code))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
         var viewModel = new EvaluationIndexViewModel
         {
             Questions = questions,
             Subjects = subjects,
-            SelectedSubjectId = subjects.FirstOrDefault()?.Id
+            SelectedSubjectId = subjects
+                .FirstOrDefault(s => datasetSubjectCodes.Contains(s.Code))?.Id
+                ?? subjects.FirstOrDefault()?.Id
         };
 
         return View(viewModel);
@@ -60,7 +67,20 @@ public sealed class EvaluationController : Controller
 
         try
         {
-            var result = await _evaluationService.EvaluateQuestionAsync(user.Id, questionId, subjectId, cancellationToken);
+            var question = _evaluationService.GetQuestions().FirstOrDefault(q => q.Id == questionId)
+                ?? throw new ArgumentException($"Evaluation question with ID '{questionId}' not found.", nameof(questionId));
+
+            var effectiveSubjectId = await ResolveEvaluationSubjectIdAsync(
+                question.SubjectCode,
+                subjectId,
+                cancellationToken);
+
+            var result = await _evaluationService.EvaluateQuestionAsync(
+                user.Id,
+                questionId,
+                effectiveSubjectId,
+                cancellationToken);
+
             return Json(new { success = true, result });
         }
         catch (Exception ex)
@@ -82,7 +102,28 @@ public sealed class EvaluationController : Controller
 
         try
         {
-            var report = await _evaluationService.RunFullEvaluationAsync(user.Id, subjectId, cancellationToken);
+            var subjectCodes = _evaluationService.GetQuestions()
+                .Select(q => q.SubjectCode)
+                .Where(code => !string.IsNullOrWhiteSpace(code))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            if (subjectCodes.Count != 1)
+            {
+                throw new InvalidOperationException(
+                    "Full evaluation requires all questions to target exactly one subject code.");
+            }
+
+            var effectiveSubjectId = await ResolveEvaluationSubjectIdAsync(
+                subjectCodes[0],
+                subjectId,
+                cancellationToken);
+
+            var report = await _evaluationService.RunFullEvaluationAsync(
+                user.Id,
+                effectiveSubjectId,
+                cancellationToken);
+
             return Json(new { success = true, report });
         }
         catch (Exception ex)
@@ -90,6 +131,45 @@ public sealed class EvaluationController : Controller
             _logger.LogError(ex, "Full evaluation suite failed");
             return Json(new { success = false, message = ex.Message });
         }
+    }
+
+    private async Task<Guid> ResolveEvaluationSubjectIdAsync(
+        string subjectCode,
+        Guid? requestedSubjectId,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(subjectCode))
+        {
+            throw new InvalidOperationException("Evaluation question does not define a subject code.");
+        }
+
+        var activeSubjects = _dbContext.Subjects
+            .AsNoTracking()
+            .Where(s => s.IsActive);
+
+        if (requestedSubjectId.HasValue)
+        {
+            var requestedSubject = await activeSubjects
+                .FirstOrDefaultAsync(s => s.Id == requestedSubjectId.Value, cancellationToken)
+                ?? throw new InvalidOperationException("The requested evaluation subject is missing or inactive.");
+
+            if (!string.Equals(requestedSubject.Code, subjectCode, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    $"Evaluation dataset targets subject '{subjectCode}', but subject '{requestedSubject.Code}' was requested.");
+            }
+
+            return requestedSubject.Id;
+        }
+
+        var resolvedSubjectId = await activeSubjects
+            .Where(s => s.Code == subjectCode)
+            .Select(s => (Guid?)s.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return resolvedSubjectId
+            ?? throw new InvalidOperationException(
+                $"No active subject with code '{subjectCode}' exists for this evaluation dataset.");
     }
 }
 
