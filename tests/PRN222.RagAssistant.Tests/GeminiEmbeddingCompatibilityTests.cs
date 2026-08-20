@@ -2,9 +2,10 @@ using System.Net;
 using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Conventions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
-using PRN222.RagAssistant.Data;
+using PRN222.RagAssistant.Data.Configurations;
 using PRN222.RagAssistant.Domain.Entities;
 using PRN222.RagAssistant.Infrastructure.Services;
 
@@ -60,12 +61,10 @@ public sealed class GeminiEmbeddingCompatibilityTests
     [Fact]
     public void DocumentChunkEmbeddingColumn_DoesNotHardCodeVectorDimensions()
     {
-        var options = new DbContextOptionsBuilder<ApplicationDbContext>()
-            .UseInMemoryDatabase($"embedding-schema-{Guid.NewGuid()}")
-            .Options;
+        var modelBuilder = new ModelBuilder(new ConventionSet());
+        new DocumentChunkConfiguration().Configure(modelBuilder.Entity<DocumentChunk>());
 
-        using var dbContext = new ApplicationDbContext(options);
-        var entityType = dbContext.Model.FindEntityType(typeof(DocumentChunk));
+        var entityType = modelBuilder.Model.FindEntityType(typeof(DocumentChunk));
         var embeddingProperty = entityType?.FindProperty(nameof(DocumentChunk.Embedding));
 
         Assert.NotNull(embeddingProperty);
