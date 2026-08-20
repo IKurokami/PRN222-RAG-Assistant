@@ -1,3 +1,5 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using PRN222.RagAssistant.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -9,7 +11,12 @@ builder.Configuration["ConnectionStrings:Postgres"] =
 
 // Flow 1 and Flow 2 use MVC Controllers + Views.
 // Razor Pages remain enabled for authentication, shell pages, and Flow 3 reporting.
-builder.Services.AddControllersWithViews();
+builder.Services.AddControllersWithViews()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+        options.JsonSerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
+    });
 builder.Services.AddRazorPages();
 builder.Services.AddInfrastructure(builder.Configuration);
 

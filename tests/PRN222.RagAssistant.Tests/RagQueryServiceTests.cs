@@ -322,7 +322,7 @@ public sealed class RagQueryServiceTests
         var userId = Guid.NewGuid();
         var sessionId = Guid.NewGuid();
 
-        await SetupSessionAsync(dbContext, userId, sessionId);
+        await SetupSessionWithoutSubjectAsync(dbContext, userId, sessionId);
 
         // Act
         var result = await service.AskAsync(userId, sessionId, "What is OOP?", providedSubjectId);
@@ -622,10 +622,31 @@ public sealed class RagQueryServiceTests
 
     private static async Task SetupSessionAsync(ApplicationDbContext dbContext, Guid userId, Guid sessionId)
     {
+        var subjectId = Guid.NewGuid();
+        dbContext.Subjects.Add(new Subject
+        {
+            Id = subjectId,
+            Code = "TEST",
+            Name = "Test Subject",
+            IsActive = true
+        });
         dbContext.ChatSessions.Add(new ChatSession
         {
             Id = sessionId,
             UserId = userId,
+            SubjectId = subjectId,
+            Title = "Existing session" // Pre-set title to skip ExecuteUpdate in EnsureSessionTitleAsync
+        });
+        await dbContext.SaveChangesAsync();
+    }
+
+    private static async Task SetupSessionWithoutSubjectAsync(ApplicationDbContext dbContext, Guid userId, Guid sessionId)
+    {
+        dbContext.ChatSessions.Add(new ChatSession
+        {
+            Id = sessionId,
+            UserId = userId,
+            SubjectId = null,
             Title = "Existing session" // Pre-set title to skip ExecuteUpdate in EnsureSessionTitleAsync
         });
         await dbContext.SaveChangesAsync();

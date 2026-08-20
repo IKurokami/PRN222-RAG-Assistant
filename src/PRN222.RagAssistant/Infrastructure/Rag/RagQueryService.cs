@@ -64,6 +64,12 @@ public sealed class RagQueryService : IRagQueryService
 
         var effectiveSubjectId = session.SubjectId ?? subjectId;
 
+        if (!effectiveSubjectId.HasValue)
+        {
+            throw new InvalidOperationException(
+                "Cannot execute RAG query without a subject context. The chat session has no SubjectId and none was provided.");
+        }
+
         // Load history BEFORE persisting current message to avoid duplicating the question.
         var history = await LoadRecentHistoryAsync(session.Id, cancellationToken);
         var queryResult = await GenerateAnswerAsync(

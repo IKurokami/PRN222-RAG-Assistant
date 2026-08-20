@@ -154,7 +154,15 @@
                                                     {
                                                         <span class="badge bg-secondary-subtle text-dark border px-2 py-1 text-start" title="@cit.ChunkContent">
                                                             <i class="bi bi-file-earmark-pdf me-1 text-danger"></i>
-                                                            <strong>@cit.DocumentTitle</strong> (Trang @cit.PageNumber)
+                                                            <strong>@cit.DocumentTitle</strong>
+                                                            @if (cit.SlideNumber.HasValue)
+                                                            {
+                                                                <span>(Slide @cit.SlideNumber)</span>
+                                                            }
+                                                            else if (cit.PageNumber.HasValue)
+                                                            {
+                                                                <span>(Trang @cit.PageNumber)</span>
+                                                            }
                                                         </span>
                                                     }
                                                 </div>
@@ -263,12 +271,16 @@
                 if (data.success) {
                     let citationsHtml = '';
                     if (data.citations && data.citations.length > 0) {
-                        const badges = data.citations.map(c => `
+                        const badges = data.citations.map(c => {
+                            const location = c.slideNumber
+                                ? `(Slide ${c.slideNumber})`
+                                : (c.pageNumber ? `(Trang ${c.pageNumber})` : '');
+                            return `
                             <span class="badge bg-secondary-subtle text-dark border px-2 py-1 text-start" title="${escapeHtml(c.excerpt)}">
                                 <i class="bi bi-file-earmark-pdf me-1 text-danger"></i>
-                                <strong>${escapeHtml(c.documentTitle)}</strong> (Trang ${c.pageNumber}) - Ref #${c.rank}
-                            </span>
-                        `).join('');
+                                <strong>${escapeHtml(c.documentTitle)}</strong> ${location} - Ref #${c.rank}
+                            </span>`;
+                        }).join('');
                         citationsHtml = `
                             <div class="mt-3 pt-2 border-top">
                                 <div class="small fw-bold text-muted mb-2"><i class="bi bi-journal-bookmark-fill me-1 text-warning"></i>Nguồn trích dẫn (${data.citations.length}):</div>

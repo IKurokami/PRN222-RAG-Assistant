@@ -21,7 +21,6 @@ Contribution credit is separate from ownership. See `docs/member-contributions.m
 
 ## Provider-neutral boundary
 
-<<<<<<< Updated upstream
 Application contracts are intentionally provider-agnostic:
 
 ```text
@@ -44,7 +43,6 @@ If embedding provider/model/dimension changes, treat existing vectors as stale a
 
 ## Subject boundary
 
-<<<<<<< Updated upstream
 The application is multi-subject. PRN222 is only the seeded demo subject.
 
 Persisted subject context now includes:
@@ -99,7 +97,6 @@ Because `ChatSession.SubjectId` now exists, report-side chat aggregates should b
 
 ## Shared contracts
 
-<<<<<<< Updated upstream
 - `IDocumentIndexingQueue`: request-to-background handoff.
 - `IDocumentIndexingService`: one-document indexing pipeline.
 - `ITextEmbeddingService`: provider-neutral embedding.
@@ -127,11 +124,3 @@ Contribution accounting may differ from ownership; use `docs/member-contribution
 - Flow 2 MVC must call `IRagQueryService`, not providers or pgvector directly.
 - Flow 3 does not call provider/retrieval code.
 - Do not create duplicate provider contracts inside feature folders.
-=======
-1. explain why the existing contract cannot represent the requirement;
-2. coordinate with the current producer/consumer owners;
-3. update all affected consumers and implementations together;
-4. update `docs/project-status.md`, `docs/team-workflow.md`, and the relevant handoff document when the change affects member boundaries.
-
-Do not change a shared contract merely to make one implementation more convenient, especially for the initial Flow 3 reporting dashboard.
->>>>>>> Stashed changes

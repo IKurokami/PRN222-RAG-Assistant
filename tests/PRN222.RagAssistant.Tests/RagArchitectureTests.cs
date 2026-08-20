@@ -1,6 +1,5 @@
 using System.Reflection;
 using PRN222.RagAssistant.Application.Abstractions;
-using PRN222.RagAssistant.Features.Rag;
 using PRN222.RagAssistant.Infrastructure.Rag;
 using Xunit;
 
@@ -89,7 +88,6 @@ public sealed class RagArchitectureTests
             "PRN222.RagAssistant.Infrastructure.Rag",
             "PRN222.RagAssistant.Data",
             "PRN222.RagAssistant.Domain",
-            "PRN222.RagAssistant.Features.Rag",
             "Microsoft.EntityFrameworkCore",
             "Microsoft.Extensions.Options",
             "Microsoft.Extensions.Logging",
@@ -172,9 +170,7 @@ public sealed class RagArchitectureTests
         
         var requiredProperties = new[]
         {
-            "NoEvidenceMessage",
-            "SystemPromptTemplate",
-            "NoEvidenceAssistantContent"
+            "NoEvidenceMessage"
         };
 
         foreach (var propName in requiredProperties)

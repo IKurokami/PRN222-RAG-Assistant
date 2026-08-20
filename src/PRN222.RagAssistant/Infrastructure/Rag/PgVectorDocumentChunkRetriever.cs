@@ -33,60 +33,37 @@ public sealed class PgVectorDocumentChunkRetriever : IDocumentChunkRetriever
     {
         var topK = _options.Retrieval.TopK;
 
-        string sql;
-        object[] sqlParams;
-        if (subjectId.HasValue)
+        if (!subjectId.HasValue)
         {
-            sql = """
-                SELECT
-                    dc."Id",
-                    dc."DocumentId",
-                    d."Title",
-                    dc."Content",
-                    dc."PageNumber",
-                    dc."SlideNumber",
-                    (dc."Embedding" <=> {0}) AS distance,
-                    dc."ChunkIndex"
-                FROM "DocumentChunks" dc
-                JOIN "Documents" d ON d."Id" = dc."DocumentId"
-                WHERE d."IndexStatus" = 'Indexed'
-                  AND dc."Embedding" IS NOT NULL
-                  AND d."SubjectId" = {1}
-                ORDER BY dc."Embedding" <=> {0}
-                LIMIT {2}
-                """;
-            sqlParams = new object[]
-            {
-                new Vector(questionEmbedding),
-                subjectId.Value,
-                topK
-            };
+            throw new ArgumentException(
+                "Subject context is required for retrieval. Global-corpus search is not allowed.",
+                nameof(subjectId));
         }
-        else
+
+        var sql = """
+            SELECT
+                dc."Id",
+                dc."DocumentId",
+                d."Title",
+                dc."Content",
+                dc."PageNumber",
+                dc."SlideNumber",
+                (dc."Embedding" <=> {0}) AS distance,
+                dc."ChunkIndex"
+            FROM "DocumentChunks" dc
+            JOIN "Documents" d ON d."Id" = dc."DocumentId"
+            WHERE d."IndexStatus" = 'Indexed'
+              AND dc."Embedding" IS NOT NULL
+              AND d."SubjectId" = {1}
+            ORDER BY dc."Embedding" <=> {0}
+            LIMIT {2}
+            """;
+        var sqlParams = new object[]
         {
-            sql = """
-                SELECT
-                    dc."Id",
-                    dc."DocumentId",
-                    d."Title",
-                    dc."Content",
-                    dc."PageNumber",
-                    dc."SlideNumber",
-                    (dc."Embedding" <=> {0}) AS distance,
-                    dc."ChunkIndex"
-                FROM "DocumentChunks" dc
-                JOIN "Documents" d ON d."Id" = dc."DocumentId"
-                WHERE d."IndexStatus" = 'Indexed'
-                  AND dc."Embedding" IS NOT NULL
-                ORDER BY dc."Embedding" <=> {0}
-                LIMIT {1}
-                """;
-            sqlParams = new object[]
-            {
-                new Vector(questionEmbedding),
-                topK
-            };
-        }
+            new Vector(questionEmbedding),
+            subjectId.Value,
+            topK
+        };
 
         var results = await _dbContext.Database
             .SqlQueryRaw<ResultRow>(sql, sqlParams)

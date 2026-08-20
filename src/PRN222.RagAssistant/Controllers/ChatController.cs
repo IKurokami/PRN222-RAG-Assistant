@@ -7,6 +7,7 @@ using PRN222.RagAssistant.Application.Models;
 using PRN222.RagAssistant.Data;
 using PRN222.RagAssistant.Domain.Entities;
 using PRN222.RagAssistant.Domain.Enums;
+using PRN222.RagAssistant.Security;
 
 namespace PRN222.RagAssistant.Controllers;
 
@@ -38,9 +39,16 @@ public sealed class ChatController : Controller
             return Challenge();
         }
 
-        var subjects = await _dbContext.Subjects
-            .AsNoTracking()
-            .Where(s => s.IsActive)
+        var roles = await _userManager.GetRolesAsync(user);
+        var isAdmin = roles.Contains(AppRoles.Admin);
+
+        // Admin may access any subject; others only active subjects.
+        var subjectQuery = _dbContext.Subjects.AsNoTracking();
+        if (!isAdmin)
+        {
+            subjectQuery = subjectQuery.Where(s => s.IsActive);
+        }
+        var subjects = await subjectQuery
             .OrderBy(s => s.Code)
             .ToListAsync(cancellationToken);
 
@@ -51,6 +59,12 @@ public sealed class ChatController : Controller
         }
 
         var selectedSubject = subjects.FirstOrDefault(s => s.Id == subjectId) ?? subjects.First();
+
+        // Non-admin users must not access an inactive subject.
+        if (!isAdmin && !selectedSubject.IsActive)
+        {
+            return Forbid();
+        }
 
         var userSessions = await _dbContext.ChatSessions
             .AsNoTracking()
@@ -103,7 +117,8 @@ public sealed class ChatController : Controller
                         ChatMessageId = combined.mc.ChatMessageId,
                         Rank = combined.mc.Rank,
                         DocumentTitle = doc.Title,
-                        PageNumber = combined.chunk.PageNumber ?? 1,
+                        PageNumber = combined.chunk.PageNumber,
+                        SlideNumber = combined.chunk.SlideNumber,
                         ChunkContent = combined.chunk.Content
                     })
                 .OrderBy(c => c.Rank)
@@ -153,6 +168,20 @@ public sealed class ChatController : Controller
             return BadRequest(new { message = "Câu hỏi không được để trống." });
         }
 
+        // Verify subject access: non-admin users may only chat on active subjects.
+        var roles = await _userManager.GetRolesAsync(user);
+        if (!roles.Contains(AppRoles.Admin))
+        {
+            var subjectExists = await _dbContext.Subjects
+                .AsNoTracking()
+                .AnyAsync(s => s.Id == dto.SubjectId && s.IsActive, cancellationToken);
+
+            if (!subjectExists)
+            {
+                return Forbid();
+            }
+        }
+
         try
         {
             var answer = await _ragQueryService.AskAsync(
@@ -169,7 +198,8 @@ public sealed class ChatController : Controller
                 citations = answer.Citations.Select(c => new
                 {
                     documentTitle = c.DocumentTitle,
-                    pageNumber = c.PageNumber ?? 1,
+                    pageNumber = c.PageNumber,
+                    slideNumber = c.SlideNumber,
                     rank = c.Rank,
                     excerpt = c.Excerpt
                 })
@@ -257,7 +287,8 @@ public sealed class CitationViewModel
     public Guid ChatMessageId { get; set; }
     public int Rank { get; set; }
     public string DocumentTitle { get; set; } = string.Empty;
-    public int PageNumber { get; set; }
+    public int? PageNumber { get; set; }
+    public int? SlideNumber { get; set; }
     public string ChunkContent { get; set; } = string.Empty;
 }
 

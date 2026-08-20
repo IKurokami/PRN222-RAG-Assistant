@@ -39,8 +39,6 @@ public sealed class IndexModel : PageModel
     public List<RecentFailureViewModel> RecentFailures { get; set; } = [];
     public List<RecentIndexedViewModel> RecentlyIndexed { get; set; } = [];
 
-    // Flow 2 is still pending and ChatSession currently has no SubjectId.
-    // Keep these explicitly global until subject-scoped chat persistence exists.
     public int TotalChatSessions { get; set; }
     public int TotalChatMessages { get; set; }
     public int TotalMessageCitations { get; set; }
@@ -185,9 +183,29 @@ public sealed class IndexModel : PageModel
             ChunkCount = chunkCountMap.GetValueOrDefault(document.Id)
         }).ToList();
 
-        TotalChatSessions = await _dbContext.ChatSessions.AsNoTracking().CountAsync(cancellationToken);
-        TotalChatMessages = await _dbContext.ChatMessages.AsNoTracking().CountAsync(cancellationToken);
-        TotalMessageCitations = await _dbContext.MessageCitations.AsNoTracking().CountAsync(cancellationToken);
+        TotalChatSessions = await _dbContext.ChatSessions
+            .AsNoTracking()
+            .CountAsync(session => session.SubjectId == subjectId, cancellationToken);
+
+        var sessionIdsForSubject = _dbContext.ChatSessions
+            .AsNoTracking()
+            .Where(session => session.SubjectId == subjectId)
+            .Select(session => session.Id);
+
+        TotalChatMessages = await _dbContext.ChatMessages
+            .AsNoTracking()
+            .Where(message => sessionIdsForSubject.Contains(message.ChatSessionId))
+            .CountAsync(cancellationToken);
+
+        var messageIdsForSubject = _dbContext.ChatMessages
+            .AsNoTracking()
+            .Where(message => sessionIdsForSubject.Contains(message.ChatSessionId))
+            .Select(message => message.Id);
+
+        TotalMessageCitations = await _dbContext.MessageCitations
+            .AsNoTracking()
+            .Where(citation => messageIdsForSubject.Contains(citation.ChatMessageId))
+            .CountAsync(cancellationToken);
 
         return Page();
     }
