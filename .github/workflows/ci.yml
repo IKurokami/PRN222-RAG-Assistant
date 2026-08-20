@@ -73,6 +73,16 @@ jobs:
           docker compose exec -T postgres psql -U postgres -d prn222_rag -v ON_ERROR_STOP=1 -c "SELECT \"Code\", \"Name\" FROM \"Subjects\" WHERE \"Code\" = 'PRN222';"
           docker compose exec -T postgres psql -U postgres -d prn222_rag -v ON_ERROR_STOP=1 -c "SELECT COUNT(*) FROM \"__EFMigrationsHistory\";"
 
+      - name: Verify pgvector mixed-dimension reindex compatibility
+        run: >-
+          docker compose exec -T postgres psql -U postgres -d prn222_rag -v ON_ERROR_STOP=1 -c
+          "CREATE TEMP TABLE vector_dimension_check (embedding vector);
+          INSERT INTO vector_dimension_check (embedding) VALUES ('[1,2]'::vector), ('[1,2,3]'::vector);
+          SELECT vector_dims(embedding) FROM vector_dimension_check ORDER BY vector_dims(embedding);
+          SELECT embedding <=> '[1,2]'::vector AS distance
+          FROM vector_dimension_check
+          WHERE vector_dims(embedding) = 2;"
+
       - name: Stop PostgreSQL validation database
         if: always()
         run: docker compose down
