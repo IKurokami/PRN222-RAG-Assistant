@@ -87,7 +87,7 @@ public sealed class CreateModel : PageModel
                 "Created VNPay order {OrderId} for User {UserId}, Amount {Amount} {Currency}, ReturnUrl={ReturnUrl}",
                 result.OrderId, user.Id, plan.Amount, plan.Currency, returnUrl);
 
-            return Redirect(result.CheckoutUrl.ToString());
+            return Redirect(result.CheckoutUrl.AbsoluteUri);
         }
         catch (Exception ex)
         {

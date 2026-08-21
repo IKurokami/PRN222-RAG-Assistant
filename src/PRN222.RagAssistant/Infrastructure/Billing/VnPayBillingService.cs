@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using PRN222.RagAssistant.Application.Abstractions;
@@ -236,6 +237,12 @@ public sealed class VnPayBillingService : IBillingService
     private Uri BuildCheckoutUrl(PaymentOrder order, CreateBillingOrderRequest request)
     {
         var options = _options.Value;
+        var sanitizedOrderInfo = RemoveDiacritics(request.Description);
+        if (string.IsNullOrWhiteSpace(sanitizedOrderInfo))
+        {
+            sanitizedOrderInfo = $"Nap quota PRN222 don {order.ExternalOrderId}";
+        }
+
         var parameters = new Dictionary<string, string?>
         {
             ["vnp_Version"] = options.Version,
@@ -244,7 +251,7 @@ public sealed class VnPayBillingService : IBillingService
             ["vnp_Amount"] = (order.Amount * 100).ToString(CultureInfo.InvariantCulture),
             ["vnp_CurrCode"] = order.Currency,
             ["vnp_TxnRef"] = order.ExternalOrderId,
-            ["vnp_OrderInfo"] = request.Description,
+            ["vnp_OrderInfo"] = sanitizedOrderInfo,
             ["vnp_IpAddr"] = request.IpAddress,
             ["vnp_ReturnUrl"] = request.ReturnUrl.ToString(),
             ["vnp_CreateDate"] = DateTime.UtcNow.ToString("yyyyMMddHHmmss", CultureInfo.InvariantCulture),
@@ -254,6 +261,35 @@ public sealed class VnPayBillingService : IBillingService
 
         var url = VnPayHashHelper.BuildFullUrl(options.BaseUrl, parameters, options.HashSecret);
         return new Uri(url, UriKind.Absolute);
+    }
+
+    private static string RemoveDiacritics(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return string.Empty;
+        var normalizedString = text.Normalize(NormalizationForm.FormD);
+        var stringBuilder = new StringBuilder(normalizedString.Length);
+
+        foreach (var c in normalizedString)
+        {
+            var unicodeCategory = CharUnicodeInfo.GetUnicodeCategory(c);
+            if (unicodeCategory != UnicodeCategory.NonSpacingMark)
+            {
+                stringBuilder.Append(c);
+            }
+        }
+
+        var cleaned = stringBuilder.ToString().Normalize(NormalizationForm.FormC);
+        // Keep only alphanumeric, space, hyphens
+        var asciiOnly = new StringBuilder(cleaned.Length);
+        foreach (var c in cleaned)
+        {
+            if (c is >= 'a' and <= 'z' or >= 'A' and <= 'Z' or >= '0' and <= '9' or ' ' or '-' or '_')
+            {
+                asciiOnly.Append(c);
+            }
+        }
+
+        return asciiOnly.ToString().Trim();
     }
 
     private static string GenerateExternalOrderId()
