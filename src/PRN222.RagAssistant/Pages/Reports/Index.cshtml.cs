@@ -35,12 +35,29 @@ public sealed class IndexModel : PageModel
     public int IndexedCount { get; private set; }
     public int FailedCount { get; private set; }
     public int TotalChunks { get; private set; }
+    public double AverageChunksPerIndexedDocument { get; private set; }
     public IReadOnlyList<ReportRecentFailure> RecentFailures { get; private set; } = Array.Empty<ReportRecentFailure>();
     public IReadOnlyList<ReportRecentIndexedDocument> RecentlyIndexed { get; private set; } = Array.Empty<ReportRecentIndexedDocument>();
 
     public int TotalChatSessions { get; private set; }
     public int TotalChatMessages { get; private set; }
     public int TotalMessageCitations { get; private set; }
+    public int UserQuestionCount { get; private set; }
+    public int AssistantResponseCount { get; private set; }
+    public int CitedAssistantResponseCount { get; private set; }
+    public int ActiveSessionsLast7Days { get; private set; }
+    public int ActiveSessionsLast30Days { get; private set; }
+    public double AverageMessagesPerSession { get; private set; }
+    public double AverageCitationsPerAssistantResponse { get; private set; }
+    public double CitationCoveragePercent { get; private set; }
+
+    public int UniqueCitedDocuments { get; private set; }
+    public int IndexedButNeverCitedDocuments { get; private set; }
+    public double CitedDocumentCoveragePercent { get; private set; }
+    public double TopThreeCitationSharePercent { get; private set; }
+    public IReadOnlyList<ReportTopCitedDocument> TopCitedDocuments { get; private set; } = Array.Empty<ReportTopCitedDocument>();
+    public IReadOnlyList<ReportTopCitedChapter> TopCitedChapters { get; private set; } = Array.Empty<ReportTopCitedChapter>();
+    public IReadOnlyList<ReportDailyChatActivity> DailyActivityLast7Days { get; private set; } = Array.Empty<ReportDailyChatActivity>();
 
     public async Task<IActionResult> OnGetAsync(Guid subjectId, CancellationToken cancellationToken)
     {
@@ -78,10 +95,26 @@ public sealed class IndexModel : PageModel
         IndexedCount = report.IndexedCount;
         FailedCount = report.FailedCount;
         TotalChunks = report.TotalChunks;
+        AverageChunksPerIndexedDocument = report.AverageChunksPerIndexedDocument;
         RecentFailures = report.RecentFailures;
         RecentlyIndexed = report.RecentlyIndexed;
         TotalChatSessions = report.TotalChatSessions;
         TotalChatMessages = report.TotalChatMessages;
         TotalMessageCitations = report.TotalMessageCitations;
+        UserQuestionCount = report.UserQuestionCount;
+        AssistantResponseCount = report.AssistantResponseCount;
+        CitedAssistantResponseCount = report.CitedAssistantResponseCount;
+        ActiveSessionsLast7Days = report.ActiveSessionsLast7Days;
+        ActiveSessionsLast30Days = report.ActiveSessionsLast30Days;
+        AverageMessagesPerSession = report.AverageMessagesPerSession;
+        AverageCitationsPerAssistantResponse = report.AverageCitationsPerAssistantResponse;
+        CitationCoveragePercent = report.CitationCoveragePercent;
+        UniqueCitedDocuments = report.UniqueCitedDocuments;
+        IndexedButNeverCitedDocuments = report.IndexedButNeverCitedDocuments;
+        CitedDocumentCoveragePercent = report.CitedDocumentCoveragePercent;
+        TopThreeCitationSharePercent = report.TopThreeCitationSharePercent;
+        TopCitedDocuments = report.TopCitedDocuments;
+        TopCitedChapters = report.TopCitedChapters;
+        DailyActivityLast7Days = report.DailyActivityLast7Days;
     }
 }
