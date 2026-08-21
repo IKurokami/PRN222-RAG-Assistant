@@ -8,6 +8,7 @@
     var isSubjectLeader = User.IsInRole(AppRoles.SubjectLeader);
     var isSubjectWorkspace = currentController is "Subjects" or "Documents" or "Chapters"
         || currentPage.StartsWith("/Reports", StringComparison.OrdinalIgnoreCase);
+    var isChatPage = currentPage.StartsWith("/Chat", StringComparison.OrdinalIgnoreCase);
     var isSubjectAdminArea = string.Equals(currentController, "AdminSubjects", StringComparison.OrdinalIgnoreCase);
     var isUserAdminArea = string.Equals(currentController, "AdminUsers", StringComparison.OrdinalIgnoreCase);
 }
@@ -53,7 +54,7 @@
                                 <a class="nav-link-humata @(isSubjectWorkspace ? "is-active" : null)" asp-area="" asp-controller="Subjects" asp-action="Index">Môn học</a>
                             </li>
                             <li class="nav-item">
-                                <a class="nav-link-humata @(currentController == "Chat" ? "is-active" : null)" asp-area="" asp-controller="Chat" asp-action="Index">Trò chuyện RAG</a>
+                                <a class="nav-link-humata @(isChatPage ? "is-active" : null)" asp-area="" asp-page="/Chat/Index">Trò chuyện RAG</a>
                             </li>
                             <li class="nav-item">
                                 <a class="nav-link-humata @(currentController == "Evaluation" ? "is-active" : null)" asp-area="" asp-controller="Evaluation" asp-action="Index">Đánh giá RAG</a>
