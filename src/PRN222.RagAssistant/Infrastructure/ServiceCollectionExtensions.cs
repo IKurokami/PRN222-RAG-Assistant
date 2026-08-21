@@ -6,6 +6,7 @@ using Pgvector.EntityFrameworkCore;
 using PRN222.RagAssistant.Application.Abstractions;
 using PRN222.RagAssistant.Data;
 using PRN222.RagAssistant.Domain.Entities;
+using PRN222.RagAssistant.Infrastructure.Billing;
 using PRN222.RagAssistant.Infrastructure.Parsing;
 using PRN222.RagAssistant.Infrastructure.Services;
 using PRN222.RagAssistant.Security;
@@ -33,7 +34,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton(dataSourceBuilder.Build());
 
         services.AddDbContext<ApplicationDbContext>(options =>
-            options.UseNpgsql(connectionString, npgsql => npgsql.UseVector()));
+            options.UseNpgsql(connectionString, npgsql => npgsql.UseVector())
+                   .ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning)));
         services.AddDbContext<DataProtectionKeyDbContext>(options =>
             options.UseNpgsql(connectionString));
 
@@ -92,7 +94,7 @@ public static class ServiceCollectionExtensions
             .Bind(configuration.GetSection(Infrastructure.Rag.RagOptions.SectionName))
             .Validate(o => o.Retrieval.TopK > 0, "Rag:Retrieval:TopK must be greater than 0.")
             .Validate(o => o.Retrieval.MinimumSimilarityScore >= 0.0 && o.Retrieval.MinimumSimilarityScore <= 1.0, "Rag:Retrieval:MinimumSimilarityScore must be between 0.0 and 1.0.")
-            .Validate(o => o.Retrieval.HistoryTurns >= 0, "Rag:Retrieval:HistoryTurns must be non-negative.")
+            .Validate(o => o.Retrieval.HistoryTurns >= 0, "Rag:Retrieval.HistoryTurns must be non-negative.")
             .Validate(o => o.Retrieval.ExcerptChars > 0, "Rag:Retrieval:ExcerptChars must be greater than 0.")
             .Validate(o => o.Agentic.ToolTopK > 0 && o.Agentic.ToolTopK <= 12, "Rag:Agentic:ToolTopK must be between 1 and 12.")
             .Validate(o => o.Agentic.MaxToolResultChars >= 1000, "Rag:Agentic:MaxToolResultChars must be at least 1000.")
@@ -102,6 +104,15 @@ public static class ServiceCollectionExtensions
         services.AddScoped<Infrastructure.Rag.IAgenticRetrievalService, Infrastructure.Rag.AgenticRetrievalService>();
         services.AddScoped<IRagQueryService, Infrastructure.Rag.RagQueryService>();
         services.AddScoped<IEvaluationService, Infrastructure.Services.EvaluationService>();
+
+        // Payment / billing integration (VNPay sandbox demo)
+        services.AddOptions<VnPayBillingOptions>()
+            .Bind(configuration.GetSection(VnPayBillingOptions.SectionName))
+            .Validate(o => !string.IsNullOrWhiteSpace(o.TmnCode), "Billing:VnPay:TmnCode must be configured.")
+            .Validate(o => !string.IsNullOrWhiteSpace(o.HashSecret), "Billing:VnPay:HashSecret must be configured.")
+            .Validate(o => !string.IsNullOrWhiteSpace(o.BaseUrl), "Billing:VnPay:BaseUrl must be configured.")
+            .ValidateOnStart();
+        services.AddScoped<IBillingService, VnPayBillingService>();
 
         return services;
     }

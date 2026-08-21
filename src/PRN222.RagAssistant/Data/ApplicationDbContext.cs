@@ -27,6 +27,8 @@ public sealed class ApplicationDbContext
 
     public DbSet<MessageCitation> MessageCitations => Set<MessageCitation>();
 
+    public DbSet<PaymentOrder> PaymentOrders => Set<PaymentOrder>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
