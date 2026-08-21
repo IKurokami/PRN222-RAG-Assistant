@@ -1,6 +1,8 @@
+using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json.Serialization;
 using PRN222.RagAssistant.Application.Abstractions;
+using PRN222.RagAssistant.Infrastructure.Rag.Exceptions;
 
 namespace PRN222.RagAssistant.Infrastructure.Services;
 
@@ -40,6 +42,13 @@ public sealed class OpenAiChatCompletionService : IChatCompletionService
         };
 
         using var response = await client.PostAsJsonAsync("chat/completions", request, cancellationToken);
+
+        // Issue #36: surface rate-limit as a typed exception.
+        if (response.StatusCode == HttpStatusCode.TooManyRequests)
+        {
+            throw AiProviderRateLimitException.FromResponse("OpenAI", response);
+        }
+
         response.EnsureSuccessStatusCode();
 
         var result = await response.Content.ReadFromJsonAsync<OpenAiChatResponse>(cancellationToken);

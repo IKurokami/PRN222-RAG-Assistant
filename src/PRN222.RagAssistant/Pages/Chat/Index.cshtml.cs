@@ -253,6 +253,16 @@ public sealed class IndexModel : PageModel
                             })
                         });
                         break;
+
+                    case RagErrorEvent ragError:
+                        // Issue #36: typed pipeline errors (e.g. rate-limit) carry a
+                        // machine-readable errorCode the frontend maps to a friendly message.
+                        await SendEventAsync("error", new
+                        {
+                            errorCode = ragError.ErrorCode,
+                            message = ragError.Message
+                        });
+                        break;
                 }
             }
         }
@@ -266,7 +276,12 @@ public sealed class IndexModel : PageModel
 
             try
             {
-                await SendEventAsync("error", new { message = "Đã xảy ra lỗi: " + ex.Message });
+                // Issue #36: do not expose raw exception messages or stack traces to users.
+                await SendEventAsync("error", new
+                {
+                    errorCode = "STREAM_ERROR",
+                    message = "Đã xảy ra lỗi khi xử lý yêu cầu. Vui lòng thử lại."
+                });
             }
             catch (Exception sendError)
             {
