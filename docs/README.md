@@ -1,57 +1,70 @@
 # Documentation index
 
-> Canonical documentation set synchronized with `master` after PR #40 on 2026-08-21.
-
-This index exists to prevent older handoff/snapshot files from silently becoming the source of truth after later merges.
+> Canonical documentation target updated on 2026-08-21 after PR #42/#43.
+>
+> The target presentation architecture is Razor Pages only for HTTP UI/actions, with SSE retained for Chat and SignalR added for Document Management realtime notifications. The documentation PR does not implement the remaining runtime migration.
 
 ## Start here
 
 | Document | Purpose |
 |---|---|
-| `../README.md` | User-facing architecture/status overview |
-| `project-status.md` | Current merged milestone and remaining debt |
-| `infrastructure.md` | Runtime architecture, persistence, providers and deployment boundaries |
+| `../README.md` | User-facing target architecture and migration status |
+| `razor-pages-signalr-architecture.md` | Canonical presentation migration + Document SignalR specification |
+| `project-status.md` | Current runtime vs required target status |
+| `infrastructure.md` | Target runtime boundaries, persistence, providers and realtime transports |
 | `ai-provider-backup.md` | Provider selection, fallback and embedding compatibility |
 | `render-deployment.md` | Current Render Blueprint/runtime configuration |
-| `rag-demo-guide.md` | Current Flow 2 Chat + Evaluation demo procedure |
-| `role-access-control.md` | Roles, policies and resource authorization |
+| `rag-demo-guide.md` | Flow 2/Document demo notes during the migration period |
+| `role-access-control.md` | Roles, policies, Razor Page and SignalR authorization rules |
 | `multi-subject-management.md` | Subject persistence and cross-flow scope |
 | `member-contributions.md` | Ownership vs merged contribution accounting |
 | `team-workflow.md` | Team integration and maintenance boundaries |
 
-## Flow references
+## Presentation checkpoint
 
-- `flow-1-mvc-migration.md` - current Flow 1 MVC boundary.
-- `flow-3-report-statistics-handoff.md` - current Flow 3 query/report boundary.
-- `member-4-rag-backend-handoff.md` - current Flow 2 backend/integration handoff.
-- `member-4-rag-status-2026-08.md` - August status snapshot, refreshed post-PR #40.
-
-## Current architecture checkpoint
+Required end state:
 
 ```text
-Flow 1: MVC Documents/Chapters + background indexing        COMPLETE
-Flow 2: MVC Chat/history/citations + Evaluation + RAG       COMPLETE
-Flow 3: Razor Pages Reports -> IReportQueryService           COMPLETE
+Flow 1: Razor Pages Documents/Chapters + background indexing + SignalR
+Flow 2: Razor Pages Chat/history/citations + Evaluation
+Flow 3: Razor Pages Reports -> IReportQueryService
+Admin/Subjects: Razor Pages
 
-Chat browser updates: SSE (not SignalR)
-Render chat: Gemini
-Render embeddings: OpenRouter / 1024 dimensions
-Data Protection keys: PostgreSQL
-Report chat metrics: subject-scoped
+Chat browser updates: SSE
+Document browser updates: SignalR notifications
 ```
+
+Current implementation checkpoint at this docs PR:
+
+```text
+Chat: Razor Pages after PR #42
+Chat page data/session persistence: IChatPageService after PR #43
+Reports/authentication: Razor Pages
+Remaining legacy MVC product/admin surfaces: code migration still pending
+```
+
+Do not mark the Razor-Pages-only migration complete until the implementation PR removes the legacy presentation layer and conventional controller routing.
+
+## Flow references
+
+- `razor-pages-signalr-architecture.md` - canonical migration and realtime design.
+- `flow-1-razor-pages-signalr.md` - Flow 1-specific Page/SignalR behavior.
+- `flow-3-report-statistics-handoff.md` - Flow 3 query/report boundary.
+- `member-4-rag-backend-handoff.md` - Flow 2 backend/integration handoff.
+- `member-4-rag-status-2026-08.md` - August Flow 2 status snapshot.
 
 ## Historical documents
 
-Files named `handoff` or dated `status` may preserve context about ownership and previous milestones, but statements inside them must match the current baseline unless explicitly labeled historical/superseded.
+Handoff/contribution files may mention the technology used by older merged PRs as historical evidence. Historical implementation credit does not override the current target architecture.
 
-`prn222-rag-assistant-documentation.txt` is a consolidated Vietnamese system reference; canonical configuration values should still be checked against `.env.example`, `docker-compose.yml`, and `render.yaml`.
+`prn222-rag-assistant-documentation.txt` is the consolidated Vietnamese system reference. Canonical configuration values should still be checked against `.env.example`, `docker-compose.yml`, and `render.yaml`.
 
 ## Synchronization rule
 
 When a PR changes architecture, workflow status, deployment/provider configuration, persistence, security, or ownership:
 
 1. update the relevant canonical docs in the same PR when practical;
-2. if code merges first, create one reconciliation PR against current `master`;
-3. prefer describing the behavior verified in source/config over repeating old PR plans;
+2. clearly separate **implemented runtime state** from **accepted target design**;
+3. after the Razor Pages migration implementation lands, reconcile all canonical docs again and remove migration-pending warnings;
 4. keep PR numbers as audit evidence;
 5. do not place real credentials in documentation.
