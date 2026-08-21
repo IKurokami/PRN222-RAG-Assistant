@@ -1,16 +1,19 @@
-# Flow 2 Chat & Evaluation demo guide
+# Flow 2 Chat, Evaluation & Document realtime demo guide
 
-> Replaces the obsolete `RagDemo` guide. `Pages/RagDemo` was removed in PR #35; use the product MVC Chat and Evaluation flows.
+> Updated on 2026-08-21 after PR #42/#43 and the accepted Razor Pages + SignalR target architecture.
+>
+> The docs PR defines the final presentation target but does not implement the remaining migrations. During the transition, some non-Chat surfaces can still be served by the legacy runtime until the follow-up code PR lands.
 
 ## What this demo verifies
 
 - document indexing into pgvector;
 - subject-scoped RAG retrieval;
 - grounded answer generation and citations;
-- MVC chat-session history;
+- Razor Page Chat session/history behavior;
 - SSE progress/typewriter rendering;
 - citation reader and Markdown UI;
-- the 50-question evaluation workflow.
+- the 50-question evaluation workflow;
+- after the implementation PR: SignalR synchronization on the Document Management page.
 
 ## Local prerequisites
 
@@ -18,47 +21,18 @@
 - .NET 10 SDK if running commands outside containers;
 - repository checked out on the branch/commit you want to test.
 
-Do not switch to an old `member4-rag-v2` branch; this guide targets current `master`.
+## Start local infrastructure
 
-## Option A: local Ollama
-
-Copy `.env.example` to `.env` if needed and keep:
-
-```env
-RAG_PROVIDER=Ollama
-RAG_CHAT_PROVIDER=
-RAG_EMBEDDING_PROVIDER=
-```
-
-Start:
+Local Ollama:
 
 ```bash
 docker compose --profile local-ai up -d --build
 ```
 
-If the configured Ollama models are not present, pull them into the Ollama container:
-
-```bash
-docker exec prn222-ollama ollama pull qwen3:4b
-docker exec prn222-ollama ollama pull qwen3-embedding:0.6b
-```
-
-## Option B: cloud/hybrid
-
-Configure the selected providers with server-side API keys, then run:
+Cloud/hybrid:
 
 ```bash
 docker compose up -d --build
-```
-
-For example, the current Render architecture uses Gemini for Chat and OpenRouter for embeddings. Local Compose is configurable and does not have to match Render.
-
-When changing the **embedding** provider/model/dimension, re-index the corpus before treating retrieval as migrated. Chat-only changes do not require re-indexing.
-
-## Verify infrastructure
-
-```bash
-docker compose ps
 ```
 
 Open:
@@ -67,7 +41,7 @@ Open:
 http://localhost:8080
 ```
 
-The health endpoint is:
+Health endpoint:
 
 ```text
 http://localhost:8080/healthz
@@ -75,24 +49,17 @@ http://localhost:8080/healthz
 
 ## Prepare users and subject
 
-The repository seeds the PRN222 demo subject through the normal database initialization path. Do not rely on a removed RagDemo page to auto-create subjects.
-
-For demo accounts either:
-
-- enable/configure optional seed users through environment variables; or
-- register a Student publicly and use an Admin account to manage elevated roles/subject assignments.
-
-Public registration never lets the user select Admin/SubjectLeader.
+Use the normal Subject catalogue and Identity/RBAC flows. Public registration creates Student only; elevated roles/subject assignments are Admin-managed.
 
 ## Upload and index a document
 
-Use a user authorized to manage the target subject:
+Use an account authorized to manage the target subject:
 
 1. Open the Subject catalogue.
 2. Open Documents for the desired subject.
 3. Upload a PDF/DOCX/PPTX.
 4. Wait until the document reaches `Indexed`.
-5. Optionally open Document details to inspect chunks.
+5. Optionally inspect Document details/chunks.
 
 Useful logs:
 
@@ -100,34 +67,51 @@ Useful logs:
 docker logs prn222-app --tail 100
 ```
 
+## Document SignalR target test
+
+This section applies after the follow-up implementation PR adds the documented hub/client.
+
+1. Open the same subject's Document Management page in two authenticated browser tabs/windows.
+2. Keep both connections on the same authorized Subject.
+3. In the first tab, upload/create a Document.
+4. Confirm the second tab receives the new Document without manual refresh.
+5. Edit the Document and confirm the second tab reflects the change.
+6. Delete the Document and confirm the second tab removes/invalidates the row.
+7. Trigger indexing/re-indexing and confirm status changes can arrive through `DocumentIndexStatusChanged`.
+8. Disconnect/reconnect the network or reload a tab and verify the client reconnects/re-subscribes safely.
+9. Verify an unauthorized user cannot subscribe to another Subject's management feed.
+
+Expected transport separation:
+
+```text
+Document create/update/delete/index status -> SignalR notifications
+Document writes                           -> Razor Page handlers
+Chat progress/result                      -> SSE
+```
+
 ## Demo the product Chat
 
-Open the MVC Chat flow from navigation or:
+Open:
 
 ```text
 http://localhost:8080/Chat
 ```
 
-Expected behavior:
+Chat is a Razor Page after PR #42. Expected behavior:
 
 1. choose an active subject;
 2. create/use a subject-aware chat session;
 3. ask a question grounded in an indexed document;
-4. observe the progress timeline;
+4. observe progress output;
 5. receive the answer with citation markers/source pills;
 6. open a citation to inspect the source excerpt;
-7. switch sessions to verify conversation history.
+7. switch sessions to verify history.
 
-### Transport note
+PR #43 keeps page/session data behind `IChatPageService`.
 
-The Chat page uses:
+### Chat transport
 
-```text
-POST /Chat/AskStream
-response: text/event-stream
-```
-
-JavaScript consumes SSE events from a `fetch` response body. Current event types include:
+Chat continues to use `text/event-stream` with event types such as:
 
 ```text
 tool_call
@@ -137,27 +121,18 @@ done
 error
 ```
 
-This implementation does **not** use SignalR.
-
-The current RAG call returns a completed answer to the controller, which then emits application-level word deltas for the typewriter experience; do not describe this as provider-native token streaming.
-
-## No-evidence behavior
-
-Ask a question for which indexed documents do not contain sufficient evidence. The backend should follow its configured grounded/no-evidence behavior and should not fabricate citations.
-
-## Contextual follow-up behavior
-
-After a grounded question, try a short follow-up such as asking for the author or intended audience. PR #35 can expand a short follow-up with recent conversation context when the standalone retrieval query returns no useful chunks.
+This is SSE. Do not expect Chat SignalR events merely because Documents use SignalR in the target architecture.
 
 ## Demo Evaluation
 
-Open:
+The final target is a Razor Page under `Pages/Evaluation` backed by `IEvaluationService`.
 
-```text
-http://localhost:8080/Evaluation
-```
+During the documentation-only migration period, use the Evaluation URL exposed by the current runtime branch you are testing. The follow-up implementation PR must preserve single-question/full-suite behavior while moving the HTTP presentation to Razor Pages.
 
-The UI reads the packaged 50-question dataset. You can run a single question or the full suite. Evaluation resolves an active subject whose code matches the dataset subject code.
+## No-evidence/contextual follow-up
+
+- Ask a question unsupported by indexed evidence and verify citations are not fabricated.
+- After a grounded question, try a short follow-up; contextual retrieval fallback should preserve the existing behavior.
 
 ## Verify persistence
 
@@ -169,44 +144,43 @@ docker compose exec -T postgres psql -U postgres -d prn222_rag -c \
 
 docker compose exec -T postgres psql -U postgres -d prn222_rag -c \
   'SELECT "ChatSessionId", "Role", LEFT("Content", 100) FROM "ChatMessages" ORDER BY "CreatedAtUtc" DESC LIMIT 10;'
-
-docker compose exec -T postgres psql -U postgres -d prn222_rag -c \
-  'SELECT "ChatMessageId", "DocumentChunkId", "Rank" FROM "MessageCitations" LIMIT 10;'
 ```
+
+SignalR notifications are transient and are not a persistence system; PostgreSQL remains the source of truth.
 
 ## Troubleshooting
 
 ### App returns 500
 
-```bash
-docker logs prn222-app --tail 100
-```
-
-Check:
-
-- selected cloud provider API key is present;
-- PostgreSQL is healthy;
-- selected Ollama service is running if Ollama is configured;
-- uploaded source file still exists for re-index operations.
+Check app logs, provider secrets, PostgreSQL health, selected Ollama service (if configured), and source-file availability.
 
 ### Document stays Processing/Failed
 
-Inspect app logs and confirm the selected embedding provider is reachable. Re-index from the product UI after correcting the provider/configuration issue.
+Inspect logs and confirm the selected embedding provider is reachable. Re-index after correcting provider/configuration issues.
 
-### pgvector dimension issues during a provider migration
+### SignalR client does not update Documents
 
-PR #37 filters retrieval to vectors with the current query dimension. If many documents disappear from retrieval after a dimension change, they are expected to remain excluded until re-indexed with the active embedding configuration.
+After the implementation PR, check:
 
-### Antiforgery token could not be decrypted after restart
+- the client connected to `/hubs/documents`;
+- the authenticated user is authorized for the selected Subject;
+- the connection joined the expected subject group;
+- the write succeeded before the event was published;
+- reconnect logic rejoined the subject after a disconnect;
+- no stale browser bundle is being served.
 
-PR #38 persists Data Protection keys in PostgreSQL. Verify migrations have created `DataProtectionKeys` and the application is using the expected database. The old workaround of accepting cookie loss on every Render restart is no longer the intended architecture.
+### pgvector dimensions during provider migration
+
+PR #37 filters retrieval to vectors with the current query dimension. Documents with stale dimensions remain excluded until re-indexed.
+
+### Antiforgery token errors after restart
+
+Verify the `DataProtectionKeys` table exists and the application is using the expected PostgreSQL database.
 
 ## Safe cleanup
-
-Normal stop:
 
 ```bash
 docker compose down
 ```
 
-Do **not** add `-v` unless intentionally deleting PostgreSQL/Ollama volumes and all local persisted data/models.
+Do **not** add `-v` unless intentionally deleting PostgreSQL/Ollama volumes and local persisted data/models.
