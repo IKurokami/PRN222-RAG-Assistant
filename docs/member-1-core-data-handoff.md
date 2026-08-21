@@ -105,4 +105,6 @@ The canonical ledger continues to credit implementation based on merged work rat
 
 ## Documentation responsibility
 
-Member 1 coordinates README, AGENTS files and `docs/*` against actual merged code/config. Project documentation uses Member numbers only and does not identify members by GitHub username.
+**Member 1 is the sole documentation editor** for README, AGENTS files and `docs/*` after reconciling merged changes from the whole team.
+
+Members 2-5 report documentation/status impacts to Member 1. Project documentation uses Member numbers only and must not add GitHub usernames.

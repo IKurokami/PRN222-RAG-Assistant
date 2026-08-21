@@ -210,4 +210,6 @@ The solution has both `ApplicationDbContext` and `DataProtectionKeyDbContext`.
 
 ## Documentation rule
 
-Member 1 remains the repository documentation coordinator for README, AGENTS files and `docs/*`. Members report documentation impacts so the canonical set can be reconciled against merged code.
+**Member 1 is the sole documentation editor** for README, all AGENTS files and `docs/*`.
+
+Members 2-5 report documentation/status impacts to Member 1. Member 1 reconciles the canonical documentation set against actual merged code/configuration.

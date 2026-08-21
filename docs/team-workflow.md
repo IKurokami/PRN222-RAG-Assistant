@@ -27,6 +27,8 @@ Maintains:
 - embedding compatibility/re-index rules;
 - repository documentation synchronization.
 
+Member 1 is the sole editor of README, AGENTS files and `docs/*`; other members report documentation/status impacts rather than editing canonical coordination docs independently.
+
 ## Member 2 - Flow 1 request behavior + Flow 3 reporting
 
 Maintains established behavior for:
@@ -115,12 +117,12 @@ Real API keys live only in local/deployment secret environments. Do not put keys
 
 ## Documentation workflow
 
-When merged code changes architecture/status/configuration:
+Members 2-5 report code/status/documentation impacts to Member 1. Member 1 reconciles the canonical docs with actual merged code.
 
-- report the impact to the documentation coordinator;
-- reconcile canonical docs against actual `master` code/config;
-- preserve PR numbers as audit evidence;
-- avoid keeping old “pending” statements once the feature is merged;
-- label historical snapshots clearly if they intentionally preserve old state.
+Contribution accounting rules:
 
-Project documentation uses Member numbers only.
+- use Member numbers only;
+- do not put GitHub usernames in project documentation;
+- distinguish assigned ownership from actual merged contribution;
+- do not double-credit work to an owner when another member delivered the merged implementation;
+- retain auditable PR numbers in `member-contributions.md`.
