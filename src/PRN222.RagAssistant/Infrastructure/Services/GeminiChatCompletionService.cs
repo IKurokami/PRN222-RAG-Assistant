@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Sockets;
 using Google.GenAI;
 using Google.GenAI.Types;
 using Microsoft.Extensions.AI;
@@ -272,17 +273,30 @@ public sealed class GeminiChatCompletionService :
 
         if (exception is HttpRequestException httpException)
         {
-            return httpException.StatusCode is null
-                or HttpStatusCode.NotFound
-                or HttpStatusCode.RequestTimeout
-                or HttpStatusCode.TooManyRequests
-                or HttpStatusCode.InternalServerError
-                or HttpStatusCode.BadGateway
-                or HttpStatusCode.ServiceUnavailable
-                or HttpStatusCode.GatewayTimeout;
+            if (httpException.StatusCode.HasValue)
+            {
+                return httpException.StatusCode.Value is
+                    HttpStatusCode.NotFound
+                    or HttpStatusCode.RequestTimeout
+                    or HttpStatusCode.TooManyRequests
+                    or HttpStatusCode.InternalServerError
+                    or HttpStatusCode.BadGateway
+                    or HttpStatusCode.ServiceUnavailable
+                    or HttpStatusCode.GatewayTimeout;
+            }
+
+            if (IsFallbackMessage(httpException.Message))
+            {
+                return true;
+            }
+
+            return httpException.InnerException is SocketException
+                || (httpException.InnerException is not null
+                    && ShouldFallback(httpException.InnerException, cancellationToken));
         }
 
-        if (exception is TimeoutException
+        if (exception is SocketException
+            || exception is TimeoutException
             || exception is TaskCanceledException)
         {
             return true;
