@@ -1,6 +1,6 @@
 # Role-based access control
 
-> Updated on 2026-08-21 for the Razor Pages + SignalR target architecture.
+> Updated on 2026-08-21 for the PR #46/issue #47 management realtime implementation branch. PR #46 is not merged; merged contribution identity remains separate.
 
 ## Roles
 
@@ -31,7 +31,7 @@ Roles/policies are coarse gates. Subject-specific management additionally checks
 | Manage users/roles | Yes | No | No |
 | Manage Chapters/Documents | Any Subject | Assigned Subjects | No |
 | Re-index Documents | Any Subject | Assigned Subjects | No |
-| Receive Document realtime updates | Authorized managed Subject | Assigned Subject | No management feed |
+| Receive authorized management realtime updates | Authorized managed Subjects and admin feeds | Assigned Subject management feed | No management feed |
 | View Flow 3 Reports | Any Subject | Assigned Subjects | No |
 | Use own authenticated Flow 2 Chat | Yes | Yes | Yes |
 | Use Evaluation | Yes | Yes | Yes |
@@ -77,26 +77,48 @@ When an account is changed away from SubjectLeader, managed-subject claims are r
 
 Documents/Chapters Razor Page handlers and Reports PageModels must evaluate the concrete subject/resource with `ISubjectAccessService` or an equivalent authorized application boundary.
 
-## Document SignalR authorization
+## Management SignalR authorization
 
-SignalR does not weaken the subject boundary.
-
-Recommended group shape:
+SignalR does not weaken the role, policy, or subject boundary. The `/hubs/management` `ManagementHub` emits `ManagementChanged` only to authorized groups:
 
 ```text
-subject:{SubjectId}
+subject:{guid:D}
+admin:users
+admin:subjects
+subjects:catalog
 ```
 
-Before joining/subscribing a connection to a subject group, the server must verify the authenticated user is allowed to receive management updates for that subject.
+Subscription methods are:
 
-Security requirements:
+```text
+SubscribeToSubject(Guid subjectId)
+SubscribeToAdminUsers()
+SubscribeToAdminSubjects()
+SubscribeToSubjectCatalog()
+```
 
-- do not trust a client-supplied `SubjectId` by itself;
-- do not broadcast one subject's management events globally;
-- do not include sensitive data in an event when a stable ID/status is sufficient;
-- disconnect/reject unauthorized subscriptions;
-- Page Handlers remain the write path with normal antiforgery protection;
-- broadcast only after the underlying write succeeds.
+The server must apply the same authorization used by the corresponding management page:
+
+- `SubscribeToSubject` checks authenticated management permission and concrete access to the requested Subject;
+- `SubscribeToAdminUsers` requires the `ManageUsers` policy;
+- `SubscribeToAdminSubjects` requires the `ManageSubjects` policy;
+- `SubscribeToSubjectCatalog` checks the server-side authorization for the active subject catalogue.
+
+The client cannot gain access to another subject by supplying a different ID. Subject-scoped events are sent only to the affected group; user/role and subject/assignment events stay in their authorized admin/catalog groups.
+
+Management notifications use `ManagementRealtimeEvent` with resources `Document`, `Chapter`, `Subject`, `SubjectLeaderAssignments`, and `User`, and changes `Created`, `Updated`, `Deleted`, `IndexStatusChanged`, `AssignmentsChanged`, and `RoleChanged`. Document index-status events retain their `Status` value.
+
+SignalR is fan-out only:
+
+```text
+Razor Page handler
+ -> policy + subject authorization, antiforgery and validation
+ -> write commits
+ -> notifier publishes ManagementChanged
+ -> authorized connected clients
+```
+
+Do not broadcast one subject's management events globally, include sensitive data when a stable ID/status is sufficient, or expose a hub write operation. Broadcast only after the underlying write succeeds.
 
 ## Flow 2 session security
 
@@ -109,7 +131,7 @@ RAG session behavior continues to validate:
 - retrieval uses the validated subject;
 - messages/citations remain attached to the validated session.
 
-Chat remains Razor Pages + SSE. Document SignalR must not become a cross-user Chat channel.
+Chat remains Razor Pages + SSE. Management SignalR must not become a cross-user Chat channel or replace the Chat SSE contract.
 
 ## UI is not authorization
 
@@ -127,7 +149,7 @@ Documents/Chapters      -> Razor Pages
 Chat                    -> Razor Pages + SSE
 Evaluation              -> Razor Pages
 Reports                 -> Razor Pages
-Document realtime       -> SignalR hub
+Management realtime       -> authorized SignalR `ManagementHub`
 ```
 
 ## Data Protection
@@ -136,4 +158,4 @@ ASP.NET Core Data Protection keys remain persisted in PostgreSQL, preserving aut
 
 ## Migration acceptance
 
-The follow-up implementation PR must include authorization regression coverage for Razor Page handlers and SignalR subject subscriptions before the legacy MVC presentation is removed.
+The PR #46 branch must retain authorization regression coverage for Razor Page handlers and ManagementHub subscriptions before merge. Its branch implementation is not a claim that PR #46 has merged; remove remaining legacy MVC presentation only after parity is verified.

@@ -33,7 +33,7 @@ services:
       Rag__OpenAI__EmbeddingModel: ${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
       Rag__Gemini__BaseUrl: ${GEMINI_BASE_URL:-https://generativelanguage.googleapis.com/}
       Rag__Gemini__ApiKey: ${GEMINI_API_KEY:-}
-      Rag__Gemini__ChatModel: ${GEMINI_CHAT_MODEL:-gemini-3.6-flash}
+      Rag__Gemini__ChatModels: "${GEMINI_CHAT_MODELS:-gemini-3.5-flash-lite,gemini-3.1-flash-lite,gemini-2.5-flash,gemini-2.5-flash-lite}"
       Rag__Gemini__EmbeddingModel: ${GEMINI_EMBEDDING_MODEL:-gemini-embedding-2}
       Rag__OpenRouter__BaseUrl: ${OPENROUTER_BASE_URL:-https://openrouter.ai/api/v1/}
       Rag__OpenRouter__ApiKey: ${OPENROUTER_API_KEY:-}

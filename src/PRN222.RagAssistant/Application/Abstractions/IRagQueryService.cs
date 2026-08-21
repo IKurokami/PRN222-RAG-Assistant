@@ -16,6 +16,13 @@ public interface IRagQueryService
         Guid? subjectId = null,
         CancellationToken cancellationToken = default);
 
+    IAsyncEnumerable<RagStreamEvent> AskStreamAsync(
+        Guid userId,
+        Guid chatSessionId,
+        string question,
+        Guid? subjectId = null,
+        CancellationToken cancellationToken = default);
+
     Task<RagQueryResult> AskStatelessAsync(
         string question,
         Guid subjectId,

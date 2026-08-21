@@ -9,6 +9,7 @@ public sealed class RagOptions
 
     public RetrievalOptions Retrieval { get; set; } = new();
     public ChatOptions Chat { get; set; } = new();
+    public AgenticOptions Agentic { get; set; } = new();
 
     public sealed class RetrievalOptions
     {
@@ -24,5 +25,21 @@ public sealed class RagOptions
     {
         public string NoEvidenceMessage { get; set; } =
             "Tôi chỉ có thể trả lời dựa trên tài liệu đã được index. Hiện không tìm thấy thông tin phù hợp cho câu hỏi này.";
+    }
+
+    public sealed class AgenticOptions
+    {
+        /// <summary>
+        /// Enables model-directed retrieval when the selected chat provider exposes
+        /// IAgenticChatCompletionService. Unsupported providers automatically fall back
+        /// to the deterministic RAG pipeline.
+        /// </summary>
+        public bool Enabled { get; set; } = true;
+
+        /// <summary>Default maximum number of chunks returned from a retrieval tool.</summary>
+        public int ToolTopK { get; set; } = 6;
+
+        /// <summary>Maximum characters returned by one tool invocation.</summary>
+        public int MaxToolResultChars { get; set; } = 7000;
     }
 }

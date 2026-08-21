@@ -1,14 +1,14 @@
 # Infrastructure baseline and target
 
-> Updated on 2026-08-21 after PR #42/#43.
+> Updated on 2026-08-21 for the PR #46/issue #47 management realtime implementation branch.
 >
-> This document defines the accepted presentation target. Remaining runtime MVC surfaces are implementation debt for a follow-up code PR.
+> PR #46 retains the completed PageModel/DbContext cleanup and implements authorized management SignalR on its branch; it is **not merged**. Provider, runtime, storage, and deployment claims below remain unchanged unless explicitly noted.
 
 ## Runtime stack
 
 - ASP.NET Core .NET 10 host.
 - Razor Pages as the sole target HTTP presentation model.
-- ASP.NET Core SignalR for Document Management realtime notifications.
+- ASP.NET Core SignalR for authorized management realtime notifications.
 - Server-Sent Events (SSE) for Chat progress/typewriter output.
 - ASP.NET Core Identity.
 - EF Core + PostgreSQL 17.
@@ -33,9 +33,8 @@ Razor Pages:
   Reports
 
 Realtime transports:
-  Chat      -> SSE
-  Documents -> SignalR notifications
-```
+  Chat         -> SSE
+  Management   -> authorized SignalR notifications
 
 No product HTTP surface should remain dependent on MVC controllers/views after the implementation migration.
 
@@ -70,11 +69,11 @@ Chat and Reports already demonstrate this direction through `IChatPageService` a
 Target request path:
 
 ```text
-subject-aware Document/Chapter Razor Page handler
- -> validate + authorize
+subject-aware management Razor Page handler
+ -> validate + authorize policy/concrete Subject
  -> persist requested change
  -> IDocumentIndexingQueue when required
- -> publish Document realtime event
+ -> publish ManagementChanged after commit succeeds
 ```
 
 Background path:
@@ -88,7 +87,7 @@ IDocumentIndexingQueue
  -> TextChunker
  -> ITextEmbeddingService
  -> replace DocumentChunk rows / persist status
- -> publish DocumentIndexStatusChanged
+ -> publish ManagementChanged(Document, IndexStatusChanged, Status)
 ```
 
 The queue remains process-local. Startup recovery re-enqueues persisted `Uploaded`/`Processing` documents.
@@ -98,42 +97,49 @@ Parsers:
 - PDF: PdfPig.
 - DOCX/PPTX: OpenXml.
 
-## Document SignalR transport
+## Management SignalR transport
 
-Recommended endpoint:
+The authorized management hub is:
 
 ```text
-/hubs/documents
+namespace PRN222.RagAssistant.Realtime
+ManagementHub
+/hubs/management
+server event: ManagementChanged
 ```
 
-Recommended server-to-client events:
+Application-facing code publishes through:
 
-```text
-DocumentCreated
-DocumentUpdated
-DocumentDeleted
-DocumentIndexStatusChanged
+```csharp
+Task PublishAsync(
+    ManagementRealtimeEvent notification,
+    CancellationToken cancellationToken = default);
 ```
 
-Recommended subject group shape:
+The envelope resources are `Document`, `Chapter`, `Subject`, `SubjectLeaderAssignments`, and `User`. Changes are `Created`, `Updated`, `Deleted`, `IndexStatusChanged`, `AssignmentsChanged`, and `RoleChanged`; Document index-status events retain their `Status`.
+
+Scoped groups are:
 
 ```text
-subject:{SubjectId}
+subject:{guid:D}
+admin:users
+admin:subjects
+subjects:catalog
 ```
 
-Server-side authorization must validate access before a connection/subscription receives subject events.
+Subscriptions are `SubscribeToSubject(Guid subjectId)`, `SubscribeToAdminUsers()`, `SubscribeToAdminSubjects()`, and `SubscribeToSubjectCatalog()`. The hub applies the same server-side policies and concrete-subject checks as the corresponding Razor Pages before adding a connection to a group.
 
-SignalR is fan-out only. CRUD remains in Razor Page handlers:
+SignalR is fan-out only. CRUD, indexing requests, subject changes, leader assignments, and user/role changes remain in Razor Page handlers/application-facing services:
 
 ```text
-Razor Page POST handler
- -> antiforgery + validation + subject authorization
+Razor Page handler
+ -> antiforgery + validation + policy/subject authorization
  -> write transaction succeeds
- -> realtime notifier / IHubContext
+ -> IManagementRealtimeNotifier / ManagementHub
  -> authorized connected clients
 ```
 
-The JavaScript client should enable automatic reconnect and use stable IDs so duplicate/out-of-order notifications can be tolerated.
+The JavaScript client opts in with `data-management-realtime`, `data-realtime-scope` (`subject`, `admin-users`, `admin-subjects`, or `subject-catalog`), and optional `data-subject-id`. It enables automatic reconnect and reloads authorized page state when `ManagementChanged` is insufficient or after a reconnect.
 
 ## Flow 2 RAG
 
@@ -164,7 +170,7 @@ done
 error
 ```
 
-Document SignalR work must not alter this contract.
+Management realtime work must not alter this contract.
 
 ## Evaluation
 
@@ -212,7 +218,7 @@ Embedding: OpenRouter / nvidia/llama-nemotron-embed-vl-1b-v2:free
 Dimension: 1024
 ```
 
-Render web services support inbound WebSocket connections, so the target SignalR Document hub is compatible with the current service type. Connections can still close when an instance is replaced during deploy/platform maintenance, so client reconnect behavior is required.
+Render web services support inbound WebSocket connections, so the target ManagementHub is compatible with the current service type. Connections can still close when an instance is replaced during deploy/platform maintenance, so client reconnect and reload fallback behavior is required.
 
 The current demo is single-instance. If future scaling uses multiple instances, SignalR scale-out/shared realtime state must be reviewed explicitly.
 
@@ -226,17 +232,19 @@ The implementation migration should keep existing build/test/EF/PostgreSQL/Docke
 
 - Razor Page handler authorization and subject scoping;
 - preserved public routes where required;
-- Document SignalR authorization/group isolation;
-- create/update/delete notifications;
-- indexing status notifications;
-- Chat SSE remaining unchanged.
+- ManagementHub policy/group isolation;
+- create/update/delete notifications for every management resource;
+- Document index-status notifications and status payloads;
+- assignment and role-change notifications;
+- automatic reconnect/reload fallback;
+- Chat SSE remaining unchanged and no SignalR Chat migration.
 
 ## Intentionally separated transports
 
 ```text
 Chat realtime/progress        = SSE
-Document Management realtime = SignalR
+Management realtime           = authorized SignalR
 HTTP UI/actions               = Razor Pages
 ```
 
-Do not collapse these into one transport merely for uniformity.
+Do not collapse these into one transport merely for uniformity, and do not migrate Chat from SSE to SignalR.

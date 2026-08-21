@@ -1,6 +1,6 @@
 # AI provider routing, fallback, and embedding compatibility
 
-> Runtime/configuration guide synchronized with repository configuration after PR #39 on 2026-08-21. External provider pricing/free limits can change independently of this repository.
+> Runtime/configuration guide synchronized with repository configuration on 2026-08-21. External provider pricing/free limits can change independently of this repository.
 
 ## Supported providers
 
@@ -41,11 +41,19 @@ Chat:      qwen3:4b
 Embedding: qwen3-embedding:0.6b
 ```
 
-Gemini configuration defaults:
+Gemini Chat fallback order:
 
 ```text
-Chat:      gemini-3.6-flash
-Embedding: gemini-embedding-2
+gemini-3.5-flash-lite
+gemini-3.1-flash-lite
+gemini-2.5-flash
+gemini-2.5-flash-lite
+```
+
+Gemini embedding default:
+
+```text
+gemini-embedding-2
 ```
 
 OpenAI configuration defaults:
@@ -63,6 +71,21 @@ nvidia/llama-nemotron-embed-vl-1b-v2:free
 
 These are repository configuration values, not guarantees that a third-party model remains available/free forever.
 
+## Gemini chat fallback chain
+
+When Gemini is selected for Chat, `GeminiChatCompletionService` reads the ordered comma-separated `Rag:Gemini:ChatModels` configuration value. `Rag:Gemini:ChatModel` remains supported as a backward-compatible single-model setting when no list is configured.
+
+The next Gemini model is tried only when the current model fails before usable response text is emitted with a model-specific or transient condition such as:
+
+- quota/rate-limit exhaustion (`429`, `RESOURCE_EXHAUSTED`);
+- request/provider timeout;
+- model not found/unavailable;
+- transient provider `5xx` failures.
+
+The service does **not** switch models for normal client/configuration failures such as invalid requests or authentication/authorization errors. It also does not switch after streaming text has already been emitted, which prevents mixing output from two different models in one assistant answer.
+
+For Agentic RAG, every configured fallback model must support function calling because the selected model can be asked to execute retrieval tools.
+
 ## OpenRouter chat fallback chain
 
 When OpenRouter is explicitly selected for Chat, the current default ordered chain in `.env.example` / Docker Compose is:
@@ -76,18 +99,23 @@ openai/gpt-oss-20b:free
 openrouter/free
 ```
 
-The adapter sends an ordered model list and allows OpenRouter provider fallback. This can improve resilience to a model/provider outage, but it does not bypass account-level rate limits/quotas.
+The adapter sends an ordered model list and allows OpenRouter provider fallback. This can improve resilience to a model/provider outage, but it does not bypass account-level rate limits/quotas shared across all candidate models.
 
 ## Current Render split
 
-Render does **not** currently use the OpenRouter chat fallback chain because PR #39 overrides Chat to Gemini:
+Render keeps Chat on Gemini and embeddings on OpenRouter:
 
 ```text
 Rag__Provider=OpenRouter
 Rag__ChatProvider=Gemini
 Rag__EmbeddingProvider=OpenRouter
 
-Chat:      gemini-3.6-flash
+Chat fallback:
+  gemini-3.5-flash-lite
+  gemini-3.1-flash-lite
+  gemini-2.5-flash
+  gemini-2.5-flash-lite
+
 Embedding: nvidia/llama-nemotron-embed-vl-1b-v2:free
 Dimensions: 1024
 ```
@@ -136,11 +164,12 @@ Run:
 docker compose --profile local-ai up -d --build
 ```
 
-### Direct Gemini
+### Direct Gemini with model fallback
 
 ```env
 RAG_PROVIDER=Gemini
 GEMINI_API_KEY=<server-side key>
+GEMINI_CHAT_MODELS=gemini-3.5-flash-lite,gemini-3.1-flash-lite,gemini-2.5-flash,gemini-2.5-flash-lite
 ```
 
 ### OpenRouter chat + fixed embedding provider
@@ -167,7 +196,8 @@ This avoids coupling Chat availability to the persisted embedding corpus.
 - only providers selected for chat/embedding require configuration;
 - selected cloud providers require API keys;
 - selected base URLs must be valid absolute URLs;
-- legacy `RAG_PROVIDER` remains supported.
+- legacy `RAG_PROVIDER` remains supported;
+- legacy single Gemini `ChatModel` remains supported if `ChatModels` is not configured.
 
 ## Secrets and privacy
 

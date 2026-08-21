@@ -1,11 +1,17 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authorization.Infrastructure;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using PRN222.RagAssistant.Controllers;
 using PRN222.RagAssistant.Infrastructure;
 using PRN222.RagAssistant.Security;
+using PRN222.RagAssistant.Pages.Documents;
+using PRN222.RagAssistant.Pages.Chapters;
+using PRN222.RagAssistant.Pages.Subjects;
+using PRN222.RagAssistant.Pages.Evaluation;
+using AdminUsersPages = PRN222.RagAssistant.Pages.AdminUsers;
+using AdminSubjectsPages = PRN222.RagAssistant.Pages.AdminSubjects;
+using DocumentsPages = PRN222.RagAssistant.Pages.Documents;
+using ChaptersPages = PRN222.RagAssistant.Pages.Chapters;
 
 namespace PRN222.RagAssistant.Tests;
 
@@ -136,32 +142,15 @@ public sealed class ChapterAuthorizationTests
     }
 
     [Fact]
-    public void AdminUsers_controller_requires_ManageUsers_policy()
+    public void AdminUsers_page_model_requires_ManageUsers_policy()
     {
-        var attributes = typeof(AdminUsersController)
+        var attributes = typeof(AdminUsersPages.IndexModel)
             .GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
             .Cast<AuthorizeAttribute>()
             .ToList();
 
         var authorizeAttribute = Assert.Single(attributes);
         Assert.Equal(AppPolicies.ManageUsers, authorizeAttribute.Policy);
-    }
-
-    [Theory]
-    [InlineData(nameof(AdminUsersController.Create))]
-    [InlineData(nameof(AdminUsersController.Edit))]
-    public void AdminUsers_POST_actions_validate_anti_forgery_tokens(string actionName)
-    {
-        var postMethods = typeof(AdminUsersController)
-            .GetMethods()
-            .Where(method => method.Name == actionName)
-            .Where(method => method.GetCustomAttributes(typeof(HttpPostAttribute), inherit: true).Any())
-            .ToList();
-
-        Assert.NotEmpty(postMethods);
-        Assert.All(postMethods, method => Assert.Contains(
-            method.GetCustomAttributes(typeof(ValidateAntiForgeryTokenAttribute), inherit: true),
-            attribute => attribute is ValidateAntiForgeryTokenAttribute));
     }
 
     [Fact]
@@ -174,80 +163,192 @@ public sealed class ChapterAuthorizationTests
     }
 
     [Fact]
-    public void Flow1_presentation_uses_MVC_controllers()
+    public void Razor_Pages_exist_for_Documents_module()
     {
-        Assert.True(typeof(Controller).IsAssignableFrom(typeof(DocumentsController)));
-        Assert.True(typeof(Controller).IsAssignableFrom(typeof(ChaptersController)));
+        var documentPageTypes = new[]
+        {
+            typeof(DocumentsPages.IndexModel),
+            typeof(DocumentsPages.DetailsModel),
+            typeof(DocumentsPages.UploadModel),
+            typeof(DocumentsPages.EditModel)
+        };
+
+        foreach (var pageType in documentPageTypes)
+        {
+            Assert.NotNull(pageType);
+            Assert.True(pageType.IsSubclassOf(typeof(Microsoft.AspNetCore.Mvc.RazorPages.PageModel)));
+        }
     }
 
     [Fact]
-    public void Flow1_does_not_keep_legacy_Razor_Page_types()
+    public void Razor_Pages_exist_for_Chapters_module()
     {
-        var legacyNamespacePrefixes = new[]
+        var chapterPageTypes = new[]
         {
-            "PRN222.RagAssistant.Pages.Documents",
-            "PRN222.RagAssistant.Pages.Chapters"
+            typeof(ChaptersPages.IndexModel),
+            typeof(ChaptersPages.CreateModel),
+            typeof(ChaptersPages.EditModel),
+            typeof(ChaptersPages.DeleteModel)
         };
 
-        var legacyTypes = typeof(DocumentsController).Assembly
-            .GetTypes()
-            .Where(type => type.Namespace is not null
-                           && legacyNamespacePrefixes.Any(prefix =>
-                               type.Namespace == prefix
-                               || type.Namespace.StartsWith($"{prefix}.", StringComparison.Ordinal)))
-            .ToList();
-
-        Assert.Empty(legacyTypes);
-    }
-
-    [Theory]
-    [InlineData(typeof(ChaptersController), nameof(ChaptersController.Create))]
-    [InlineData(typeof(ChaptersController), nameof(ChaptersController.Edit))]
-    [InlineData(typeof(ChaptersController), nameof(ChaptersController.Delete))]
-    [InlineData(typeof(ChaptersController), nameof(ChaptersController.DeleteConfirmed))]
-    [InlineData(typeof(DocumentsController), nameof(DocumentsController.Upload))]
-    [InlineData(typeof(DocumentsController), nameof(DocumentsController.Edit))]
-    [InlineData(typeof(DocumentsController), nameof(DocumentsController.Delete))]
-    [InlineData(typeof(DocumentsController), nameof(DocumentsController.Reindex))]
-    public void Flow1_write_actions_have_ManageDocuments_authorization_attribute(Type controllerType, string actionName)
-    {
-        var methods = controllerType
-            .GetMethods()
-            .Where(method => method.Name == actionName)
-            .ToList();
-
-        Assert.NotEmpty(methods);
-        Assert.All(methods, method =>
+        foreach (var pageType in chapterPageTypes)
         {
-            var authorizeAttributes = method
-                .GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
-                .Cast<AuthorizeAttribute>();
-
-            Assert.Contains(authorizeAttributes, attribute => attribute.Policy == AppPolicies.ManageDocuments);
-        });
+            Assert.NotNull(pageType);
+            Assert.True(pageType.IsSubclassOf(typeof(Microsoft.AspNetCore.Mvc.RazorPages.PageModel)));
+        }
     }
 
-    [Theory]
-    [InlineData(typeof(DocumentsController), nameof(DocumentsController.Upload))]
-    [InlineData(typeof(DocumentsController), nameof(DocumentsController.Edit))]
-    [InlineData(typeof(DocumentsController), nameof(DocumentsController.Delete))]
-    [InlineData(typeof(DocumentsController), nameof(DocumentsController.Reindex))]
-    [InlineData(typeof(ChaptersController), nameof(ChaptersController.Create))]
-    [InlineData(typeof(ChaptersController), nameof(ChaptersController.Edit))]
-    [InlineData(typeof(ChaptersController), nameof(ChaptersController.DeleteConfirmed))]
-    public void Flow1_POST_actions_validate_anti_forgery_tokens(Type controllerType, string actionName)
+    [Fact]
+    public void Razor_Pages_exist_for_AdminSubjects_module()
     {
-        var postMethods = controllerType
-            .GetMethods()
-            .Where(method => method.Name == actionName)
-            .Where(method => method.GetCustomAttributes(typeof(HttpPostAttribute), inherit: true).Any()
-                          || method.GetCustomAttributes(typeof(ActionNameAttribute), inherit: true).Any())
-            .ToList();
+        var pageTypes = new[]
+        {
+            typeof(AdminSubjectsPages.IndexModel),
+            typeof(AdminSubjectsPages.CreateModel),
+            typeof(AdminSubjectsPages.EditModel),
+            typeof(AdminSubjectsPages.LeadersModel)
+        };
 
-        Assert.NotEmpty(postMethods);
-        Assert.All(postMethods, method => Assert.Contains(
-            method.GetCustomAttributes(typeof(ValidateAntiForgeryTokenAttribute), inherit: true),
-            attribute => attribute is ValidateAntiForgeryTokenAttribute));
+        foreach (var pageType in pageTypes)
+        {
+            Assert.NotNull(pageType);
+            Assert.True(pageType.IsSubclassOf(typeof(Microsoft.AspNetCore.Mvc.RazorPages.PageModel)));
+        }
+    }
+
+    [Fact]
+    public void Razor_Pages_exist_for_AdminUsers_module()
+    {
+        var pageTypes = new[]
+        {
+            typeof(AdminUsersPages.IndexModel),
+            typeof(AdminUsersPages.CreateModel),
+            typeof(AdminUsersPages.EditModel)
+        };
+
+        foreach (var pageType in pageTypes)
+        {
+            Assert.NotNull(pageType);
+            Assert.True(pageType.IsSubclassOf(typeof(Microsoft.AspNetCore.Mvc.RazorPages.PageModel)));
+        }
+    }
+
+    [Fact]
+    public void Razor_Pages_exist_for_Subjects_module()
+    {
+        var pageTypes = new[]
+        {
+            typeof(PRN222.RagAssistant.Pages.Subjects.IndexModel)
+        };
+
+        foreach (var pageType in pageTypes)
+        {
+            Assert.NotNull(pageType);
+            Assert.True(pageType.IsSubclassOf(typeof(Microsoft.AspNetCore.Mvc.RazorPages.PageModel)));
+        }
+    }
+
+    [Fact]
+    public void Razor_Pages_exist_for_Evaluation_module()
+    {
+        var pageTypes = new[]
+        {
+            typeof(PRN222.RagAssistant.Pages.Evaluation.IndexModel)
+        };
+
+        foreach (var pageType in pageTypes)
+        {
+            Assert.NotNull(pageType);
+            Assert.True(pageType.IsSubclassOf(typeof(Microsoft.AspNetCore.Mvc.RazorPages.PageModel)));
+        }
+    }
+
+    [Fact]
+    public void Documents_Upload_Edit_require_ManageDocuments_policy()
+    {
+        var protectedPages = new[]
+        {
+            typeof(DocumentsPages.UploadModel),
+            typeof(DocumentsPages.EditModel)
+        };
+
+        foreach (var pageType in protectedPages)
+        {
+            var attributes = pageType
+                .GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
+                .Cast<AuthorizeAttribute>()
+                .ToList();
+
+            Assert.NotEmpty(attributes);
+            Assert.Contains(attributes, a => a.Policy == AppPolicies.ManageDocuments);
+        }
+    }
+
+    [Fact]
+    public void Chapters_Create_Edit_Delete_require_ManageDocuments_policy()
+    {
+        var protectedPages = new[]
+        {
+            typeof(ChaptersPages.CreateModel),
+            typeof(ChaptersPages.EditModel),
+            typeof(ChaptersPages.DeleteModel)
+        };
+
+        foreach (var pageType in protectedPages)
+        {
+            var attributes = pageType
+                .GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
+                .Cast<AuthorizeAttribute>()
+                .ToList();
+
+            Assert.NotEmpty(attributes);
+            Assert.Contains(attributes, a => a.Policy == AppPolicies.ManageDocuments);
+        }
+    }
+
+    [Fact]
+    public void AdminUsers_pages_require_ManageUsers_policy()
+    {
+        var protectedPages = new[]
+        {
+            typeof(AdminUsersPages.IndexModel),
+            typeof(AdminUsersPages.CreateModel),
+            typeof(AdminUsersPages.EditModel)
+        };
+
+        foreach (var pageType in protectedPages)
+        {
+            var attributes = pageType
+                .GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
+                .Cast<AuthorizeAttribute>()
+                .ToList();
+
+            Assert.NotEmpty(attributes);
+            Assert.Contains(attributes, a => a.Policy == AppPolicies.ManageUsers);
+        }
+    }
+
+    [Fact]
+    public void AdminSubjects_pages_require_ManageSubjects_policy()
+    {
+        var protectedPages = new[]
+        {
+            typeof(AdminSubjectsPages.IndexModel),
+            typeof(AdminSubjectsPages.CreateModel),
+            typeof(AdminSubjectsPages.EditModel),
+            typeof(AdminSubjectsPages.LeadersModel)
+        };
+
+        foreach (var pageType in protectedPages)
+        {
+            var attributes = pageType
+                .GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
+                .Cast<AuthorizeAttribute>()
+                .ToList();
+
+            Assert.NotEmpty(attributes);
+            Assert.Contains(attributes, a => a.Policy == AppPolicies.ManageSubjects);
+        }
     }
 
     private static IServiceCollection BuildServices()

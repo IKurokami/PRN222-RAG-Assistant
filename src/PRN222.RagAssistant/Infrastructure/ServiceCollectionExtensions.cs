@@ -94,9 +94,12 @@ public static class ServiceCollectionExtensions
             .Validate(o => o.Retrieval.MinimumSimilarityScore >= 0.0 && o.Retrieval.MinimumSimilarityScore <= 1.0, "Rag:Retrieval:MinimumSimilarityScore must be between 0.0 and 1.0.")
             .Validate(o => o.Retrieval.HistoryTurns >= 0, "Rag:Retrieval:HistoryTurns must be non-negative.")
             .Validate(o => o.Retrieval.ExcerptChars > 0, "Rag:Retrieval:ExcerptChars must be greater than 0.")
+            .Validate(o => o.Agentic.ToolTopK > 0 && o.Agentic.ToolTopK <= 12, "Rag:Agentic:ToolTopK must be between 1 and 12.")
+            .Validate(o => o.Agentic.MaxToolResultChars >= 1000, "Rag:Agentic:MaxToolResultChars must be at least 1000.")
             .ValidateOnStart();
         services.AddSingleton<Infrastructure.Rag.GroundedPromptBuilder>();
         services.AddScoped<Infrastructure.Rag.IDocumentChunkRetriever, Infrastructure.Rag.PgVectorDocumentChunkRetriever>();
+        services.AddScoped<Infrastructure.Rag.IAgenticRetrievalService, Infrastructure.Rag.AgenticRetrievalService>();
         services.AddScoped<IRagQueryService, Infrastructure.Rag.RagQueryService>();
         services.AddScoped<IEvaluationService, Infrastructure.Services.EvaluationService>();
 

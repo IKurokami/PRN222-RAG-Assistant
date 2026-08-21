@@ -16,6 +16,7 @@ public sealed class DocumentIndexingService : IDocumentIndexingService
     private readonly TextChunker _textChunker;
     private readonly IConfiguration _configuration;
     private readonly ILogger<DocumentIndexingService> _logger;
+    private readonly IManagementRealtimeNotifier _realtimeNotifier;
 
     public DocumentIndexingService(
         ApplicationDbContext dbContext,
@@ -23,7 +24,8 @@ public sealed class DocumentIndexingService : IDocumentIndexingService
         DocumentParserFactory parserFactory,
         TextChunker textChunker,
         IConfiguration configuration,
-        ILogger<DocumentIndexingService> logger)
+        ILogger<DocumentIndexingService> logger,
+        IManagementRealtimeNotifier realtimeNotifier)
     {
         _dbContext = dbContext;
         _embeddingBatcher = embeddingBatcher;
@@ -31,6 +33,7 @@ public sealed class DocumentIndexingService : IDocumentIndexingService
         _textChunker = textChunker;
         _configuration = configuration;
         _logger = logger;
+        _realtimeNotifier = realtimeNotifier;
     }
 
     public async Task IndexAsync(Guid documentId, CancellationToken cancellationToken = default)
@@ -51,6 +54,14 @@ public sealed class DocumentIndexingService : IDocumentIndexingService
         document.IndexStatus = DocumentIndexStatus.Processing;
         document.IndexError = null;
         await _dbContext.SaveChangesAsync(cancellationToken);
+        await _realtimeNotifier.PublishAsync(
+            new ManagementRealtimeEvent(
+                ManagementResource.Document,
+                ManagementChange.IndexStatusChanged,
+                document.Id,
+                document.SubjectId,
+                document.IndexStatus.ToString()),
+            CancellationToken.None);
 
         try
         {
@@ -129,6 +140,14 @@ public sealed class DocumentIndexingService : IDocumentIndexingService
             document.IndexError = null;
 
             await _dbContext.SaveChangesAsync(cancellationToken);
+            await _realtimeNotifier.PublishAsync(
+                new ManagementRealtimeEvent(
+                    ManagementResource.Document,
+                    ManagementChange.IndexStatusChanged,
+                    document.Id,
+                    document.SubjectId,
+                    document.IndexStatus.ToString()),
+                CancellationToken.None);
 
             _logger.LogInformation(
                 "Successfully indexed document {DocumentId} with {ChunkCount} chunks",
@@ -150,6 +169,14 @@ public sealed class DocumentIndexingService : IDocumentIndexingService
                     : ex.Message;
 
                 await _dbContext.SaveChangesAsync(CancellationToken.None);
+                await _realtimeNotifier.PublishAsync(
+                    new ManagementRealtimeEvent(
+                        ManagementResource.Document,
+                        ManagementChange.IndexStatusChanged,
+                        failDoc.Id,
+                        failDoc.SubjectId,
+                        failDoc.IndexStatus.ToString()),
+                    CancellationToken.None);
             }
         }
     }

@@ -2,15 +2,16 @@
 @using PRN222.RagAssistant.Security
 @{
     var currentPage = ViewContext.RouteData.Values["page"]?.ToString() ?? "";
-    var currentController = ViewContext.RouteData.Values["controller"]?.ToString() ?? "";
-    var isHomePage = string.Equals(currentPage, "/Index", StringComparison.OrdinalIgnoreCase) && string.IsNullOrEmpty(currentController);
+    var isHomePage = string.Equals(currentPage, "/Index", StringComparison.OrdinalIgnoreCase);
     var isAdmin = User.IsInRole(AppRoles.Admin);
     var isSubjectLeader = User.IsInRole(AppRoles.SubjectLeader);
-    var isSubjectWorkspace = currentController is "Subjects" or "Documents" or "Chapters"
+    var isSubjectWorkspace = currentPage.StartsWith("/Subjects", StringComparison.OrdinalIgnoreCase)
+        || currentPage.StartsWith("/Documents", StringComparison.OrdinalIgnoreCase)
+        || currentPage.StartsWith("/Chapters", StringComparison.OrdinalIgnoreCase)
         || currentPage.StartsWith("/Reports", StringComparison.OrdinalIgnoreCase);
     var isChatPage = currentPage.StartsWith("/Chat", StringComparison.OrdinalIgnoreCase);
-    var isSubjectAdminArea = string.Equals(currentController, "AdminSubjects", StringComparison.OrdinalIgnoreCase);
-    var isUserAdminArea = string.Equals(currentController, "AdminUsers", StringComparison.OrdinalIgnoreCase);
+    var isSubjectAdminArea = currentPage.StartsWith("/AdminSubjects", StringComparison.OrdinalIgnoreCase);
+    var isUserAdminArea = currentPage.StartsWith("/AdminUsers", StringComparison.OrdinalIgnoreCase);
 }
 <!DOCTYPE html>
 <html lang="vi">
@@ -51,23 +52,23 @@
                         @if (User.Identity?.IsAuthenticated == true)
                         {
                             <li class="nav-item">
-                                <a class="nav-link-humata @(isSubjectWorkspace ? "is-active" : null)" asp-area="" asp-controller="Subjects" asp-action="Index">Môn học</a>
+                                <a class="nav-link-humata @(isSubjectWorkspace ? "is-active" : null)" asp-area="" asp-page="/Subjects/Index">Môn học</a>
                             </li>
                             <li class="nav-item">
                                 <a class="nav-link-humata @(isChatPage ? "is-active" : null)" asp-area="" asp-page="/Chat/Index">Trò chuyện RAG</a>
                             </li>
                             <li class="nav-item">
-                                <a class="nav-link-humata @(currentController == "Evaluation" ? "is-active" : null)" asp-area="" asp-controller="Evaluation" asp-action="Index">Đánh giá RAG</a>
+                                <a class="nav-link-humata @(currentPage.StartsWith("/Evaluation", StringComparison.OrdinalIgnoreCase) ? "is-active" : null)" asp-area="" asp-page="/Evaluation/Index">Đánh giá RAG</a>
                             </li>
 
                         }
                         @if (isAdmin)
                         {
                             <li class="nav-item">
-                                <a class="nav-link-humata @(isSubjectAdminArea ? "is-active" : null)" asp-area="" asp-controller="AdminSubjects" asp-action="Index">Quản trị môn học</a>
+                                <a class="nav-link-humata @(isSubjectAdminArea ? "is-active" : null)" asp-area="" asp-page="/AdminSubjects/Index">Quản trị môn học</a>
                             </li>
                             <li class="nav-item">
-                                <a class="nav-link-humata @(isUserAdminArea ? "is-active" : null)" asp-area="" asp-controller="AdminUsers" asp-action="Index">Người dùng</a>
+                                <a class="nav-link-humata @(isUserAdminArea ? "is-active" : null)" asp-area="" asp-page="/AdminUsers/Index">Người dùng</a>
                             </li>
                         }
                         <li class="nav-item">
@@ -139,7 +140,7 @@
                 <li><a asp-area="" asp-page="/Index">Trang chủ</a></li>
                 @if (User.Identity?.IsAuthenticated == true)
                 {
-                    <li><a asp-area="" asp-controller="Subjects" asp-action="Index">Danh mục môn học</a></li>
+                    <li><a asp-area="" asp-page="/Subjects/Index">Danh mục môn học</a></li>
                 }
                 <li><a href="/#features">Tính năng</a></li>
                 <li><a href="https://flm.fpt.edu.vn/gui/role/teacher/SyllabusDetails?sylID=13892" target="_blank" rel="noopener noreferrer">Đề cương FLM</a></li>

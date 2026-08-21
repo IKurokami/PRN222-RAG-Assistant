@@ -1,6 +1,9 @@
 using Microsoft.AspNetCore.DataProtection;
+using PRN222.RagAssistant.Application.Abstractions;
 using PRN222.RagAssistant.Data;
 using PRN222.RagAssistant.Infrastructure;
+using PRN222.RagAssistant.Infrastructure.Services;
+using PRN222.RagAssistant.Realtime;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -9,11 +12,15 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Configuration["ConnectionStrings:Postgres"] =
     PostgresConnectionStringResolver.Resolve(builder.Configuration);
 
-// MVC remains enabled for controller-based areas, while authentication,
-// Chat UI, shell pages, and reporting use Razor Pages.
-builder.Services.AddControllersWithViews();
+// Full Razor Pages architecture (controller-based pages migrated to Razor Pages)
 builder.Services.AddRazorPages();
 builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddSignalR();
+builder.Services.AddScoped<IManagementRealtimeNotifier, SignalRManagementRealtimeNotifier>();
+builder.Services.AddScoped<ISubjectCatalogService, SubjectCatalogService>();
+builder.Services.AddScoped<IChapterManagementService, ChapterManagementService>();
+builder.Services.AddScoped<IDocumentManagementService, DocumentManagementService>();
+builder.Services.AddScoped<IHomePageService, HomePageService>();
 builder.Services.AddChatPageServices();
 builder.Services.AddReporting();
 builder.Services
@@ -43,9 +50,7 @@ app.MapGet("/healthz", () => Results.Ok(new { status = "ok" }))
    .AllowAnonymous();
 
 app.MapStaticAssets();
-app.MapControllerRoute(
-    name: "default",
-    pattern: "{controller=Home}/{action=Index}/{id?}");
+app.MapHub<ManagementHub>("/hubs/management");
 app.MapRazorPages()
    .WithStaticAssets();
 
