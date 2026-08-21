@@ -77,10 +77,17 @@ public sealed class ReportQueryService : IReportQueryService
             .ToListAsync(cancellationToken);
 
         var subjectDocumentIds = documentsQuery.Select(document => document.Id);
+        var indexedSubjectDocumentIds = documentsQuery
+            .Where(document => document.IndexStatus == DocumentIndexStatus.Indexed)
+            .Select(document => document.Id);
 
         var totalChunks = await _dbContext.DocumentChunks
             .AsNoTracking()
             .CountAsync(chunk => subjectDocumentIds.Contains(chunk.DocumentId), cancellationToken);
+
+        var indexedChunks = await _dbContext.DocumentChunks
+            .AsNoTracking()
+            .CountAsync(chunk => indexedSubjectDocumentIds.Contains(chunk.DocumentId), cancellationToken);
 
         var recentFailures = await documentsQuery
             .Where(document => document.IndexStatus == DocumentIndexStatus.Failed)
@@ -314,7 +321,7 @@ public sealed class ReportQueryService : IReportQueryService
             IndexedCount = indexedCount,
             FailedCount = statusCounts.GetValueOrDefault(DocumentIndexStatus.Failed),
             TotalChunks = totalChunks,
-            AverageChunksPerIndexedDocument = Average(totalChunks, indexedCount),
+            AverageChunksPerIndexedDocument = Average(indexedChunks, indexedCount),
             RecentFailures = recentFailures,
             RecentlyIndexed = recentlyIndexed,
             TotalChatSessions = totalChatSessions,
