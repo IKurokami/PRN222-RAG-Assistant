@@ -1,286 +1,505 @@
 ====================================================================================================
-PRN222 RAG ASSISTANT - TÀI LIỆU KIẾN TRÚC & HƯỚNG DẪN HỆ THỐNG CHI TIẾT
-Dự án: Hệ thống Trợ lý RAG Đa môn học (PRN222 Multi-Subject RAG Assistant)
-Phiên bản: 1.0.0 (Hỗ trợ .NET 10.0 + PostgreSQL pgvector + Multi-AI Provider)
+PRN222 RAG ASSISTANT - TÀI LIỆU KIẾN TRÚC & VẬN HÀNH HỆ THỐNG
 ====================================================================================================
 
-TỔNG QUAN TÀI LIỆU
-----------------------------------------------------------------------------------------------------
-Tài liệu này tổng hợp toàn bộ thông tin kiến trúc, luồng xử lý dữ liệu, mô hình cơ sở dữ liệu, 
-cơ chế phân quyền người dùng (RBAC), quy trình tích hợp nhà cung cấp trí tuệ nhân tạo (AI Provider), 
-và hướng dẫn vận hành hệ thống PRN222 RAG Assistant. 
+Baseline tài liệu: master sau PR #40 - 2026-08-21
+Framework: .NET 10 / ASP.NET Core
+Database: PostgreSQL 17 + pgvector
+Kiến trúc Presentation: MVC + Razor Pages
+AI Provider hỗ trợ: Ollama, Gemini, OpenAI, OpenRouter
 
-Tài liệu được xây dựng nhằm phục vụ công tác bàn giao, đánh giá báo cáo đồ án, và duy trì hệ thống
-mà không làm ảnh hưởng tới bất kỳ mã nguồn (source code) hay tiến trình thực thi trực tiếp nào của ứng dụng.
-
-
-====================================================================================================
-MỤC MỤC TÀI LIỆU
-====================================================================================================
-1. TỔNG QUAN DỰ ÁN & MỤC TIÊU HỆ THỐNG
-2. TỔNG QUAN KIẾN TRÚC HỆ THỐNG (SYSTEM ARCHITECTURE)
-3. CÔNG NGHỆ & THƯ VIỆN SỬ DỤNG (TECH STACK & DEPENDENCIES)
-4. MÔ HÌNH DỮ LIỆU & THỰC THỂ CƠ SỞ DỮ LIỆU (DATABASE SCHEMAS & ENTITIES)
-5. CƠ CHẾ BẢO MẬT & PHÂN QUYỀN (SECURITY & ROLE-BASED ACCESS CONTROL)
-6. LUỒNG 1: QUẢN LÝ TÀI LIỆU VÀ TIẾN TRÌNH INDEXING (DOCUMENT MANAGEMENT & INDEXING WORKFLOW)
-7. LUỒNG 2: HỆ THỐNG TRỢ LÝ RAG ĐA MÔN HỌC & HỎI ĐÁP (MULTI-SUBJECT RAG ASSISTANT ENGINE)
-8. LUỒNG 3: BÁO CÁO VÀ THỐNG KÊ HỌC THUẬT (ACADEMIC REPORTING & ANALYTICS)
-9. HẠ TẦNG AI PROVIDER & NGUYÊN TẮC QUẢN LÝ CHUỖI EMBEDDING VECTOR
-10. QUY TRÌNH ĐÓNG GÓI VÀ VẬN HÀNH BẰNG DOCKER COMPOSE
-11. DANH MỤC TIÊU CHUẨN KIỂM THỬ VÀ ĐẢM BẢO CHẤT LƯỢNG (TESTING & QUALITY ASSURANCE)
-12. PHÂN CÔNG TRÁCH NHIỆM & BÀN GIAO THÀNH VIÊN DỰ ÁN (TEAM WORKFLOW & OWNERSHIP)
-
+Tài liệu này là bản tham chiếu tổng hợp bằng tiếng Việt. Các giá trị cấu hình runtime chính xác nhất vẫn phải
+được đối chiếu với `.env.example`, `docker-compose.yml` và `render.yaml`.
 
 ====================================================================================================
-1. TỔNG QUAN DỰ ÁN & MỤC TIÊU HỆ THỐNG
+1. TỔNG QUAN HỆ THỐNG
 ====================================================================================================
-1.1. Giới thiệu dự án:
-   PRN222 RAG Assistant là ứng dụng web cho phép giảng viên và sinh viên tương tác với giáo trình, 
-   tài liệu bài giảng và đề thi của các môn học thông qua mô hình RAG (Retrieval-Augmented Generation).
-   Hệ thống không giới hạn ở một môn học cố định (như PRN222), mà được thiết kế theo kiến trúc Đa môn học 
-   (Multi-subject architecture), cho phép quản lý không giới hạn các môn học khác nhau.
 
-1.2. Mục tiêu cốt lõi:
-   - Tự động phân tích, chia nhỏ (chunking) và đánh chỉ mục vector (vector indexing) các định dạng tài liệu 
-     phổ biến bao gồm PDF, DOCX, PPTX.
-   - Truy vấn ngữ nghĩa chính xác theo phạm vi môn học cụ thể (Subject Boundary Invariant).
-   - Hỗ trợ linh hoạt các AI Provider khác nhau (Ollama local mặc định, Google Gemini Free Tier, OpenAI paid).
-   - Phân quyền chặt chẽ theo các vai trò Admin, Subject Leader (Chủ nhiệm môn), và Student (Sinh viên).
+PRN222 RAG Assistant là ứng dụng hỗ trợ học tập theo mô hình Retrieval-Augmented Generation (RAG).
+PRN222 chỉ là môn học demo được seed sẵn; hệ thống thực tế hỗ trợ nhiều Subject và không được hard-code
+PRN222 làm phạm vi toàn cục.
 
+Ba workflow chính hiện đều đã hoàn thành:
 
-====================================================================================================
-2. TỔNG QUAN KIẾN TRÚC HỆ THỐNG (SYSTEM ARCHITECTURE)
-====================================================================================================
-Hệ thống được thiết kế theo kiến trúc phân tầng (Clean Architecture / Layered Architecture) 
-kết hợp với mô hình ASP.NET Core MVC cho phần xử lý tương tác chính và Razor Pages cho phần Báo cáo & Xác thực.
+1. Flow 1 - Document Management & Indexing
+   - ASP.NET Core MVC Controllers + Views.
+   - Quản lý Chapter/Document theo Subject.
+   - Upload PDF/DOCX/PPTX.
+   - Index nền qua queue/worker.
 
-Các tầng kiến trúc chính:
-- Tầng Domain (Domain Layer):
-  Chứa các thực thể cốt lõi (Entities), Enums, và Value Objects. 
-  Quy tắc quan trọng: Không sử dụng Navigation Properties trong Domain Entities để đảm bảo ranh giới rõ ràng.
+2. Flow 2 - RAG Question & Answer & Conversation Management
+   - ASP.NET Core MVC Chat + Evaluation.
+   - Session/history/citation theo Subject và theo user.
+   - RAG retrieval bằng pgvector.
+   - UI Chat cập nhật tiến trình bằng Server-Sent Events (SSE).
 
-- Tầng Application (Application Layer):
-  Chứa các Hợp đồng giao diện (Interfaces), DTOs, và các Dịch vụ ứng dụng như IDocumentIndexingService, 
-  ITextEmbeddingService, IChatCompletionService, IRagQueryService, ISubjectAccessService.
+3. Flow 3 - Report & Statistics
+   - Razor Pages.
+   - Read-only.
+   - Truy vấn qua IReportQueryService thay vì PageModel truy cập DbContext trực tiếp.
+   - Tất cả document/index/chat metrics đều scope theo Subject.
 
-- Tầng Infrastructure (Infrastructure Layer):
-  Chứa cấu hình Entity Framework Core (ApplicationDbContext), tích hợp PostgreSQL + pgvector, 
-  các Adapter kết nối tới AI Provider (Ollama, Gemini, OpenAI), các Worker chạy nền (DocumentIndexingWorker), 
-  và hệ thống Lưu trữ tệp (File Storage Service).
-
-- Tầng Presentation (Presentation Layer):
-  - MVC Controllers & Views: Quản lý Luồng 1 (Tài liệu, Chương), Luồng 2 (Chat RAG), Quản trị người dùng (Admin Users), Quản lý môn học (Subjects).
-  - Razor Pages: Quản lý Xác thực (Identity Login/Register/Profile), Shell UI, và Luồng 3 (Báo cáo thống kê).
-
+Conversation History thuộc Flow 2, không phải workflow thứ tư.
 
 ====================================================================================================
-3. CÔNG NGHỆ & THƯ VIỆN SỬ DỤNG (TECH STACK & DEPENDENCIES)
+2. PHÂN BỔ MVC / RAZOR PAGES
 ====================================================================================================
-- Framework chính: ASP.NET Core (.NET 10.0)
-- Cơ sở dữ liệu: PostgreSQL 17 + Tiện ích mở rộng pgvector
-- ORM: Entity Framework Core 10.0 (EF Core)
-- Xác thực & Phân quyền: ASP.NET Core Identity
-- Thư viện đọc tài liệu:
-  * PdfPig: Đọc và trích xuất nội dung tệp PDF.
-  * DocumentFormat.OpenXml: Đọc và trích xuất tệp Word (.docx) và PowerPoint (.pptx).
-- Công cụ thiết kế giao diện (UI/UX):
-  * Design tokens & CSS components tự tạo (`design-tokens.css`, `components.css`).
-  * Bootstrap 5.3.3 & Bootstrap Icons 1.11.3.
-- Môi trường chạy Docker: Docker Compose v2 với tính năng Profiles (`local-ai`).
 
+MVC Controllers + Views:
+- Flow 1: Documents, Chapters.
+- Flow 2: Chat, Evaluation.
+- Admin Users.
+- Admin Subjects / Subject catalogue.
 
-====================================================================================================
-4. MÔ HÌNH DỮ LIỆU & THỰC THỂ CƠ SỞ DỮ LIỆU (DATABASE SCHEMAS & ENTITIES)
-====================================================================================================
-Hệ thống lưu trữ toàn bộ dữ liệu trong cơ sở dữ liệu PostgreSQL. Dưới đây là mô tả chi tiết các bảng chính:
+Razor Pages:
+- Authentication / các shell page liên quan.
+- Flow 3 Reports.
 
-4.1. Bảng `Subjects` (Môn học):
-   - `Id` (Guid, PK): Mã định danh môn học.
-   - `Code` (string): Mã môn học (ví dụ: PRN222, PRN211).
-   - `Name` (string): Tên đầy đủ môn học.
-   - `Description` (string): Mô tả môn học.
-   - `IsActive` (bool): Trạng thái hoạt động.
-
-4.2. Bảng `Chapters` (Chương học):
-   - `Id` (Guid, PK): Mã định danh chương.
-   - `SubjectId` (Guid, FK): Thuộc môn học nào.
-   - `OrderNumber` (int): Số thứ tự chương.
-   - `Title` (string): Tiêu đề chương.
-   - `Description` (string): Mô tả chương.
-
-4.3. Bảng `Documents` (Tài liệu):
-   - `Id` (Guid, PK): Mã định danh tài liệu.
-   - `SubjectId` (Guid, FK): Thuộc môn học nào.
-   - `ChapterId` (Guid?, FK): Thuộc chương học nào (có thể null).
-   - `Title` (string): Tên tài liệu.
-   - `FileName` (string): Tên file gốc.
-   - `StoragePath` (string): Đường dẫn lưu trữ trên đĩa (`storage/uploads/...`).
-   - `ContentType` (string): Loại MIME (application/pdf, application/vnd.openxmlformats-officedocument...).
-   - `FileSize` (long): Kích thước file tính bằng byte.
-   - `IndexStatus` (enum): Trạng thái đánh chỉ mục (`Uploaded`, `Processing`, `Indexed`, `Failed`).
-   - `IndexedAt` (DateTimeOffset?): Thời điểm hoàn thành đánh chỉ mục.
-   - `ErrorMessage` (string?): Lỗi xảy ra nếu đánh chỉ mục thất bại.
-
-4.4. Bảng `DocumentChunks` (Đoạn tài liệu & Vector embedding):
-   - `Id` (Guid, PK): Mã định danh đoạn tài liệu.
-   - `DocumentId` (Guid, FK): Thuộc tài liệu nào.
-   - `ChunkIndex` (int): Thứ tự của đoạn trong tài liệu.
-   - `Content` (string): Nội dung văn bản của đoạn.
-   - `Embedding` (Vector/float[]): Chứa chuỗi Vector embedding (mặc định 1024 chiều) lưu vào cột pgvector.
-
-4.5. Bảng `ChatSessions` & `ChatMessages` (Hội thoại RAG):
-   - Lưu trữ các phiên hỏi đáp của sinh viên/người dùng với AI trợ lý theo từng môn học cụ thể (`SubjectId`).
-   - `MessageCitations`: Lưu trữ trích dẫn (Citations) tham chiếu chính xác đến đoạn tài liệu `DocumentChunkId` nào được dùng để tạo câu trả lời.
-
+Trang nội bộ `Pages/RagDemo` đã bị xóa ở PR #35. Không dùng `/rag-demo` cho demo hiện tại.
 
 ====================================================================================================
-5. CƠ CHẾ BẢO MẬT & PHÂN QUYỀN (SECURITY & ROLE-BASED ACCESS CONTROL)
+3. CÁC TẦNG KIẾN TRÚC CHÍNH
 ====================================================================================================
-5.1. Các vai trò hệ thống (System Roles):
-   - `Admin` (Quản trị viên hệ thống):
-     Quản lý toàn bộ người dùng, vai trò, môn học, phân công Chủ nhiệm môn, và có quyền ghi/xóa trên tất cả tài liệu.
-   - `SubjectLeader` (Chủ nhiệm môn học):
-     Quản lý tài liệu, chương học và nội dung học thuật CHỈ đối với các môn học được phân công.
-   - `Student` (Sinh viên / Người dùng chung):
-     Xem danh sách môn học đang mở, thực hiện tra cứu/hỏi đáp RAG AI trên các môn học active. Không có quyền sửa đổi dữ liệu.
 
-5.2. Chính sách phân quyền (Authorization Policies):
-   - Policy `ManageUsers`: Yêu cầu vai trò `Admin`.
-   - Policy `ManageSubjects`: Yêu cầu vai trò `Admin`.
-   - Policy `ManageDocuments`: Yêu cầu vai trò `Admin` HOẶC `SubjectLeader`.
+Domain:
+- Entities và Enums cốt lõi.
+- Subject là ranh giới nghiệp vụ quan trọng.
+- Domain giữ quy ước không phụ thuộc Presentation/provider cụ thể.
 
-5.3. Quy tắc Ranh giới Môn học (Subject Access Service Boundary):
-   - Đối với vai trò `SubjectLeader`, quyền truy cập môn học được lưu dưới dạng User Claim: `AppClaimTypes.ManagedSubject`.
-   - Việc kiểm tra Policy `ManageDocuments` chỉ là điều kiện cần. Điều kiện đủ là phải qua kiểm tra `ISubjectAccessService.HasAccessAsync(userId, subjectId)` 
-     để đảm bảo Chủ nhiệm môn A không thể chỉnh sửa hay xóa tài liệu của môn B.
+Application:
+- Các contract/model an toàn cho Presentation, ví dụ:
+  * IDocumentIndexingQueue
+  * IDocumentIndexingService
+  * ITextEmbeddingService
+  * IChatCompletionService
+  * IRagQueryService
+  * IEvaluationService
+  * IReportQueryService
+  * RagAnswer / RagCitation
+  * SubjectReportSnapshot
 
+Infrastructure:
+- ApplicationDbContext / EF Core.
+- DataProtectionKeyDbContext.
+- PostgreSQL + pgvector.
+- Provider adapters cho Ollama/Gemini/OpenAI/OpenRouter.
+- Document parsers/chunker/indexing worker.
+- RAG retrieval/prompt/service implementation.
+- ReportQueryService.
 
-====================================================================================================
-6. LUỒNG 1: QUẢN LÝ TÀI LIỆU VÀ TIẾN TRÌNH INDEXING (DOCUMENT MANAGEMENT & INDEXING WORKFLOW)
-====================================================================================================
-6.1. Quy trình tải lên và tạo tài liệu:
-   1. Người dùng chọn Môn học và tải tệp lên qua MVC Controller `DocumentsController`.
-   2. Hệ thống kiểm tra quyền quản lý môn học (`ISubjectAccessService`).
-   3. Lưu tệp vật lý vào thư mục `storage/uploads/`.
-   4. Tạo bản ghi `Document` với trạng thái `IndexStatus = Uploaded`.
-   5. Đưa `Document.Id` vào hàng chờ bất đồng bộ trong bộ nhớ (`InMemoryDocumentIndexingQueue`).
-
-6.2. Tiến trình xử lý ngầm (Background Worker - DocumentIndexingWorker):
-   1. Worker lắng nghe hàng chờ `IDocumentIndexingQueue`.
-   2. Khi nhận được `Document.Id`, Worker chuyển trạng thái tài liệu sang `Processing`.
-   3. Gọi `IDocumentIndexingService`:
-      - Đọc nội dung tệp bằng parser tương ứng (PdfPig cho PDF, OpenXml cho DOCX/PPTX).
-      - Chia nhỏ văn bản thành các đoạn (chunks) có kích thước phù hợp (overlap windowing).
-      - Gọi `ITextEmbeddingService` để tính toán ma trận vector embedding cho từng đoạn (1024 dimensions).
-      - Lưu danh sách `DocumentChunk` cùng vector vào PostgreSQL pgvector.
-   4. Cập nhật trạng thái tài liệu thành `Indexed` (hoặc `Failed` nếu phát sinh lỗi).
-
-6.3. Nguyên tắc phục hồi khi khởi động (Startup Recovery):
-   Khi ứng dụng khởi động lại, `DocumentIndexingWorker` sẽ tự động quét cơ sở dữ liệu tìm các tài liệu 
-   đang ở trạng thái `Uploaded` hoặc `Processing` để đưa lại vào hàng chờ xử lý, đảm bảo không bỏ sót tệp nào.
-
+Presentation:
+- MVC Controllers/Views.
+- Razor Pages.
+- JavaScript/CSS UI.
+- Flow 2 Chat dùng fetch + SSE, không dùng SignalR.
 
 ====================================================================================================
-7. LUỒNG 2: HỆ THỐNG TRỢ LÝ RAG ĐA MÔN HỌC & HỎI ĐÁP (MULTI-SUBJECT RAG ASSISTANT ENGINE)
+4. MULTI-SUBJECT VÀ PHÂN QUYỀN
 ====================================================================================================
-7.1. Nguyên tắc cốt lõi của RAG theo Môn học:
-   Truy vấn RAG chỉ được phép tìm kiếm vector trên các tài liệu thuộc môn học được chọn (`selectedSubjectId`).
-   Không bao giờ tìm kiếm chồng chéo sang tài liệu của môn học khác.
 
-7.2. Quy trình truy vấn (Query Pipeline):
-   1. Người dùng gửi câu hỏi từ giao diện Chat kèm `subjectId`.
-   2. Gọi `ITextEmbeddingService.GenerateEmbeddingAsync(userQuery)` để chuyển câu hỏi thành vector query.
-   3. Thực hiện truy vấn khoảng cách cosine vector trên PostgreSQL pgvector:
-      `SELECT chunks FROM DocumentChunks WHERE Document.SubjectId = selectedSubjectId ORDER BY embedding <=> query_vector LIMIT K`
-   4. Tổng hợp K đoạn tài liệu liên quan nhất làm ngữ cảnh (Context).
-   5. Đưa ngữ cảnh và câu hỏi vào `IChatCompletionService.CompleteAsync(prompt)` để AI tạo câu trả lời.
-   6. Trả về câu trả lời kèm thông tin trích dẫn (Citations) dẫn link chính xác tới tài liệu nguồn.
+Persisted subject context chính:
+- Chapter.SubjectId
+- Document.SubjectId
+- ChatSession.SubjectId
 
+Vai trò:
+- Admin
+- SubjectLeader
+- Student
 
-====================================================================================================
-8. LUỒNG 3: BÁO CÁO VÀ THỐNG KÊ HỌC THUẬT (ACADEMIC REPORTING & ANALYTICS)
-====================================================================================================
-8.1. Thiết kế Razor Pages:
-   Luồng 3 được triển khai hoàn toàn bằng Razor Pages đặt tại `Pages/Reports/`.
+Policies:
+- ManageUsers     -> Admin
+- ManageSubjects  -> Admin
+- ManageDocuments -> Admin hoặc SubjectLeader
 
-8.2. Chức năng báo cáo:
-   - Thống kê tổng số tài liệu, tổng số chương, số lượng tài liệu đã đánh chỉ mục (`Indexed`) vs thất bại (`Failed`).
-   - Thống kê tỷ lệ hoàn thành đánh chỉ mục tài liệu theo từng môn học cụ thể.
-   - Báo cáo mang tính chất chỉ đọc (Read-only), không thực hiện ghi dữ liệu hay gọi trực tiếp tới AI Provider.
+Flow 1 và Flow 3 ngoài policy còn kiểm tra Subject cụ thể bằng ISubjectAccessService.
 
+Admin:
+- quản lý user/role;
+- quản lý Subject;
+- quản lý bất kỳ Subject nào như operational override.
 
-====================================================================================================
-9. HẠ TẦNG AI PROVIDER & NGUYÊN TẮC QUẢN LÝ CHUỖI EMBEDDING VECTOR
-====================================================================================================
-9.1. Cấu hình AI Provider linh hoạt:
-   Hệ thống hỗ trợ 3 AI Provider chính thông qua cấu hình `Rag:Provider`:
-   - `Ollama`: Mặc định chạy Local AI (không mất phí, tự cung cấp phần cứng).
-     * Chat model: `qwen3:4b`
-     * Embedding model: `qwen3-embedding:0.6b`
-   - `Gemini`: Cấu hình sao lưu Online Free Tier của Google.
-     * Chat model: `gemini-3.6-flash`
-     * Embedding model: `gemini-embedding-2`
-   - `OpenAI`: Cấu hình Online Paid API tùy chọn.
-     * Chat model: `gpt-5.6-luna`
-     * Embedding model: `text-embedding-3-small`
+SubjectLeader:
+- chỉ quản lý các Subject được assign.
+- assignment lưu bằng ASP.NET Core Identity claim `prn222:managed-subject`.
 
-9.2. Quy tắc kích thước Vector (Embedding Dimension Invariant):
-   - Kích thước Vector mặc định hệ thống được quy định là `1024` chiều (`Rag:EmbeddingDimensions = 1024`).
-   - Các Provider online (Gemini/OpenAI) được cấu hình tham số đầu ra vector đúng 1024 dimensions.
+Student:
+- đăng ký public được;
+- xem Subject active;
+- dùng Chat/Evaluation khi đã authenticate;
+- không quản lý academic content.
 
-9.3. Quy tắc bất biến Không gian Vector (Vector Space Invariant):
-   Mặc dù kích thước vector của các model có thể cùng bằng 1024, không gian ngữ nghĩa (Vector Space) 
-   của hai model khác nhau hoàn toàn KHÔNG THỂ trộn lẫn với nhau.
-   NGUYÊN TẮC: Khi thay đổi AI Provider hoặc Embedding Model, toàn bộ kho dữ liệu tài liệu hiện có 
-   phải được đánh chỉ mục lại (Re-index) từ đầu để đảm bảo tính đồng nhất không gian vector.
-
+Flow 2 còn kiểm tra session thuộc đúng authenticated user và Subject request không xung đột với
+ChatSession.SubjectId.
 
 ====================================================================================================
-10. QUY TRÌNH ĐÓNG GÓI VÀ VẬN HÀNH BẰNG DOCKER COMPOSE
+5. FLOW 1 - DOCUMENT MANAGEMENT & INDEXING
 ====================================================================================================
-10.1. Cấu trúc Docker Compose:
-   File `docker-compose.yml` định nghĩa 3 dịch vụ chính:
-   - `app`: Ứng dụng ASP.NET Core (chạy port 8080).
-   - `postgres`: Cơ sở dữ liệu PostgreSQL 17 + pgvector (chạy port 5432).
-   - `ollama`: Chạy mô hình AI local (chạy port 11434), thuộc profile `local-ai`.
 
-10.2. Các lệnh vận hành thông dụng:
-   - Khởi chạy chế độ Local AI hoàn chỉnh (bao gồm Ollama):
-     `docker compose --profile local-ai up -d --build`
+Luồng tổng quát:
 
-   - Khởi chạy chế độ Online AI (Gemini / OpenAI, không khởi động container Ollama):
-     `docker compose up -d --build`
+MVC upload/re-index
+  -> persist Document
+  -> IDocumentIndexingQueue
+  -> InMemoryDocumentIndexingQueue
+  -> DocumentIndexingWorker
+  -> IDocumentIndexingService
+  -> parser tương ứng
+  -> TextChunker
+  -> ITextEmbeddingService
+  -> replace DocumentChunk rows
+  -> cập nhật IndexStatus
 
-   - Rebuild riêng ứng dụng `app`:
-     `docker compose --profile local-ai up -d --build app`
+Parser:
+- PDF: PdfPig.
+- DOCX/PPTX: DocumentFormat.OpenXml.
 
-   - Kiểm tra trạng thái các container:
-     `docker ps`
+Queue hiện là process-local, không phải Redis/RabbitMQ.
+Startup recovery re-enqueue các Document còn trạng thái Uploaded/Processing.
 
-   - Xem log của ứng dụng:
-     `docker logs prn222-app --tail 100 -f`
+Issue #27 đã đóng ở PR #30. Các cải tiến đã merge gồm bounded overlap, Unicode/grapheme safety,
+chunking config, PDF two-column ordering và thêm parser regression coverage.
 
-
-====================================================================================================
-11. DANH MỤC TIÊU CHUẨN KIỂM THỬ VÀ ĐẢM BẢO CHẤT LƯỢNG (TESTING & QUALITY ASSURANCE)
-====================================================================================================
-Trước khi thực hiện hợp nhất mã nguồn (Merge PR), dự án bắt buộc phải vượt qua chuỗi kiểm thử sau:
-1. `dotnet tool restore` & `dotnet libman restore`
-2. `dotnet build` (Không được chứa lỗi biên dịch)
-3. `dotnet test` (Tất cả unit tests và architecture tests phải PASS)
-4. Kiểm tra cấu hình Docker Compose: `docker compose config`
-5. Kiểm tra tính tương thích của EF Core Model Changes: `dotnet ef migrations has-pending-model-changes`
-
+Technical debt còn lại chủ yếu là test/fixture layout phức tạp cho DOCX/PPTX/PDF.
 
 ====================================================================================================
-12. PHÂN CÔNG TRÁCH NHIỆM & BÀN GIAO THÀNH VIÊN DỰ ÁN (TEAM WORKFLOW & OWNERSHIP)
+6. FLOW 2 - RAG CHAT
 ====================================================================================================
-- Member 1: Core / Data / RBAC / Multi-subject / AI Provider foundation / Hệ thống Tài liệu Docs.
-- Member 2: Luồng 1 Request Behavior (Controllers/Views) & Luồng 3 Reporting Behavior (Razor Pages).
-- Member 3: Tiến trình chia đoạn & đánh chỉ mục (Chunking & Indexing Pipeline), cùng Thiết kế lại UI/UX.
-- Member 4: Luồng 2 RAG Backend Service & Tích hợp truy vấn pgvector.
-- Member 5: Luồng 2 MVC Presentation, Giao diện Chat & Bộ công cụ đánh giá RAG Evaluation.
+
+Luồng backend:
+
+selected Subject
+  -> ChatSession.SubjectId
+  -> IRagQueryService
+  -> ITextEmbeddingService
+  -> PgVectorDocumentChunkRetriever
+  -> filter Indexed Document theo SubjectId
+  -> filter vector_dims phù hợp query embedding
+  -> cosine similarity
+  -> GroundedPromptBuilder + conversation history
+  -> IChatCompletionService
+  -> parse citation markers
+  -> persist ChatMessages + MessageCitations
+  -> trả RagAnswer cho MVC
+
+Các invariant quan trọng:
+- session phải thuộc authenticated user;
+- Subject request phải nhất quán với persisted session;
+- không cố tình fallback sang global corpus trong product path;
+- không tạo citation giả khi không có evidence;
+- chỉ citation thật sự được reference trong answer mới được persist/render.
+
+PR #35 tăng cường:
+- grounded prompt chống hallucination ngoài tài liệu;
+- citation marker inline gần factual claim;
+- contextual follow-up retrieval khi câu hỏi ngắn tự đứng một mình không tìm được evidence;
+- citation excerpt dài hơn cho reader UI.
 
 ====================================================================================================
-KẾT THÚC TÀI LIỆU
+7. SSE TRONG CHAT - KHÔNG PHẢI SIGNALR
+====================================================================================================
+
+Endpoint chính:
+
+POST /Chat/AskStream
+Response Content-Type: text/event-stream
+
+Browser dùng fetch() và đọc `response.body.getReader()`.
+
+Các event hiện có:
+- tool_call
+- citations
+- delta
+- done
+- error
+
+Đây là Server-Sent Events (SSE). Project hiện không có SignalR Hub cho Chat.
+
+Một điểm cần mô tả chính xác:
+- Controller gọi `IRagQueryService.AskAsync(...)` để lấy kết quả RAG.
+- Sau đó controller phát các `delta` theo từ để tạo typewriter experience.
+- Vì vậy đây là application-level SSE/typewriter output, không nên gọi là provider-native token streaming.
+
+====================================================================================================
+8. FLOW 2 - EVALUATION
+====================================================================================================
+
+Evaluation dùng MVC `EvaluationController` + `IEvaluationService`.
+
+Dataset 50 câu được đóng gói tại:
+
+Infrastructure/Data/evaluation_dataset_50.json
+
+Chức năng:
+- chạy một câu;
+- chạy full suite;
+- resolve active Subject phù hợp với SubjectCode của dataset;
+- sử dụng cùng RAG pipeline/provider-neutral contracts.
+
+====================================================================================================
+9. FLOW 3 - REPORT & STATISTICS
+====================================================================================================
+
+PR #40 thay đổi boundary quan trọng:
+
+Pages/Reports/Index.cshtml.cs
+  -> IReportQueryService
+  -> ReportQueryService
+  -> ApplicationDbContext
+
+PageModel:
+- giữ authorization/presentation mapping;
+- không import EF Core/ApplicationDbContext để tự query report.
+
+SubjectReportSnapshot bao gồm:
+- Subject identity;
+- tổng Chapter/Document;
+- unassigned Documents;
+- Documents by Chapter;
+- Uploaded/Processing/Indexed/Failed;
+- tổng DocumentChunks;
+- recent failures;
+- recently indexed Documents và chunk count;
+- tổng ChatSessions của Subject;
+- tổng ChatMessages qua các session đó;
+- tổng MessageCitations qua các message đó.
+
+Warning cũ rằng Chat metrics của Flow 3 là global đã hết hiệu lực sau PR #40.
+
+====================================================================================================
+10. AI PROVIDER VÀ CẤU HÌNH
+====================================================================================================
+
+Contract provider-neutral:
+- ITextEmbeddingService
+- IChatCompletionService
+
+Provider hỗ trợ:
+- Ollama
+- Gemini
+- OpenAI
+- OpenRouter
+
+Backward-compatible base:
+- RAG_PROVIDER
+
+Override độc lập:
+- RAG_CHAT_PROVIDER
+- RAG_EMBEDDING_PROVIDER
+- RAG_EMBEDDING_DIMENSIONS
+
+Local Ollama mặc định trong repo:
+- Chat: qwen3:4b
+- Embedding: qwen3-embedding:0.6b
+
+OpenRouter Chat nếu được chọn có ordered fallback chain cấu hình qua OPENROUTER_CHAT_MODELS.
+
+====================================================================================================
+11. EMBEDDING VECTOR VÀ PR #37
+====================================================================================================
+
+Nguyên tắc quan trọng:
+- đổi embedding provider/model/dimension => phải re-index toàn corpus;
+- đổi chỉ Chat provider/model => không cần re-index.
+
+PR #37 thêm compatibility cho quá trình đổi dimension:
+- Gemini batch embeddings gửi outputDimensionality đúng cấu hình;
+- pgvector retrieval lọc `vector_dims(Embedding)` bằng dimension của query trước khi cosine distance.
+
+Hệ quả:
+- khi migrate dimension, row cũ và row mới khác dimension có thể tạm thời cùng tồn tại;
+- row dimension cũ bị loại khỏi retrieval thay vì gây lỗi `different vector dimensions`;
+- từng Document trở lại searchable khi re-index xong với cấu hình mới.
+
+Nhưng:
+- hai embedding model khác nhau vẫn có thể cùng 1024 dimensions mà vector space không tương thích;
+- vector_dims không phát hiện được trường hợp này;
+- do đó không được coi same-dimension different-model embeddings là có thể trộn tùy ý.
+
+====================================================================================================
+12. ASP.NET CORE DATA PROTECTION - PR #38
+====================================================================================================
+
+Trước PR #38, ephemeral web filesystem trên Render có thể làm mất Data Protection key ring khi container
+restart/redeploy, dẫn tới cookie/antiforgery token cũ không decrypt được.
+
+Baseline hiện tại:
+
+AddDataProtection()
+  -> PersistKeysToDbContext<DataProtectionKeyDbContext>()
+  -> SetApplicationName("PRN222-RAG-Assistant")
+
+Key được lưu ở bảng PostgreSQL `DataProtectionKeys`.
+CI có kiểm tra bảng này trên PostgreSQL thật.
+
+Vì vậy web container restart bình thường không còn đồng nghĩa với mất key ring nếu database vẫn còn.
+
+====================================================================================================
+13. RENDER DEPLOYMENT
+====================================================================================================
+
+`render.yaml` định nghĩa:
+- Docker web service free, Singapore;
+- PostgreSQL 17 free, Singapore;
+- branch master;
+- autoDeployTrigger: checksPass;
+- /healthz;
+- startup migrations.
+
+Current Render AI split sau PR #39:
+
+Rag__Provider=OpenRouter
+Rag__ChatProvider=Gemini
+Rag__EmbeddingProvider=OpenRouter
+Rag__EmbeddingDimensions=1024
+
+Chat:
+- Gemini
+- gemini-3.6-flash
+
+Embedding:
+- OpenRouter
+- nvidia/llama-nemotron-embed-vl-1b-v2:free
+
+Required manual AI secrets:
+- Rag__Gemini__ApiKey
+- Rag__OpenRouter__ApiKey
+
+Cả hai đều phải là deployment secrets, không commit.
+
+====================================================================================================
+14. STORAGE TRÊN RENDER
+====================================================================================================
+
+PostgreSQL giữ metadata, chunks, chat, Identity và Data Protection keys.
+
+Source file upload hiện ở:
+
+/app/storage/uploads
+
+Trên Render free web service, local filesystem này là ephemeral. Redeploy/restart có thể làm source file biến mất
+mặc dù metadata/chunks trong PostgreSQL còn.
+
+Muốn dùng lâu dài:
+- persistent disk trên plan phù hợp; hoặc
+- object storage.
+
+Render PostgreSQL free cũng chỉ phù hợp demo/dev, không nên coi là production persistence/SLA.
+
+====================================================================================================
+15. CI/CD
+====================================================================================================
+
+GitHub Actions hiện kiểm tra:
+- dotnet tool restore;
+- LibMan restore;
+- NuGet restore;
+- Release build;
+- tests;
+- ApplicationDbContext pending-model check;
+- Docker Compose config;
+- PostgreSQL startup;
+- EF migrations;
+- pgvector extension/schema/seed verification;
+- DataProtectionKeys table;
+- mixed-dimension pgvector retrieval smoke test.
+
+Khi master checks pass, Render `checksPass` trigger auto deploy.
+
+====================================================================================================
+16. DOCKER COMPOSE
+====================================================================================================
+
+Local Ollama:
+
+  docker compose --profile local-ai up -d --build
+
+Cloud/hybrid:
+
+  docker compose up -d --build
+
+Stop bình thường:
+
+  docker compose down
+
+Không dùng `docker compose down -v` trừ khi thực sự muốn xóa local PostgreSQL/Ollama volumes.
+
+====================================================================================================
+17. CÔNG NGHỆ/THƯ VIỆN CHÍNH
+====================================================================================================
+
+- .NET 10 / ASP.NET Core
+- ASP.NET Core MVC
+- Razor Pages
+- ASP.NET Core Identity
+- ASP.NET Core Data Protection EF persistence
+- Entity Framework Core 10
+- Npgsql
+- PostgreSQL 17
+- pgvector
+- PdfPig
+- DocumentFormat.OpenXml
+- Bootstrap 5.3.3
+- Bootstrap Icons 1.11.3
+- jQuery / validation libraries theo libman.json
+
+====================================================================================================
+18. PHÂN CÔNG VÀ CONTRIBUTION HIỆN TẠI
+====================================================================================================
+
+Member 1:
+- Core/Data/RBAC/multi-subject/provider/deployment/docs coordination.
+
+Member 2:
+- Flow 1 request/business behavior.
+- Flow 3 report behavior.
+
+Member 3:
+- indexing/ingestion maintenance.
+- cross-app UI/UX baseline.
+
+Member 4:
+- Flow 2 RAG backend maintenance.
+- issue #27 remediation contribution ở PR #30.
+
+Member 5:
+- Flow 2 MVC Chat/history/citations/evaluation đã hoàn thành qua PR #34/#35.
+
+Chi tiết ownership vs actual merged contribution xem `docs/member-contributions.md`.
+
+====================================================================================================
+19. DOCUMENTATION CANONICAL SET
+====================================================================================================
+
+Bắt đầu từ:
+- README.md
+- docs/README.md
+- docs/project-status.md
+- docs/infrastructure.md
+- docs/ai-provider-backup.md
+- docs/render-deployment.md
+- docs/rag-demo-guide.md
+- docs/role-access-control.md
+- docs/multi-subject-management.md
+- docs/member-contributions.md
+- docs/team-workflow.md
+
+Các file handoff/status phải được hiểu theo baseline mới nhất hoặc phải ghi rõ nếu chỉ là historical snapshot.
+
+====================================================================================================
+20. BASELINE PR ĐÃ ĐỒNG BỘ TRONG TÀI LIỆU NÀY
+====================================================================================================
+
+- PR #30: subject-scoped RAG backend + issue #27 remediation.
+- PR #32: Render CD Blueprint.
+- PR #33: Render pgvector runtime/seeding fixes.
+- PR #34: MVC Chat/history/citations + 50-question Evaluation.
+- PR #35: Chat redesign + SSE UX + grounding/follow-up + remove RagDemo.
+- PR #37: embedding dimensions + pgvector re-index compatibility.
+- PR #38: PostgreSQL Data Protection keys + OpenRouter Chat fallback update.
+- PR #39: Render Chat -> Gemini, embeddings remain OpenRouter.
+- PR #40: IReportQueryService + subject-scoped report Chat metrics.
+
+====================================================================================================
+END OF DOCUMENT
 ====================================================================================================

@@ -1,82 +1,130 @@
-# AI provider routing, free fallback, and backup strategy
+# AI provider routing, fallback, and embedding compatibility
 
-> Canonical provider/runtime guide. Owned by Member 1. Research snapshot: **2026-08-15**.
+> Runtime/configuration guide synchronized with repository configuration after PR #39 on 2026-08-21. External provider pricing/free limits can change independently of this repository.
 
-## Goal
-
-The project supports local, direct-cloud, and routed-cloud AI without provider-specific branches in Flow 1/Flow 2.
-
-Supported providers:
+## Supported providers
 
 ```text
 Ollama | Gemini | OpenAI | OpenRouter
 ```
 
-`RAG_PROVIDER` is backward compatible. Two optional overrides allow chat and embeddings to be configured independently:
+Application workflows consume provider-neutral contracts:
+
+```text
+ITextEmbeddingService
+IChatCompletionService
+```
+
+`RAG_PROVIDER` is the backward-compatible base provider. Chat and embeddings may override it independently:
 
 ```env
 RAG_PROVIDER=Ollama
 RAG_CHAT_PROVIDER=
 RAG_EMBEDDING_PROVIDER=
+RAG_EMBEDDING_DIMENSIONS=1024
 ```
 
 Blank overrides inherit `RAG_PROVIDER`.
 
-## Why the split was added
+## Why chat and embedding selection are separate
 
-Chat free-model availability can be volatile. It is safe for a chat request to fall back to another LLM because generated text is not part of the persistent vector space.
+Chat model changes do not alter persisted vector data, so changing a chat provider/model/fallback order does not require re-indexing.
 
-Embedding models are not interchangeable. Changing an embedding model changes the semantic coordinate system stored in pgvector. Therefore:
+Embeddings define the semantic vector space stored in pgvector. Changing embedding provider/model/dimension requires a complete corpus re-index.
 
-- **chat may rotate/fallback between models**;
-- **embedding uses one fixed configured model**;
-- changing embedding provider/model/dimension requires a complete corpus re-index.
+## Repository defaults/examples
 
-## Cost/free matrix
+Local Ollama defaults:
 
-| Provider | Chat | Embedding | Cost position |
-|---|---|---|---|
-| Ollama | `qwen3:4b` | `qwen3-embedding:0.6b` | local / $0 provider fee; own hardware |
-| Gemini | `gemini-3.6-flash` | `gemini-embedding-2` | direct online Free Tier available; limits/data terms apply |
-| OpenRouter | ordered free chain | `nvidia/llama-nemotron-embed-vl-1b-v2:free` | free-first routing; low limits/availability can vary |
-| OpenAI | `gpt-5.6-luna` | `text-embedding-3-small` | optional paid API |
-
-OpenRouter documents `:free` variants and the `openrouter/free` router as zero-cost inference options. Its Free plan/free-model API limits are low and are not a production SLA. As of this snapshot, the documented baseline is 50 free-model API requests/day unless the account has purchased at least 10 credits, in which case the free-model limit is 1000 requests/day.
-
-The default OpenRouter free embedding model is explicitly a trial/free endpoint whose provider page says prompts/output are logged to improve the provider's model/products and warns against personal/confidential/sensitive data. Treat this as a development/demo option, not a privacy-equivalent replacement for local Ollama.
-
-## OpenRouter chat fallback
-
-Default:
-
-```env
-OPENROUTER_CHAT_MODELS=google/gemma-4-26b-a4b-it:free,nvidia/nemotron-3-ultra-550b-a55b:free,openrouter/free
+```text
+Chat:      qwen3:4b
+Embedding: qwen3-embedding:0.6b
 ```
 
-The adapter sends this ordered array as OpenRouter's `models` parameter. OpenRouter automatically tries the next model when the current one returns an error such as rate limiting or downtime. Provider routing also keeps `allow_fallbacks=true`.
+Gemini configuration defaults:
 
-`openrouter/free` remains last because it randomly selects from the currently available free pool and free availability changes frequently.
-
-Operators may replace the model list in `.env` without code changes.
-
-## OpenRouter embeddings
-
-Default:
-
-```env
-OPENROUTER_EMBEDDING_MODEL=nvidia/llama-nemotron-embed-vl-1b-v2:free
-RAG_EMBEDDING_DIMENSIONS=1024
+```text
+Chat:      gemini-3.6-flash
+Embedding: gemini-embedding-2
 ```
 
-The adapter sends **one `model`**, never a `models` array. This is intentional.
+OpenAI configuration defaults:
 
-`nvidia/nemotron-3-embed-1b:free` was researched but not selected as this project's default because NVIDIA's hosted API documentation specifies native 2048-dimensional output and rejects `dimensions=1024`. The current database/corpus contract is 1024 dimensions.
+```text
+Chat:      gpt-5.6-luna
+Embedding: text-embedding-3-small
+```
 
-If the OpenRouter embedding model changes, re-index all searchable documents before retrieval.
+OpenRouter embedding default:
 
-## Recommended configurations
+```text
+nvidia/llama-nemotron-embed-vl-1b-v2:free
+```
 
-### 1. Fully local
+These are repository configuration values, not guarantees that a third-party model remains available/free forever.
+
+## OpenRouter chat fallback chain
+
+When OpenRouter is explicitly selected for Chat, the current default ordered chain in `.env.example` / Docker Compose is:
+
+```text
+nvidia/nemotron-3.5-lightning:free
+nvidia/nemotron-3-ultra-550b-a55b:free
+nvidia/nemotron-3-super-120b-a12b:free
+google/gemma-4-26b-a4b-it:free
+openai/gpt-oss-20b:free
+openrouter/free
+```
+
+The adapter sends an ordered model list and allows OpenRouter provider fallback. This can improve resilience to a model/provider outage, but it does not bypass account-level rate limits/quotas.
+
+## Current Render split
+
+Render does **not** currently use the OpenRouter chat fallback chain because PR #39 overrides Chat to Gemini:
+
+```text
+Rag__Provider=OpenRouter
+Rag__ChatProvider=Gemini
+Rag__EmbeddingProvider=OpenRouter
+
+Chat:      gemini-3.6-flash
+Embedding: nvidia/llama-nemotron-embed-vl-1b-v2:free
+Dimensions: 1024
+```
+
+Render therefore needs both a Gemini API key and an OpenRouter API key.
+
+## Embedding dimensionality and PR #37
+
+Default project dimension remains 1024, but the data column/runtime is not conceptually limited to one hard-coded dimension forever.
+
+PR #37:
+
+- sends configured `outputDimensionality` correctly for Gemini batch embedding;
+- keeps provider response-dimension validation;
+- keeps `DocumentChunk.Embedding` usable for different vector dimensions during a migration;
+- filters retrieval using `vector_dims(Embedding) = questionEmbedding.Length` before cosine distance.
+
+### What this means during re-index
+
+If switching from one dimension to another, documents may be re-indexed gradually. Old vectors with the previous dimension can temporarily remain in the table without crashing current retrieval; they are excluded until re-indexed.
+
+### What this does not mean
+
+Two models can emit vectors with the same length while using different semantic coordinate systems. `vector_dims` cannot detect that incompatibility.
+
+Therefore the operational rule remains:
+
+```text
+change embedding provider/model/dimension
+ -> plan a full corpus re-index
+ -> do not intentionally treat old vectors as semantically compatible
+ -> complete re-index before considering the migration finished
+```
+
+## Recommended runtime patterns
+
+### Fully local
 
 ```env
 RAG_PROVIDER=Ollama
@@ -88,118 +136,45 @@ Run:
 docker compose --profile local-ai up -d --build
 ```
 
-### 2. Recommended free-first hybrid
-
-Use OpenRouter for resilient free chat and Gemini for a stable direct embedding model:
-
-```env
-RAG_PROVIDER=Ollama
-RAG_CHAT_PROVIDER=OpenRouter
-RAG_EMBEDDING_PROVIDER=Gemini
-OPENROUTER_API_KEY=<server-side key>
-GEMINI_API_KEY=<server-side key>
-RAG_EMBEDDING_DIMENSIONS=1024
-```
-
-Run:
-
-```bash
-docker compose up -d --build
-```
-
-### 3. OpenRouter for chat and embedding
-
-```env
-RAG_PROVIDER=OpenRouter
-OPENROUTER_API_KEY=<server-side key>
-RAG_EMBEDDING_DIMENSIONS=1024
-```
-
-If documents were previously indexed with Ollama/Gemini/OpenAI, perform a complete re-index before using RAG retrieval.
-
-### 4. Direct Gemini
+### Direct Gemini
 
 ```env
 RAG_PROVIDER=Gemini
 GEMINI_API_KEY=<server-side key>
 ```
 
-### 5. Optional OpenAI paid
+### OpenRouter chat + fixed embedding provider
 
 ```env
-RAG_PROVIDER=OpenAI
-OPENAI_API_KEY=<server-side key>
+RAG_CHAT_PROVIDER=OpenRouter
+RAG_EMBEDDING_PROVIDER=Gemini
+OPENROUTER_API_KEY=<server-side key>
+GEMINI_API_KEY=<server-side key>
 ```
 
-## Environment variables
-
-Shared:
+### Current Render pattern
 
 ```text
-RAG_PROVIDER
-RAG_CHAT_PROVIDER
-RAG_EMBEDDING_PROVIDER
-RAG_EMBEDDING_DIMENSIONS
+ChatProvider=Gemini
+EmbeddingProvider=OpenRouter
 ```
 
-OpenRouter:
-
-```text
-OPENROUTER_API_KEY
-OPENROUTER_BASE_URL
-OPENROUTER_CHAT_MODELS
-OPENROUTER_EMBEDDING_MODEL
-OPENROUTER_HTTP_REFERER
-OPENROUTER_APP_TITLE
-```
-
-`HTTP-Referer` and `X-Title` attribution are optional. API keys remain server-side only.
+This avoids coupling Chat availability to the persisted embedding corpus.
 
 ## Startup validation
 
-- unsupported chat/embedding provider values fail fast;
-- only providers actually selected by chat or embedding are configured/validated;
-- selected cloud providers require their API key;
-- unselected provider keys are not required;
-- selected base URLs must be absolute;
-- legacy `RAG_PROVIDER` continues to work for both contracts.
+- unsupported provider values fail fast;
+- only providers selected for chat/embedding require configuration;
+- selected cloud providers require API keys;
+- selected base URLs must be valid absolute URLs;
+- legacy `RAG_PROVIDER` remains supported.
 
-## Embedding compatibility invariant
+## Secrets and privacy
 
-Default:
+API keys remain server-side. Do not expose keys in browser JavaScript, logs, tracked appsettings, docs, screenshots, or committed `.env` files.
 
-```text
-RAG_EMBEDDING_DIMENSIONS=1024
-```
+Selecting a cloud provider sends the relevant embedding text and/or chat context to that external service. Provider choice is therefore a privacy/data-egress decision in addition to a cost/availability decision.
 
-Any change to embedding provider/model/dimension invalidates the previously stored semantic vector space:
+## External-information note
 
-```text
-change embedding provider/model/dimension
- -> treat stored DocumentChunk.Embedding values as stale
- -> re-index the complete corpus
- -> then enable similarity retrieval
-```
-
-Do not partially mix vectors from two embedding models.
-
-## Official references
-
-- OpenRouter model fallback: <https://openrouter.ai/docs/guides/routing/model-fallbacks>
-- OpenRouter Free Models Router: <https://openrouter.ai/docs/guides/routing/routers/free-router>
-- OpenRouter FAQ/rate limits: <https://openrouter.ai/docs/faq>
-- OpenRouter embeddings API: <https://openrouter.ai/docs/api/reference/embeddings>
-- OpenRouter free embedding model: <https://openrouter.ai/nvidia/llama-nemotron-embed-vl-1b-v2:free>
-- NVIDIA embedding dimensions reference: <https://docs.nvidia.com/nim/nemo-retriever/text-embedding/latest/reference.html>
-- Google Gemini pricing: <https://ai.google.dev/gemini-api/docs/pricing>
-- Google Gemini rate limits: <https://ai.google.dev/gemini-api/docs/rate-limits>
-- OpenAI API pricing: <https://openai.com/api/pricing/>
-- Ollama pricing: <https://ollama.com/pricing>
-
-Cloud models, free availability, rate limits, and data policies can change. Re-check official pages before production use.
-
-## Ownership
-
-This provider routing/fallback foundation is **Member 1** work. Member 1 owns provider configuration/adapters/tests/docs and re-index coordination.
-
-Member 3 still owns indexing/chunking/worker behavior. Member 4 owns future Flow 2 retrieval/grounding/persistence. Member 5 owns future Flow 2 MVC/evaluation.
+Free-tier availability, quotas, model names, pricing and provider data policies can change without repository changes. Before a production deployment, verify those items against the provider's current official documentation rather than treating an old repository snapshot as a service guarantee.

@@ -1,254 +1,212 @@
-# RAG Demo - Member 4 End-to-End Guide
+# Flow 2 Chat & Evaluation demo guide
 
-## Prerequisites
+> Replaces the obsolete `RagDemo` guide. `Pages/RagDemo` was removed in PR #35; use the product MVC Chat and Evaluation flows.
 
-1. Docker Desktop running
-2. `.NET 10.0 SDK` installed
-3. `git`
+## What this demo verifies
 
-## Step 1: Switch to demo branch
+- document indexing into pgvector;
+- subject-scoped RAG retrieval;
+- grounded answer generation and citations;
+- MVC chat-session history;
+- SSE progress/typewriter rendering;
+- citation reader and Markdown UI;
+- the 50-question evaluation workflow.
 
-```bash
-cd PRN222-RAG-Assistant
-git checkout member4-rag-v2
+## Local prerequisites
+
+- Docker Desktop / Docker Engine + Compose v2;
+- .NET 10 SDK if running commands outside containers;
+- repository checked out on the branch/commit you want to test.
+
+Do not switch to an old `member4-rag-v2` branch; this guide targets current `master`.
+
+## Option A: local Ollama
+
+Copy `.env.example` to `.env` if needed and keep:
+
+```env
+RAG_PROVIDER=Ollama
+RAG_CHAT_PROVIDER=
+RAG_EMBEDDING_PROVIDER=
 ```
 
-## Step 2: Start infrastructure + Ollama
+Start:
 
 ```bash
 docker compose --profile local-ai up -d --build
 ```
 
-Wait for all containers to be healthy:
-
-```bash
-docker compose ps
-```
-
-Expected output:
-```
-NAME                STATUS
-prn222-app         running
-prn222-postgres     running
-prn222-ollama       running
-```
-
-## Step 3: Pull Ollama models (first time only)
+If the configured Ollama models are not present, pull them into the Ollama container:
 
 ```bash
 docker exec prn222-ollama ollama pull qwen3:4b
 docker exec prn222-ollama ollama pull qwen3-embedding:0.6b
 ```
 
-Models are ~2.5GB + ~1GB. This takes a few minutes.
+## Option B: cloud/hybrid
 
-Verify models are available:
-
-```bash
-docker exec prn222-ollama ollama list
-```
-
-Expected:
-```
-NAME                      SIZE      MODIFIED
-qwen3:4b                  2.5GB     ...
-qwen3-embedding:0.6b      1.0GB     ...
-```
-
-## Step 4: Verify app is running
-
-Open browser: **http://localhost:8080**
-
-You should see the PRN222 RAG Assistant homepage.
-
-## Step 5: Register a student account
-
-1. Click **Đăng ký** (Register)
-2. Fill in email/password
-3. Login automatically after registration
-
-## Step 6: Upload a test document
-
-> If no PRN222 subject exists, the demo page auto-creates one.
-> For a real test, upload a PDF about PRN222 topics (OOP, C#, .NET).
-
-1. Go to **Tài liệu** (Documents) — requires SubjectLeader role
-2. Switch to Admin/SubjectLeader account, or manually create via Razor Page:
-
-**Create subject via SQL (inside postgres container):**
+Configure the selected providers with server-side API keys, then run:
 
 ```bash
-docker exec -i prn222-postgres psql -U postgres -d prn222_rag <<'EOF'
-INSERT INTO "Subjects" ("Id", "Code", "Name", "Description", "IsActive")
-VALUES (
-    '11111111-1111-1111-1111-111111111111',
-    'PRN222',
-    'PRN222 - Introduction to Programming',
-    'Môn học giới thiệu lập trình C#',
-    true
-)
-ON CONFLICT ("Code") DO NOTHING;
-EOF
+docker compose up -d --build
 ```
 
-3. Upload a PDF (e.g., a C# tutorial PDF)
-4. Wait for status to change from `Processing` → `Indexed`
+For example, the current Render architecture uses Gemini for Chat and OpenRouter for embeddings. Local Compose is configurable and does not have to match Render.
 
-Check indexing status:
+When changing the **embedding** provider/model/dimension, re-index the corpus before treating retrieval as migrated. Chat-only changes do not require re-indexing.
+
+## Verify infrastructure
 
 ```bash
-docker logs prn222-app --tail 20 -f
+docker compose ps
 ```
 
-Look for: `Document indexing completed. DocumentId=...`
+Open:
 
-## Step 7: Demo the RAG Backend
+```text
+http://localhost:8080
+```
 
-Open: **http://localhost:8080/rag-demo**
+The health endpoint is:
 
-### Test 1: With documents indexed
+```text
+http://localhost:8080/healthz
+```
 
-1. Type a question related to the uploaded PDF content
-2. Click **Hỏi**
-3. Expected:
-   - ✅ Answer appears
-   - ✅ Citations list shows document sources with page numbers
-   - ✅ "Demo Session" created in database
+## Prepare users and subject
 
-### Test 2: Without documents (no-evidence path)
+The repository seeds the PRN222 demo subject through the normal database initialization path. Do not rely on a removed RagDemo page to auto-create subjects.
 
-1. Make sure no documents are `Indexed`
-2. Ask any question
-3. Expected:
-   - ✅ Answer: "Tôi chỉ có thể trả lời dựa trên tài liệu đã được index. Hiện không tìm thấy thông tin phù hợp."
-   - ✅ Citations: empty
+For demo accounts either:
 
-### Test 3: Verify data persistence
+- enable/configure optional seed users through environment variables; or
+- register a Student publicly and use an Admin account to manage elevated roles/subject assignments.
+
+Public registration never lets the user select Admin/SubjectLeader.
+
+## Upload and index a document
+
+Use a user authorized to manage the target subject:
+
+1. Open the Subject catalogue.
+2. Open Documents for the desired subject.
+3. Upload a PDF/DOCX/PPTX.
+4. Wait until the document reaches `Indexed`.
+5. Optionally open Document details to inspect chunks.
+
+Useful logs:
 
 ```bash
-docker exec -i prn222-postgres psql -U postgres -d prn222_rag <<'EOF'
--- Check chat sessions
-SELECT "Id", "Title", "UserId", "CreatedAtUtc" FROM "ChatSessions" LIMIT 5;
-
--- Check messages
-SELECT m."Id", m."ChatSessionId", m."Role", LEFT(m."Content", 80) as "Content"
-FROM "ChatMessages" m
-ORDER BY m."CreatedAtUtc" DESC LIMIT 10;
-
--- Check citations
-SELECT mc."Id", mc."ChatMessageId", mc."DocumentChunkId", mc."Rank",
-       dc."Content" as "ChunkContent"
-FROM "MessageCitations" mc
-JOIN "DocumentChunks" dc ON dc."Id" = mc."DocumentChunkId"
-LIMIT 5;
-EOF
+docker logs prn222-app --tail 100
 ```
 
-## What Member 4 Backend Does
+## Demo the product Chat
 
+Open the MVC Chat flow from navigation or:
+
+```text
+http://localhost:8080/Chat
 ```
-User question
-    │
-    ▼
-[1] Validate question (not empty)
-    │
-    ▼
-[2] Verify ChatSession belongs to User
-    │
-    ▼
-[3] Persist UserMessage to DB
-    │
-    ▼
-[4] Generate question embedding (ITextEmbeddingService → Ollama)
-    │
-    ▼
-[5] Search pgvector for TopK similar chunks (PgVectorDocumentChunkRetriever)
-    │
-    ▼
-[6] Filter by MinimumSimilarityScore (0.3 default)
-    │
-    ├── No chunks found ──► Return NoEvidenceMessage
-    │
-    ▼
-[7] Build prompt with context + history (GroundedPromptBuilder)
-    │
-    ▼
-[8] Generate answer (IChatCompletionService → Ollama)
-    │
-    ▼
-[9] Persist AssistantMessage + Citations to DB
-    │
-    ▼
-[10] Auto-set session title from first question
-    │
-    ▼
-Return RagAnswer (Answer + Citations)
+
+Expected behavior:
+
+1. choose an active subject;
+2. create/use a subject-aware chat session;
+3. ask a question grounded in an indexed document;
+4. observe the progress timeline;
+5. receive the answer with citation markers/source pills;
+6. open a citation to inspect the source excerpt;
+7. switch sessions to verify conversation history.
+
+### Transport note
+
+The Chat page uses:
+
+```text
+POST /Chat/AskStream
+response: text/event-stream
+```
+
+JavaScript consumes SSE events from a `fetch` response body. Current event types include:
+
+```text
+tool_call
+citations
+delta
+done
+error
+```
+
+This implementation does **not** use SignalR.
+
+The current RAG call returns a completed answer to the controller, which then emits application-level word deltas for the typewriter experience; do not describe this as provider-native token streaming.
+
+## No-evidence behavior
+
+Ask a question for which indexed documents do not contain sufficient evidence. The backend should follow its configured grounded/no-evidence behavior and should not fabricate citations.
+
+## Contextual follow-up behavior
+
+After a grounded question, try a short follow-up such as asking for the author or intended audience. PR #35 can expand a short follow-up with recent conversation context when the standalone retrieval query returns no useful chunks.
+
+## Demo Evaluation
+
+Open:
+
+```text
+http://localhost:8080/Evaluation
+```
+
+The UI reads the packaged 50-question dataset. You can run a single question or the full suite. Evaluation resolves an active subject whose code matches the dataset subject code.
+
+## Verify persistence
+
+Useful PostgreSQL checks:
+
+```bash
+docker compose exec -T postgres psql -U postgres -d prn222_rag -c \
+  'SELECT "Id", "SubjectId", "Title", "CreatedAtUtc" FROM "ChatSessions" ORDER BY "CreatedAtUtc" DESC LIMIT 5;'
+
+docker compose exec -T postgres psql -U postgres -d prn222_rag -c \
+  'SELECT "ChatSessionId", "Role", LEFT("Content", 100) FROM "ChatMessages" ORDER BY "CreatedAtUtc" DESC LIMIT 10;'
+
+docker compose exec -T postgres psql -U postgres -d prn222_rag -c \
+  'SELECT "ChatMessageId", "DocumentChunkId", "Rank" FROM "MessageCitations" LIMIT 10;'
 ```
 
 ## Troubleshooting
 
-### Ollama container keeps restarting
+### App returns 500
 
 ```bash
-docker logs prn222-ollama
+docker logs prn222-app --tail 100
 ```
 
-If OOM (Out of Memory), increase Docker Desktop memory to 8GB+.
+Check:
 
-### Models not found after pull
+- selected cloud provider API key is present;
+- PostgreSQL is healthy;
+- selected Ollama service is running if Ollama is configured;
+- uploaded source file still exists for re-index operations.
+
+### Document stays Processing/Failed
+
+Inspect app logs and confirm the selected embedding provider is reachable. Re-index from the product UI after correcting the provider/configuration issue.
+
+### pgvector dimension issues during a provider migration
+
+PR #37 filters retrieval to vectors with the current query dimension. If many documents disappear from retrieval after a dimension change, they are expected to remain excluded until re-indexed with the active embedding configuration.
+
+### Antiforgery token could not be decrypted after restart
+
+PR #38 persists Data Protection keys in PostgreSQL. Verify migrations have created `DataProtectionKeys` and the application is using the expected database. The old workaround of accepting cookie loss on every Render restart is no longer the intended architecture.
+
+## Safe cleanup
+
+Normal stop:
 
 ```bash
-docker restart prn222-ollama
-docker exec prn222-ollama ollama list
+docker compose down
 ```
 
-### App returns 500 error
-
-Check app logs:
-```bash
-docker logs prn222-app --tail 50
-```
-
-Common issues:
-- `Connection refused` to Ollama → `Rag__Ollama__BaseUrl` should be `http://ollama:11434` (already set in docker-compose.yml)
-- DB migration failed → `docker compose down -v && docker compose --profile local-ai up -d --build`
-
-### Indexing stuck at "Processing"
-
-```bash
-docker logs prn222-app | grep -i "index"
-```
-
-The `DocumentIndexingWorker` processes queued documents. Check if Ollama is reachable.
-
-## Configuration
-
-Current AI provider: **Ollama** (local, no API key needed)
-
-To switch providers, update environment:
-
-```bash
-# Gemini (free tier)
-RAG_CHAT_PROVIDER=Gemini
-RAG_EMBEDDING_PROVIDER=Gemini
-GEMINI_API_KEY=your_key
-
-# OpenRouter (free models)
-RAG_CHAT_PROVIDER=OpenRouter
-RAG_EMBEDDING_PROVIDER=OpenRouter
-OPENROUTER_API_KEY=your_key
-```
-
-Restart app after changing provider:
-```bash
-docker compose up -d --build app
-```
-
-## Database Schema
-
-```
-ChatSessions ──────< ChatMessages
-                          │
-                          └──< MessageCitations >────── DocumentChunks >──── Documents
-                            (rank, chunkId)           (content, embedding)   (title, indexStatus)
-```
+Do **not** add `-v` unless intentionally deleting PostgreSQL/Ollama volumes and all local persisted data/models.
