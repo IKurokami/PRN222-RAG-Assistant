@@ -14,5 +14,9 @@ public sealed class ApplicationUserConfiguration : IEntityTypeConfiguration<Appl
 
         builder.Property(x => x.CreatedAtUtc)
             .IsRequired();
+
+        builder.Property(x => x.QuotaRemaining)
+            .IsRequired()
+            .HasDefaultValue(10);
     }
 }

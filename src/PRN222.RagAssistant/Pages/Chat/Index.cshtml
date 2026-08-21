@@ -533,6 +533,11 @@ else
                             accumulatedText = data.answer || accumulatedText;
                             receivedCitations = data.citations || receivedCitations;
                         } else if (currentEvent === 'error') {
+                            if (data.action === 'insufficient_quota') {
+                                const quotaErr = new Error(data.message || 'Bạn đã hết lượt hỏi. Vui lòng nạp thêm quota để tiếp tục.');
+                                quotaErr.isInsufficientQuota = true;
+                                throw quotaErr;
+                            }
                             throw new Error(data.message || 'Lỗi xử lý câu hỏi');
                         }
                     }
@@ -569,8 +574,17 @@ else
                 const toolSummary = document.querySelector(`#${assistantMsgId} .tool-call-summary`);
                 if (toolSummary) toolSummary.innerHTML = '<i class="bi bi-exclamation-triangle-fill text-danger"></i><span>Lỗi xử lý yêu cầu</span>';
                 bodyEl.classList.remove('d-none');
-                bodyEl.innerHTML = `<div class="alert alert-danger py-2 mb-0 rounded-4 border-0">${escapeHtml(error.message || 'Lỗi kết nối máy chủ. Vui lòng thử lại.')}</div>`;
-            } finally {
+                if (error.isInsufficientQuota) {
+                    bodyEl.innerHTML = `<div class="alert alert-warning py-3 mb-0 rounded-4 border-0 shadow-sm">
+                        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                            <div><i class="bi bi-coin text-warning me-2 fs-5"></i><strong>Hết lượt hỏi:</strong> ${escapeHtml(error.message)}</div>
+                            <a href="/Billing/Create" class="btn btn-warning btn-sm rounded-pill px-3 fw-semibold"><i class="bi bi-plus-circle me-1"></i>Nạp thêm Quota</a>
+                        </div>
+                    </div>`;
+                } else {
+                    bodyEl.innerHTML = `<div class="alert alert-danger py-2 mb-0 rounded-4 border-0">${escapeHtml(error.message || 'Lỗi kết nối máy chủ. Vui lòng thử lại.')}</div>`;
+                }
+            }
                 sendIcon.classList.remove('d-none');
                 sendSpinner.classList.add('d-none');
                 sendBtn.disabled = !input.value.trim();

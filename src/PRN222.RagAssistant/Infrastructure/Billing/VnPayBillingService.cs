@@ -14,15 +14,18 @@ public sealed class VnPayBillingService : IBillingService
     private readonly ApplicationDbContext _dbContext;
     private readonly IOptions<VnPayBillingOptions> _options;
     private readonly ILogger<VnPayBillingService> _logger;
+    private readonly IUserQuotaService _userQuotaService;
 
     public VnPayBillingService(
         ApplicationDbContext dbContext,
         IOptions<VnPayBillingOptions> options,
-        ILogger<VnPayBillingService> logger)
+        ILogger<VnPayBillingService> logger,
+        IUserQuotaService userQuotaService)
     {
         _dbContext = dbContext;
         _options = options;
         _logger = logger;
+        _userQuotaService = userQuotaService;
     }
 
     public async Task<BillingOrderResult> CreateOrderAsync(
@@ -220,6 +223,15 @@ public sealed class VnPayBillingService : IBillingService
             });
 
         await _dbContext.SaveChangesAsync(cancellationToken);
+
+        var quotaUnits = (int)(order.Amount / 1000);
+        if (quotaUnits > 0)
+        {
+            await _userQuotaService.GrantQuotaAsync(order.UserId, quotaUnits, cancellationToken);
+            _logger.LogInformation(
+                "Granted {QuotaUnits} quota units to User {UserId} for paid order {OrderId}",
+                quotaUnits, order.UserId, order.Id);
+        }
     }
 
     private async Task MarkOrderFailedAsync(

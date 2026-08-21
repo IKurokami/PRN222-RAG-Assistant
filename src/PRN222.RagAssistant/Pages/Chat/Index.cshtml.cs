@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 using PRN222.RagAssistant.Application.Abstractions;
 using PRN222.RagAssistant.Application.Models;
 using PRN222.RagAssistant.Domain.Entities;
+using PRN222.RagAssistant.Infrastructure.Rag.Exceptions;
 
 namespace PRN222.RagAssistant.Pages.Chat;
 
@@ -117,6 +118,14 @@ public sealed class IndexModel : PageModel
                     excerpt = c.Excerpt
                 })
             });
+        }
+        catch (InsufficientQuotaException ex)
+        {
+            _logger.LogWarning("Chat request blocked due to insufficient quota for User {UserId}", user.Id);
+            return new JsonResult(new { action = "insufficient_quota", message = ex.Message })
+            {
+                StatusCode = StatusCodes.Status403Forbidden
+            };
         }
         catch (Exception ex)
         {
@@ -259,6 +268,25 @@ public sealed class IndexModel : PageModel
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             _logger.LogDebug("Chat stream cancelled for User {UserId}", user.Id);
+        }
+        catch (InsufficientQuotaException ex)
+        {
+            _logger.LogWarning("Chat stream blocked due to insufficient quota for User {UserId}", user.Id);
+            try
+            {
+                await SendEventAsync("error", new
+                {
+                    action = "insufficient_quota",
+                    message = ex.Message
+                });
+            }
+            catch (Exception sendError)
+            {
+                _logger.LogDebug(
+                    sendError,
+                    "Unable to send quota error event for User {UserId}",
+                    user.Id);
+            }
         }
         catch (Exception ex)
         {

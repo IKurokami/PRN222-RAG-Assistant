@@ -22,9 +22,14 @@
                         </h1>
                         <p class="text-muted small mb-0">Thanh toán an toàn qua cổng VNPay (Sandbox Demo) để mở rộng số lượt truy vấn tài liệu.</p>
                     </div>
-                    <a asp-page="/Billing/History" class="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1 rounded-pill px-3">
-                        <i class="bi bi-clock-history"></i> Lịch sử
-                    </a>
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="badge bg-light text-dark border px-3 py-2 rounded-pill font-monospace fs-6">
+                            <i class="bi bi-coin text-warning me-1"></i>Số lượt còn lại: <strong>@Model.CurrentQuota</strong>
+                        </span>
+                        <a asp-page="/Billing/History" class="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1 rounded-pill px-3">
+                            <i class="bi bi-clock-history"></i> Lịch sử
+                        </a>
+                    </div>
                 </div>
 
                 @if (!string.IsNullOrEmpty(Model.Message))

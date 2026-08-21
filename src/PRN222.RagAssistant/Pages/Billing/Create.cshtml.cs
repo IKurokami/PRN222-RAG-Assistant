@@ -14,17 +14,20 @@ public sealed class CreateModel : PageModel
 {
     private readonly IBillingService _billingService;
     private readonly UserManager<ApplicationUser> _userManager;
+    private readonly IUserQuotaService _userQuotaService;
     private readonly IConfiguration _configuration;
     private readonly ILogger<CreateModel> _logger;
 
     public CreateModel(
         IBillingService billingService,
         UserManager<ApplicationUser> userManager,
+        IUserQuotaService userQuotaService,
         IConfiguration configuration,
         ILogger<CreateModel> logger)
     {
         _billingService = billingService;
         _userManager = userManager;
+        _userQuotaService = userQuotaService;
         _configuration = configuration;
         _logger = logger;
     }
@@ -40,9 +43,15 @@ public sealed class CreateModel : PageModel
     public InputModel Input { get; set; } = new();
 
     public string? Message { get; private set; }
+    public int CurrentQuota { get; private set; }
 
-    public void OnGet()
+    public async Task OnGetAsync(CancellationToken cancellationToken)
     {
+        var user = await _userManager.GetUserAsync(User);
+        if (user is not null)
+        {
+            CurrentQuota = await _userQuotaService.GetRemainingQuotaAsync(user.Id, cancellationToken);
+        }
     }
 
     public async Task<IActionResult> OnPostAsync(CancellationToken cancellationToken)
@@ -58,6 +67,7 @@ public sealed class CreateModel : PageModel
             Message = "Không tìm thấy thông tin người dùng hiện tại.";
             return Page();
         }
+        CurrentQuota = await _userQuotaService.GetRemainingQuotaAsync(user.Id, cancellationToken);
 
         var plan = Plans.FirstOrDefault(p => p.Id == Input.PlanId);
         if (plan is null)

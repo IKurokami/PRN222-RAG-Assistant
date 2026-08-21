@@ -22,6 +22,7 @@ public sealed class RagQueryService : IRagQueryService
     private readonly ILogger<RagQueryService> _logger;
     private readonly TimeProvider _clock;
     private readonly IAgenticRetrievalService? _agenticRetrievalService;
+    private readonly IUserQuotaService _userQuotaService;
 
     public RagQueryService(
         ApplicationDbContext dbContext,
@@ -32,6 +33,7 @@ public sealed class RagQueryService : IRagQueryService
         IOptions<RagOptions> options,
         ILogger<RagQueryService> logger,
         TimeProvider clock,
+        IUserQuotaService userQuotaService,
         IAgenticRetrievalService? agenticRetrievalService = null)
     {
         _dbContext = dbContext;
@@ -42,6 +44,7 @@ public sealed class RagQueryService : IRagQueryService
         _options = options.Value;
         _logger = logger;
         _clock = clock;
+        _userQuotaService = userQuotaService;
         _agenticRetrievalService = agenticRetrievalService;
     }
 
@@ -93,6 +96,10 @@ public sealed class RagQueryService : IRagQueryService
                 nameof(subjectId));
         }
 
+        if (!await _userQuotaService.HasQuotaAsync(userId, cancellationToken))
+        {
+            throw new InsufficientQuotaException(userId);
+        }
         var effectiveSubjectId = session.SubjectId ?? subjectId;
         var history = await LoadRecentHistoryAsync(session.Id, cancellationToken);
 
@@ -288,6 +295,7 @@ public sealed class RagQueryService : IRagQueryService
             cancellationToken);
 
         await EnsureSessionTitleAsync(session, question, cancellationToken);
+        await _userQuotaService.ConsumeQuotaAsync(userId, cancellationToken);
 
         var answer = new RagAnswer(
             session.Id,

@@ -6,6 +6,7 @@ using PRN222.RagAssistant.Application.Models;
 using PRN222.RagAssistant.Data;
 using PRN222.RagAssistant.Domain.Entities;
 using PRN222.RagAssistant.Infrastructure.Billing;
+using PRN222.RagAssistant.Infrastructure.Services;
 using Xunit;
 
 namespace PRN222.RagAssistant.Tests;
@@ -38,11 +39,13 @@ public sealed class VnPayBillingServiceTests
             OrderType = "other"
         });
 
+        var quotaService = new UserQuotaService(dbContext);
+
         var service = new VnPayBillingService(
             dbContext,
             billingOptions,
-            NullLogger<VnPayBillingService>.Instance);
-
+            NullLogger<VnPayBillingService>.Instance,
+            quotaService);
         return (dbContext, service);
     }
 
@@ -339,6 +342,62 @@ public sealed class VnPayBillingServiceTests
         Assert.Equal(2, userOrders.Count);
         Assert.Equal(100_000, userOrders[0].Amount); // Newest first
         Assert.Equal(50_000, userOrders[1].Amount);
+    }
+
+    [Fact]
+    public async Task ProcessWebhookAsync_GrantsQuotaToUser_WhenPaymentSuccessful()
+    {
+        // Arrange
+        var (dbContext, service) = CreateService();
+        var userId = Guid.NewGuid();
+        var user = new ApplicationUser
+        {
+            Id = userId,
+            UserName = "student@test.com",
+            Email = "student@test.com",
+            DisplayName = "Test Student",
+            CreatedAtUtc = DateTime.UtcNow,
+            QuotaRemaining = 10
+        };
+        dbContext.Users.Add(user);
+        await dbContext.SaveChangesAsync();
+
+        var order = new PaymentOrder
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            Provider = "VNPay",
+            ExternalOrderId = "PRN222-20260821-QUOTA001",
+            Amount = 50_000,
+            Currency = "VND",
+            Status = "Pending",
+            CreatedUtc = DateTime.UtcNow,
+            MetadataJson = "{}"
+        };
+        dbContext.PaymentOrders.Add(order);
+        await dbContext.SaveChangesAsync();
+
+        var callbackParams = new Dictionary<string, string?>
+        {
+            ["vnp_TxnRef"] = order.ExternalOrderId,
+            ["vnp_Amount"] = "5000000",
+            ["vnp_ResponseCode"] = "00",
+            ["vnp_TransactionNo"] = "14000111",
+            ["vnp_BankCode"] = "NCB",
+            ["vnp_CardType"] = "ATM"
+        };
+        var hash = VnPayHashHelper.CreateSecureHash(callbackParams, TestHashSecret);
+        callbackParams["vnp_SecureHash"] = hash;
+
+        var request = new ProcessWebhookRequest("VNPay", callbackParams);
+
+        // Act
+        var result = await service.ProcessWebhookAsync(request, CancellationToken.None);
+
+        // Assert
+        Assert.True(result.Success);
+        var updatedUser = await dbContext.Users.FirstAsync(u => u.Id == userId);
+        Assert.Equal(60, updatedUser.QuotaRemaining); // 10 + (50,000 / 1000) = 60
     }
 
     private sealed class TestModelCustomizer : ModelCustomizer

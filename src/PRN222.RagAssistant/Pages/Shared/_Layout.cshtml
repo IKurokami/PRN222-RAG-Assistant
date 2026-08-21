@@ -1,5 +1,8 @@
 @using Microsoft.AspNetCore.Http
+@using System.Security.Claims
+@using PRN222.RagAssistant.Application.Abstractions
 @using PRN222.RagAssistant.Security
+@inject IUserQuotaService QuotaService
 @{
     var currentPage = ViewContext.RouteData.Values["page"]?.ToString() ?? "";
     var isHomePage = string.Equals(currentPage, "/Index", StringComparison.OrdinalIgnoreCase);
@@ -12,6 +15,16 @@
     var isChatPage = currentPage.StartsWith("/Chat", StringComparison.OrdinalIgnoreCase);
     var isSubjectAdminArea = currentPage.StartsWith("/AdminSubjects", StringComparison.OrdinalIgnoreCase);
     var isUserAdminArea = currentPage.StartsWith("/AdminUsers", StringComparison.OrdinalIgnoreCase);
+
+    int quotaRemaining = 0;
+    if (User.Identity?.IsAuthenticated == true)
+    {
+        var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (Guid.TryParse(userIdStr, out var currentUserId))
+        {
+            quotaRemaining = await QuotaService.GetRemainingQuotaAsync(currentUserId);
+        }
+    }
 }
 <!DOCTYPE html>
 <html lang="vi">
@@ -86,6 +99,10 @@
                     <div class="navbar-humata-actions">
                         @if (User.Identity?.IsAuthenticated == true)
                         {
+                            <a asp-page="/Billing/Create" class="badge rounded-pill text-decoration-none d-flex align-items-center gap-1 py-2 px-3 @(quotaRemaining > 0 ? "bg-light text-dark border" : "bg-danger text-white")" title="Số câu hỏi còn lại">
+                                <i class="bi bi-coin text-warning"></i>
+                                <span>Quota: <strong>@quotaRemaining</strong></span>
+                            </a>
                             <div class="nav-session">
                                 <i class="bi bi-person" aria-hidden="true"></i>
                                 <span class="nav-session-copy">

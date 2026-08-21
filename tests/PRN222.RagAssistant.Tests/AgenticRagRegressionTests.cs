@@ -8,6 +8,7 @@ using PRN222.RagAssistant.Application.Abstractions;
 using PRN222.RagAssistant.Data;
 using PRN222.RagAssistant.Domain.Entities;
 using PRN222.RagAssistant.Infrastructure.Rag;
+using PRN222.RagAssistant.Infrastructure.Services;
 using Xunit;
 
 namespace PRN222.RagAssistant.Tests;
@@ -231,6 +232,7 @@ public sealed class AgenticRagRegressionTests
             options,
             NullLogger<RagQueryService>.Instance,
             TimeProvider.System,
+            new UserQuotaService(dbContext),
             retrieval);
     }
 
@@ -257,6 +259,19 @@ public sealed class AgenticRagRegressionTests
         Guid sessionId,
         Guid subjectId)
     {
+        if (!await dbContext.Users.AnyAsync(u => u.Id == userId))
+        {
+            dbContext.Users.Add(new ApplicationUser
+            {
+                Id = userId,
+                UserName = $"user-{userId:N}@test.com",
+                Email = $"user-{userId:N}@test.com",
+                DisplayName = "Test User",
+                CreatedAtUtc = DateTime.UtcNow,
+                QuotaRemaining = 10
+            });
+        }
+
         dbContext.ChatSessions.Add(new ChatSession
         {
             Id = sessionId,

@@ -104,6 +104,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<Infrastructure.Rag.IAgenticRetrievalService, Infrastructure.Rag.AgenticRetrievalService>();
         services.AddScoped<IRagQueryService, Infrastructure.Rag.RagQueryService>();
         services.AddScoped<IEvaluationService, Infrastructure.Services.EvaluationService>();
+        services.AddScoped<IUserQuotaService, UserQuotaService>();
 
         // Payment / billing integration (VNPay sandbox demo)
         services.AddOptions<VnPayBillingOptions>()
