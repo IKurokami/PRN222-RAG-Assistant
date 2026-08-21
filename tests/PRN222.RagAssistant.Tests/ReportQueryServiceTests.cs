@@ -1,4 +1,6 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using PRN222.RagAssistant.Application.Abstractions;
 using PRN222.RagAssistant.Data;
 using PRN222.RagAssistant.Domain.Entities;
@@ -205,6 +207,7 @@ public sealed class ReportQueryServiceTests
     {
         var options = new DbContextOptionsBuilder<ApplicationDbContext>()
             .UseInMemoryDatabase($"report-tests-{Guid.NewGuid()}")
+            .ReplaceService<IModelCustomizer, ReportTestModelCustomizer>()
             .Options;
 
         return new ApplicationDbContext(options);
@@ -264,5 +267,19 @@ public sealed class ReportQueryServiceTests
             Content = "message",
             CreatedAtUtc = now
         };
+    }
+
+    private sealed class ReportTestModelCustomizer : ModelCustomizer
+    {
+        public ReportTestModelCustomizer(ModelCustomizerDependencies dependencies)
+            : base(dependencies)
+        {
+        }
+
+        public override void Customize(ModelBuilder modelBuilder, DbContext context)
+        {
+            base.Customize(modelBuilder, context);
+            modelBuilder.Entity<DocumentChunk>().Ignore(chunk => chunk.Embedding);
+        }
     }
 }
