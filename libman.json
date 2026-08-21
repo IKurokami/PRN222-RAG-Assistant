@@ -42,6 +42,13 @@
         "font/fonts/bootstrap-icons.woff",
         "font/fonts/bootstrap-icons.woff2"
       ]
+    },
+    {
+      "library": "microsoft-signalr@10.0.0",
+      "destination": "src/PRN222.RagAssistant/wwwroot/lib/microsoft-signalr",
+      "files": [
+        "signalr.min.js"
+      ]
     }
   ]
 }

@@ -1,15 +1,15 @@
 # Documentation index
 
-> Canonical documentation target updated on 2026-08-21 after PR #42/#43.
+> Canonical documentation target updated on 2026-08-21 after PR #42/#43 and the PR #46/issue #47 implementation work.
 >
-> The target presentation architecture is Razor Pages only for HTTP UI/actions, with SSE retained for Chat and SignalR added for Document Management realtime notifications. The documentation PR does not implement the remaining runtime migration.
+> The target presentation architecture is Razor Pages only for HTTP UI/actions, with SSE retained for Chat and authorized SignalR management realtime for Documents, Chapters, Subjects, Subject Leader assignments, and Users/roles. PR #46 contains the implementation on its branch but is **not merged**; branch implementation state must not be read as merged `master` state.
 
 ## Start here
 
 | Document | Purpose |
 |---|---|
 | `../README.md` | User-facing target architecture and migration status |
-| `razor-pages-signalr-architecture.md` | Canonical presentation migration + Document SignalR specification |
+| `razor-pages-signalr-architecture.md` | Canonical presentation migration + management SignalR specification |
 | `project-status.md` | Current runtime vs required target status |
 | `infrastructure.md` | Target runtime boundaries, persistence, providers and realtime transports |
 | `ai-provider-backup.md` | Provider selection, fallback and embedding compatibility |
@@ -25,29 +25,36 @@
 Required end state:
 
 ```text
-Flow 1: Razor Pages Documents/Chapters + background indexing + SignalR
+Flow 1: Razor Pages Documents/Chapters + background indexing + ManagementHub
 Flow 2: Razor Pages Chat/history/citations + Evaluation
 Flow 3: Razor Pages Reports -> IReportQueryService
 Admin/Subjects: Razor Pages
 
 Chat browser updates: SSE
-Document browser updates: SignalR notifications
+Management browser updates: SignalR notifications
 ```
 
-Current implementation checkpoint at this docs PR:
+Merged baseline:
 
 ```text
 Chat: Razor Pages after PR #42
 Chat page data/session persistence: IChatPageService after PR #43
 Reports/authentication: Razor Pages
-Remaining legacy MVC product/admin surfaces: code migration still pending
 ```
 
-Do not mark the Razor-Pages-only migration complete until the implementation PR removes the legacy presentation layer and conventional controller routing.
+PR #46 branch implementation state (not merged):
+
+```text
+PageModel/DbContext cleanup: retained
+Management realtime: Documents, Chapters, Subjects, Subject Leader assignments, Users/roles
+Management hub: authorized scoped subscriptions with reconnect/reload fallback
+```
+
+PR #46 must not be described as merged, and the Razor-Pages-only migration is not complete on `master` until the implementation is merged and any remaining legacy presentation/routing is verified.
 
 ## Flow references
 
-- `razor-pages-signalr-architecture.md` - canonical migration and realtime design.
+- `razor-pages-signalr-architecture.md` - canonical migration and management realtime design.
 - `flow-1-razor-pages-signalr.md` - Flow 1-specific Page/SignalR behavior.
 - `flow-3-report-statistics-handoff.md` - Flow 3 query/report boundary.
 - `member-4-rag-backend-handoff.md` - Flow 2 backend/integration handoff.

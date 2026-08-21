@@ -1,19 +1,19 @@
 # Application-layer instructions
 
-> Updated on 2026-08-21 after PR #42/#43 and the accepted Razor Pages + SignalR documentation target.
+> Updated on 2026-08-21 for the PR #46/issue #47 management realtime implementation branch. PR #46 is not merged; this guidance distinguishes branch implementation state from merged `master`.
 
 This subtree contains provider-neutral, presentation-safe cross-workflow contracts/models. Keep it independent from Razor runtime types, SignalR hub types, provider-specific payloads, and PostgreSQL implementation details.
 
 ## Target workflow presentation
 
-1. Flow 1 - Document Management & Indexing - Razor Pages + background services + SignalR notifications.
+1. Flow 1 - Document/Chapter Management & Indexing - Razor Pages + background services + management realtime notifications.
 2. Flow 2 RAG backend - complete and provider-neutral.
 3. Flow 2 Chat/history/citations - Razor Pages + SSE.
 4. Flow 2 Evaluation - target Razor Pages.
 5. Flow 3 Report & Statistics - Razor Pages behind `IReportQueryService`.
 6. Admin/Subject catalogue - target Razor Pages.
 
-The remaining runtime MVC surfaces are implementation debt. Do not add new Application contracts that assume MVC controllers/views.
+The remaining runtime MVC surfaces are implementation debt on merged `master`; PR #46 retains the PageModel/DbContext cleanup on its unmerged branch. Do not add new Application contracts that assume MVC controllers/views.
 
 ## Provider-neutral boundary
 
@@ -55,7 +55,7 @@ subject-aware Razor Page handler
  -> application-facing Document/Chapter behavior boundary
  -> persist requested change
  -> IDocumentIndexingQueue when required
- -> realtime notification after successful persistence
+ -> IManagementRealtimeNotifier after the commit succeeds
 ```
 
 Indexing remains:
@@ -66,7 +66,31 @@ IDocumentIndexingQueue
  -> ITextEmbeddingService
 ```
 
-Application code must not depend on SignalR `Hub`, `IHubContext`, JavaScript client types, or PageModel. A realtime notifier abstraction may be introduced if needed, with the SignalR implementation in Presentation/Infrastructure wiring.
+## Management realtime contract
+
+Application owns the provider-neutral notifier boundary:
+
+```csharp
+public interface IManagementRealtimeNotifier
+{
+    Task PublishAsync(
+        ManagementRealtimeEvent notification,
+        CancellationToken cancellationToken = default);
+}
+
+public record ManagementRealtimeEvent(
+    ManagementResource Resource,
+    ManagementChange Change,
+    Guid EntityId,
+    Guid? SubjectId = null,
+    string? Status = null);
+```
+
+`ManagementResource` values are `Document`, `Chapter`, `Subject`, `SubjectLeaderAssignments`, and `User`. `ManagementChange` values are `Created`, `Updated`, `Deleted`, `IndexStatusChanged`, `AssignmentsChanged`, and `RoleChanged`.
+
+Publish only after the requested write is durably committed. The SignalR implementation belongs outside Application and maps this contract to the authorized `ManagementHub`; it must not expose a write operation.
+
+Application code must not depend on SignalR `Hub`, `IHubContext`, JavaScript client types, or PageModel.
 
 ## Flow 2 boundary
 
@@ -96,6 +120,8 @@ IReportQueryService
 ## Shared contracts/models
 
 - `IDocumentIndexingQueue`
+- `IManagementRealtimeNotifier`
+- `ManagementRealtimeEvent` and its management resource/change values
 - `IDocumentIndexingService`
 - `ITextEmbeddingService`
 - `IChatCompletionService`

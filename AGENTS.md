@@ -24,13 +24,14 @@ docs/render-deployment.md
 ## Architecture target
 
 Documentation target accepted on 2026-08-21 after PR #42/#43.
+PR #46/issue #47 branch implementation retains the PageModel/DbContext cleanup and adds authorized management realtime; PR #46 is not merged, so branch state is distinct from merged `master`.
 
 - Main project: `src/PRN222.RagAssistant`
 - Tests: `tests/PRN222.RagAssistant.Tests`
 - Target: `net10.0`
 - HTTP presentation target: **Razor Pages only**
 - Chat realtime/progress transport: **SSE**
-- Document Management realtime transport: **SignalR notifications**
+- Management realtime transport: **SignalR notifications**
 - Auth: ASP.NET Core Identity
 - Roles: `Admin`, `SubjectLeader`, `Student`
 - Policies: `ManageUsers`, `ManageSubjects`, `ManageDocuments`
@@ -62,9 +63,9 @@ Do not add new MVC product controllers/views. When migrating an existing surface
 
 PageModels own HTTP concerns and should call purpose-specific Application-facing services where practical rather than growing direct EF/provider logic.
 
-## Document SignalR rule
+## Management SignalR rule
 
-SignalR is allowed specifically for Document Management realtime fan-out.
+SignalR is allowed for authorized management realtime fan-out for Documents, Chapters, Subjects, Subject Leader assignments, and Users/roles. It is not an MVC replacement and must not contain business CRUD logic.
 
 Target pattern:
 
@@ -72,28 +73,30 @@ Target pattern:
 Razor Page handler
  -> authorize + validate + persist
  -> commit succeeds
- -> realtime notifier / IHubContext
- -> subject-scoped SignalR clients
+ -> IManagementRealtimeNotifier / ManagementHub
+ -> policy- and subject-scoped SignalR clients
 ```
 
-SignalR must not become the CRUD API. Create/edit/delete/re-index requests remain Razor Page handlers with normal antiforgery and server-side authorization.
-
-Recommended events:
+The shared notification contract is:
 
 ```text
-DocumentCreated
-DocumentUpdated
-DocumentDeleted
-DocumentIndexStatusChanged
+ManagementRealtimeEvent(
+  Resource: Document | Chapter | Subject | SubjectLeaderAssignments | User,
+  Change: Created | Updated | Deleted | IndexStatusChanged | AssignmentsChanged | RoleChanged,
+  EntityId: Guid,
+  SubjectId?: Guid,
+  Status?: string)
 ```
 
-Connections/groups must be authorized against concrete subject access. A client-supplied subject ID is never sufficient authorization.
+The SignalR hub is `PRN222.RagAssistant.Realtime.ManagementHub` at `/hubs/management` and emits `ManagementChanged`. Subscription methods are `SubscribeToSubject(Guid)`, `SubscribeToAdminUsers()`, `SubscribeToAdminSubjects()`, and `SubscribeToSubjectCatalog()`. Groups are `subject:{guid:D}`, `admin:users`, `admin:subjects`, and `subjects:catalog`; every subscription performs server-side policy and concrete-subject authorization.
+
+SignalR must not become the CRUD API. Create/edit/delete/re-index requests remain Razor Page handlers with normal antiforgery and server-side authorization. Broadcasts occur only after the persistence transaction succeeds.
 
 ## Chat transport rule
 
 Chat remains Razor Pages + SSE. PR #42 migrated Chat to `Pages/Chat`; PR #43 moved its page data/session mutation boundary behind `IChatPageService`.
 
-Do not replace Chat SSE with SignalR as part of the Document Management realtime work.
+- Do not replace Chat SSE with SignalR as part of the management realtime work.
 
 Grounded retrieval must preserve:
 
@@ -129,7 +132,7 @@ Subject is a first-class workflow boundary.
 
 - `Chapter.SubjectId`, `Document.SubjectId`, and `ChatSession.SubjectId` carry persisted scope.
 - Flow 1 Razor Page handlers preserve subject context and authorize concrete resources.
-- Document SignalR subscriptions use the same concrete subject boundary.
+- Management SignalR subscriptions use the same concrete subject boundary and corresponding admin policies.
 - Flow 2 session/retrieval/persistence stays subject-scoped.
 - Flow 3 report snapshots stay subject-scoped.
 - Admin may manage any existing subject.
@@ -146,7 +149,7 @@ Target presentation is Razor Pages under `Pages/Documents` and `Pages/Chapters`.
 - Page handlers do not parse/chunk/embed/query pgvector/call provider APIs.
 - Indexing consumes `ITextEmbeddingService`.
 - Startup recovery handles persisted `Uploaded`/`Processing` documents.
-- Document CRUD/index status changes publish subject-scoped SignalR notifications after persistence succeeds.
+- Management changes, including Document index-status changes, publish scoped SignalR notifications after persistence succeeds.
 
 ## Flow 2 rules
 
@@ -191,7 +194,7 @@ Provider-specific DTOs and EF/PostgreSQL implementation details stay outside App
 
 Current Render uses Gemini Chat and OpenRouter embeddings. ASP.NET Core Data Protection keys persist in PostgreSQL.
 
-Render web services support WebSocket connections, so the target Document SignalR hub is compatible with the current deployment model. Clients must implement reconnect behavior because instance replacement can close active connections.
+- Render web services support WebSocket connections, so the target management SignalR hub is compatible with the current deployment model. Clients must implement reconnect behavior because instance replacement can close active connections; affected pages use reload fallback.
 
 ## Infrastructure and hygiene
 

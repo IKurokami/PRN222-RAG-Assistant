@@ -1,6 +1,6 @@
 # Multi-subject management
 
-> Updated on 2026-08-21 for the Razor Pages + SignalR target architecture.
+> Updated on 2026-08-21 for the PR #46/issue #47 management realtime implementation branch. PR #46 is not merged; subject ownership and contribution identity rules remain unchanged.
 
 ## Goal
 
@@ -20,7 +20,7 @@ Subject context reaches all workflows:
 - Flow 1 Document/Chapter management and indexing source ownership;
 - Flow 2 Chat sessions and RAG retrieval;
 - Flow 3 Report snapshots including Chat aggregates;
-- Document SignalR subscriptions and broadcasts.
+- Authorized management SignalR subscriptions and broadcasts use the same persisted subject boundary.
 
 ## Target presentation
 
@@ -55,17 +55,27 @@ Documents/Chapters migrate to Razor Pages while preserving concrete subject cont
 
 The background indexing pipeline remains document-ID-driven; no per-subject worker is required.
 
-### SignalR subject isolation
+### Management realtime isolation
 
-Document realtime connections use subject-scoped groups, for example:
+Management realtime uses the authorized `/hubs/management` `ManagementHub` and a common `ManagementChanged` event. Subject-specific Document/Chapter changes use:
 
 ```text
-subject:{SubjectId}
+subject:{guid:D}
 ```
 
-A user may join a group only after server-side authorization for that subject. Create/update/delete/index-status events are sent only to the affected subject group.
+Administrative changes use only their corresponding scoped groups:
 
-SignalR events are not the source of truth. Clients may refresh state from the authorized Razor Page/read endpoint when needed.
+```text
+admin:users
+admin:subjects
+subjects:catalog
+```
+
+The hub exposes `SubscribeToSubject(Guid subjectId)`, `SubscribeToAdminUsers()`, `SubscribeToAdminSubjects()`, and `SubscribeToSubjectCatalog()`. Each method performs server-side policy and concrete-subject authorization; a client-supplied ID is never sufficient. User/role and Subject Leader assignment events do not leak into unrelated subject groups.
+
+Management resources are Document, Chapter, Subject, SubjectLeaderAssignments, and User. Changes are Created, Updated, Deleted, IndexStatusChanged, AssignmentsChanged, and RoleChanged. Document index-status notifications retain their status payload.
+
+SignalR events are not the source of truth. Razor Page handlers remain the write path, and broadcasts occur only after persistence commits. Clients automatically reconnect and reload authorized state when an event is insufficient.
 
 ## Flow 2
 
@@ -103,6 +113,6 @@ Public registration creates only a Student account. It does not create Subject L
 
 ## Migration rule
 
-The follow-up presentation PR must preserve subject isolation while removing the remaining legacy MVC surfaces. Razor Page conversion and SignalR addition are not allowed to introduce global-corpus or cross-subject management paths.
+The PR #46 branch must preserve subject isolation while the implementation is reviewed and merged. Razor Page conversion and ManagementHub addition are not allowed to introduce global-corpus, cross-subject, or unauthorized management paths.
 
 See `razor-pages-signalr-architecture.md` for the canonical migration target.
