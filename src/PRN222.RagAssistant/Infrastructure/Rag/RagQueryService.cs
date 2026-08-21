@@ -141,9 +141,9 @@ public sealed class RagQueryService : IRagQueryService
                     yield return toolEvent;
                 }
 
-                // Never expose an ungrounded direct answer. Text emitted before the first
-                // successful retrieval tool is intentionally withheld from the browser.
-                if (evidence.Count == 0)
+                // Never expose a direct answer before a successful retrieval tool has
+                // produced either chunk evidence or trusted document metadata evidence.
+                if (!evidence.HasEvidence)
                 {
                     continue;
                 }
@@ -157,7 +157,8 @@ public sealed class RagQueryService : IRagQueryService
                 yield return remainingToolEvent;
             }
 
-            if (evidence.Count == 0)
+            var rejectedUngroundedAnswer = false;
+            if (!evidence.HasEvidence)
             {
                 answerText = _options.Chat.NoEvidenceMessage;
                 citations = Array.Empty<RagCitation>();
@@ -167,23 +168,50 @@ public sealed class RagQueryService : IRagQueryService
             else
             {
                 answerText = answerBuilder.ToString().Trim();
+                chunkCount = evidence.Count;
+
                 if (string.IsNullOrWhiteSpace(answerText))
                 {
                     answerText = _options.Chat.NoEvidenceMessage;
+                    citations = Array.Empty<RagCitation>();
                 }
+                else
+                {
+                    citations = ParseCitationsFromAnswer(answerText, evidence.Chunks);
 
-                citations = ParseCitationsFromAnswer(answerText, evidence.Chunks);
-                chunkCount = evidence.Count;
+                    // Metadata-only answers from list_documents cannot point at a chunk,
+                    // but any answer synthesized from retrieved chunks must reference at
+                    // least one valid marker before it can be persisted as grounded output.
+                    if (evidence.RequiresCitations
+                        && citations.Count == 0
+                        && !string.Equals(
+                            answerText,
+                            _options.Chat.NoEvidenceMessage,
+                            StringComparison.OrdinalIgnoreCase))
+                    {
+                        rejectedUngroundedAnswer = true;
+                        answerText = _options.Chat.NoEvidenceMessage;
+                        citations = Array.Empty<RagCitation>();
+
+                        _logger.LogWarning(
+                            "Agentic RAG answer rejected because chunk evidence was used without a valid citation marker. SessionId={SessionId}, UserId={UserId}, ChunkCount={ChunkCount}",
+                            session.Id,
+                            userId,
+                            chunkCount);
+                    }
+                }
             }
 
             yield return new RagToolCallEvent(
                 "agent-plan",
                 "agentic_rag",
                 "completed",
-                $"Agent hoàn tất với {chunkCount} đoạn bằng chứng",
-                citations.Count > 0
-                    ? $"Câu trả lời sử dụng {citations.Count} trích dẫn."
-                    : "Không có citation marker hợp lệ trong câu trả lời cuối.");
+                $"Agent hoàn tất với {evidence.TotalEvidenceCount} mục bằng chứng",
+                rejectedUngroundedAnswer
+                    ? "Câu trả lời không có citation marker hợp lệ nên đã bị chặn."
+                    : citations.Count > 0
+                        ? $"Câu trả lời sử dụng {citations.Count} trích dẫn."
+                        : "Câu trả lời dựa trên metadata tài liệu hoặc không có chunk cần trích dẫn.");
         }
         else
         {
@@ -390,8 +418,8 @@ public sealed class RagQueryService : IRagQueryService
         4. Dùng `keyword_search` khi cần tên riêng, mã, phiên bản, năm, thuật ngữ hoặc chuỗi chính xác.
         5. Khi một đoạn có vẻ thiếu ngữ cảnh trước/sau, gọi `get_chunk_context` với chunk_id được tool tìm kiếm trả về.
         6. Có thể gọi tool nhiều lần với các truy vấn khác nhau nếu câu hỏi cần tổng hợp nhiều nguồn.
-        7. Dùng `list_documents` khi người dùng hỏi có những tài liệu nào hoặc cần xác định đúng tên tài liệu.
-        8. Mỗi đoạn bằng chứng có marker [n]. Khi trả lời, đặt đúng marker [n] ngay sau dữ kiện được hỗ trợ bởi đoạn đó.
+        7. Dùng `list_documents` khi người dùng hỏi có những tài liệu nào hoặc cần xác định đúng tên tài liệu. Metadata trả về từ tool này là bằng chứng hợp lệ cho câu hỏi liệt kê tài liệu và không cần marker chunk.
+        8. Mỗi đoạn bằng chứng có marker [n]. Khi trả lời bằng nội dung chunk, đặt đúng marker [n] ngay sau dữ kiện được hỗ trợ bởi đoạn đó.
         9. Nếu các tool không tìm thấy bằng chứng đủ để trả lời, trả lời đúng tinh thần: "{_options.Chat.NoEvidenceMessage}".
         10. Không yêu cầu, suy đoán hoặc tự chọn subjectId. Phạm vi môn học đã được backend khóa theo phiên chat.
 
@@ -656,6 +684,7 @@ public sealed class RagQueryService : IRagQueryService
         private readonly int _maxToolResultChars;
         private readonly List<RetrievedChunk> _chunks = [];
         private readonly Dictionary<Guid, int> _indices = [];
+        private int _metadataEvidenceCount;
 
         public EvidenceCollector(int maxToolResultChars)
         {
@@ -663,7 +692,18 @@ public sealed class RagQueryService : IRagQueryService
         }
 
         public int Count => _chunks.Count;
+        public int TotalEvidenceCount => _chunks.Count + _metadataEvidenceCount;
+        public bool HasEvidence => TotalEvidenceCount > 0;
+        public bool RequiresCitations => _chunks.Count > 0;
         public IReadOnlyList<RetrievedChunk> Chunks => _chunks;
+
+        public void AddDocumentMetadataEvidence(int count)
+        {
+            if (count > 0)
+            {
+                _metadataEvidenceCount += count;
+            }
+        }
 
         public string AddAndFormat(IReadOnlyList<RetrievedChunk> chunks)
         {
@@ -873,6 +913,8 @@ public sealed class RagQueryService : IRagQueryService
             {
                 return "Không có tài liệu đã index phù hợp trong môn học hiện tại.";
             }
+
+            _evidence.AddDocumentMetadataEvidence(documents.Count);
 
             return string.Join(
                 Environment.NewLine,
