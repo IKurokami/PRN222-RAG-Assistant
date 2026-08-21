@@ -22,15 +22,37 @@ public sealed class GeminiChatCompletionService :
     private readonly IChatClient _agentClient;
     private readonly string _model;
 
+    public GeminiChatCompletionService(
+        IHttpClientFactory httpClientFactory,
+        IConfiguration configuration)
+        : this(configuration, () => httpClientFactory.CreateClient("Gemini"))
+    {
+    }
+
+    // Kept for lightweight direct construction outside DI. Production DI uses the
+    // IHttpClientFactory overload above so SDK traffic participates in configured
+    // handlers, timeouts and test doubles.
     public GeminiChatCompletionService(IConfiguration configuration)
+        : this(configuration, httpClientFactory: null)
+    {
+    }
+
+    private GeminiChatCompletionService(
+        IConfiguration configuration,
+        Func<HttpClient>? httpClientFactory)
     {
         _model = configuration["Rag:Gemini:ChatModel"]
             ?? throw new InvalidOperationException("Rag:Gemini:ChatModel must be configured.");
 
+        // AddInfrastructure already validates the key for production. A placeholder is
+        // allowed only when a custom HttpClient factory is supplied so isolated unit
+        // tests can exercise SDK serialization/deserialization without a real credential.
         var apiKey = configuration["Rag:Gemini:ApiKey"]
             ?? configuration["GEMINI_API_KEY"]
-            ?? throw new InvalidOperationException(
-                "Rag:Gemini:ApiKey / GEMINI_API_KEY must be configured.");
+            ?? (httpClientFactory is not null
+                ? "test-sdk-key"
+                : throw new InvalidOperationException(
+                    "Rag:Gemini:ApiKey / GEMINI_API_KEY must be configured."));
 
         var baseUrl = configuration["Rag:Gemini:BaseUrl"]
             ?? configuration["GEMINI_BASE_URL"]
@@ -43,7 +65,13 @@ public sealed class GeminiChatCompletionService :
                 BaseUrl = baseUrl.TrimEnd('/'),
                 ApiVersion = "v1beta",
                 Timeout = 120_000
-            });
+            },
+            clientOptions: httpClientFactory is null
+                ? null
+                : new ClientOptions
+                {
+                    HttpClientFactory = httpClientFactory
+                });
 
         _chatClient = _genAiClient.AsIChatClient(_model);
         _agentClient = _chatClient
