@@ -36,7 +36,7 @@ public sealed class ReportQueryServiceTests
     }
 
     [Fact]
-    public async Task GetSubjectReportAsync_scopes_document_and_chat_statistics_to_subject()
+    public async Task GetSubjectReportAsync_scopes_document_chat_and_citation_insights_to_subject()
     {
         await using var dbContext = CreateContext();
 
@@ -45,16 +45,20 @@ public sealed class ReportQueryServiceTests
         var targetChapterId = Guid.NewGuid();
         var otherChapterId = Guid.NewGuid();
         var targetIndexedDocumentId = Guid.NewGuid();
+        var targetUncitedDocumentId = Guid.NewGuid();
         var targetFailedDocumentId = Guid.NewGuid();
         var otherDocumentId = Guid.NewGuid();
         var targetChunkId = Guid.NewGuid();
         var targetSecondChunkId = Guid.NewGuid();
+        var targetUncitedChunkId = Guid.NewGuid();
+        var targetFailedChunkId = Guid.NewGuid();
         var otherChunkId = Guid.NewGuid();
         var targetSessionId = Guid.NewGuid();
         var otherSessionId = Guid.NewGuid();
         var legacySessionId = Guid.NewGuid();
         var targetUserMessageId = Guid.NewGuid();
         var targetAssistantMessageId = Guid.NewGuid();
+        var targetUncitedAssistantMessageId = Guid.NewGuid();
         var otherMessageId = Guid.NewGuid();
         var legacyMessageId = Guid.NewGuid();
         var now = DateTime.UtcNow;
@@ -99,6 +103,12 @@ public sealed class ReportQueryServiceTests
                 DocumentIndexStatus.Indexed,
                 now.AddMinutes(-5)),
             CreateDocument(
+                targetUncitedDocumentId,
+                targetSubjectId,
+                targetChapterId,
+                DocumentIndexStatus.Indexed,
+                now.AddMinutes(-10)),
+            CreateDocument(
                 targetFailedDocumentId,
                 targetSubjectId,
                 null,
@@ -129,6 +139,20 @@ public sealed class ReportQueryServiceTests
             },
             new DocumentChunk
             {
+                Id = targetUncitedChunkId,
+                DocumentId = targetUncitedDocumentId,
+                ChunkIndex = 0,
+                Content = "target uncited chunk"
+            },
+            new DocumentChunk
+            {
+                Id = targetFailedChunkId,
+                DocumentId = targetFailedDocumentId,
+                ChunkIndex = 0,
+                Content = "stale chunk from a failed re-index"
+            },
+            new DocumentChunk
+            {
                 Id = otherChunkId,
                 DocumentId = otherDocumentId,
                 ChunkIndex = 0,
@@ -143,6 +167,7 @@ public sealed class ReportQueryServiceTests
         dbContext.ChatMessages.AddRange(
             CreateMessage(targetUserMessageId, targetSessionId, ChatMessageRole.User, now),
             CreateMessage(targetAssistantMessageId, targetSessionId, ChatMessageRole.Assistant, now),
+            CreateMessage(targetUncitedAssistantMessageId, targetSessionId, ChatMessageRole.Assistant, now),
             CreateMessage(otherMessageId, otherSessionId, ChatMessageRole.Assistant, now),
             CreateMessage(legacyMessageId, legacySessionId, ChatMessageRole.Assistant, now));
 
@@ -178,29 +203,63 @@ public sealed class ReportQueryServiceTests
         Assert.Equal(targetSubjectId, result!.SubjectId);
         Assert.Equal("TARGET", result.SubjectCode);
         Assert.Equal(1, result.TotalChapters);
-        Assert.Equal(2, result.TotalDocuments);
+        Assert.Equal(3, result.TotalDocuments);
         Assert.Equal(1, result.UnassignedDocuments);
-        Assert.Equal(2, result.TotalChunks);
+        Assert.Equal(4, result.TotalChunks);
         Assert.Equal(0, result.UploadedCount);
         Assert.Equal(0, result.ProcessingCount);
-        Assert.Equal(1, result.IndexedCount);
+        Assert.Equal(2, result.IndexedCount);
         Assert.Equal(1, result.FailedCount);
+        Assert.Equal(1.5, result.AverageChunksPerIndexedDocument);
 
         var chapter = Assert.Single(result.DocumentsByChapter);
         Assert.Equal(targetChapterId, chapter.Id);
-        Assert.Equal(1, chapter.DocumentCount);
+        Assert.Equal(2, chapter.DocumentCount);
 
         var failure = Assert.Single(result.RecentFailures);
         Assert.Equal(targetFailedDocumentId, failure.DocumentId);
         Assert.Equal("Index failed", failure.IndexError);
 
-        var recentlyIndexed = Assert.Single(result.RecentlyIndexed);
-        Assert.Equal(targetIndexedDocumentId, recentlyIndexed.DocumentId);
-        Assert.Equal(2, recentlyIndexed.ChunkCount);
+        Assert.Equal(2, result.RecentlyIndexed.Count);
+        Assert.Contains(result.RecentlyIndexed, item =>
+            item.DocumentId == targetIndexedDocumentId && item.ChunkCount == 2);
+        Assert.Contains(result.RecentlyIndexed, item =>
+            item.DocumentId == targetUncitedDocumentId && item.ChunkCount == 1);
 
         Assert.Equal(1, result.TotalChatSessions);
-        Assert.Equal(2, result.TotalChatMessages);
+        Assert.Equal(3, result.TotalChatMessages);
         Assert.Equal(1, result.TotalMessageCitations);
+        Assert.Equal(1, result.UserQuestionCount);
+        Assert.Equal(2, result.AssistantResponseCount);
+        Assert.Equal(1, result.CitedAssistantResponseCount);
+        Assert.Equal(1, result.ActiveSessionsLast7Days);
+        Assert.Equal(1, result.ActiveSessionsLast30Days);
+        Assert.Equal(3, result.AverageMessagesPerSession);
+        Assert.Equal(0.5, result.AverageCitationsPerAssistantResponse);
+        Assert.Equal(50, result.CitationCoveragePercent);
+
+        Assert.Equal(1, result.UniqueCitedDocuments);
+        Assert.Equal(1, result.IndexedButNeverCitedDocuments);
+        Assert.Equal(50, result.CitedDocumentCoveragePercent);
+        Assert.Equal(100, result.TopThreeCitationSharePercent);
+
+        var topDocument = Assert.Single(result.TopCitedDocuments);
+        Assert.Equal(targetIndexedDocumentId, topDocument.DocumentId);
+        Assert.Equal(1, topDocument.CitationCount);
+        Assert.Equal(1, topDocument.DistinctSessions);
+        Assert.Equal(1, topDocument.CitedChunkCount);
+        Assert.Equal(1, topDocument.ChapterNumber);
+
+        var topChapter = Assert.Single(result.TopCitedChapters);
+        Assert.Equal(targetChapterId, topChapter.ChapterId);
+        Assert.Equal(2, topChapter.DocumentCount);
+        Assert.Equal(1, topChapter.CitedDocumentCount);
+        Assert.Equal(1, topChapter.CitationCount);
+
+        var today = Assert.Single(result.DailyActivityLast7Days, item => item.DateUtc.Date == now.Date);
+        Assert.Equal(1, today.UserMessages);
+        Assert.Equal(2, today.AssistantMessages);
+        Assert.Equal(1, today.CitationCount);
     }
 
     private static ApplicationDbContext CreateContext()
