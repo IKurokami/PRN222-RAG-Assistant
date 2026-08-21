@@ -14,6 +14,7 @@ builder.Configuration["ConnectionStrings:Postgres"] =
 builder.Services.AddControllersWithViews();
 builder.Services.AddRazorPages();
 builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddReporting();
 builder.Services
     .AddDataProtection()
     .PersistKeysToDbContext<DataProtectionKeyDbContext>()
