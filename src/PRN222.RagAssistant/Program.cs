@@ -1,12 +1,23 @@
+using Microsoft.AspNetCore.DataProtection;
+using PRN222.RagAssistant.Data;
 using PRN222.RagAssistant.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Flow 1 and the pending Flow 2 use MVC Controllers + Views.
+// Normalize either the existing ASP.NET Core connection string or a Render-style
+// postgresql:// URL before Infrastructure builds Npgsql/EF Core services.
+builder.Configuration["ConnectionStrings:Postgres"] =
+    PostgresConnectionStringResolver.Resolve(builder.Configuration);
+
+// Flow 1 and Flow 2 use MVC Controllers + Views.
 // Razor Pages remain enabled for authentication, shell pages, and Flow 3 reporting.
 builder.Services.AddControllersWithViews();
 builder.Services.AddRazorPages();
 builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services
+    .AddDataProtection()
+    .PersistKeysToDbContext<DataProtectionKeyDbContext>()
+    .SetApplicationName("PRN222-RAG-Assistant");
 
 var app = builder.Build();
 
@@ -16,7 +27,6 @@ await app.InitializeDatabaseAsync();
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error");
-    // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
     app.UseHsts();
 }
 
@@ -26,6 +36,9 @@ app.UseRouting();
 
 app.UseAuthentication();
 app.UseAuthorization();
+
+app.MapGet("/healthz", () => Results.Ok(new { status = "ok" }))
+   .AllowAnonymous();
 
 app.MapStaticAssets();
 app.MapControllerRoute(

@@ -52,6 +52,13 @@
                             <li class="nav-item">
                                 <a class="nav-link-humata @(isSubjectWorkspace ? "is-active" : null)" asp-area="" asp-controller="Subjects" asp-action="Index">Môn học</a>
                             </li>
+                            <li class="nav-item">
+                                <a class="nav-link-humata @(currentController == "Chat" ? "is-active" : null)" asp-area="" asp-controller="Chat" asp-action="Index">Trò chuyện RAG</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link-humata @(currentController == "Evaluation" ? "is-active" : null)" asp-area="" asp-controller="Evaluation" asp-action="Index">Đánh giá RAG</a>
+                            </li>
+
                         }
                         @if (isAdmin)
                         {
