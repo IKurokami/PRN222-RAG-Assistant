@@ -205,7 +205,7 @@ public sealed class IndexModel : PageModel
         }
     }
 
-    public async Task OnPostAskStreamAsync(
+    public async Task<IActionResult> OnPostAskStreamAsync(
         [FromBody] AskRequestDto dto,
         CancellationToken cancellationToken)
     {
@@ -227,13 +227,13 @@ public sealed class IndexModel : PageModel
         if (user == null)
         {
             await SendEventAsync("error", new { message = "Vui lòng đăng nhập." });
-            return;
+            return new EmptyResult();
         }
 
         if (string.IsNullOrWhiteSpace(dto.Question))
         {
             await SendEventAsync("error", new { message = "Câu hỏi không được để trống." });
-            return;
+            return new EmptyResult();
         }
 
         try
@@ -326,6 +326,8 @@ public sealed class IndexModel : PageModel
             _logger.LogError(ex, "Chat stream request failed for User {UserId}", user.Id);
             await SendEventAsync("error", new { message = "Đã xảy ra lỗi: " + ex.Message });
         }
+
+        return new EmptyResult();
     }
 
     public async Task<IActionResult> OnPostNewSessionAsync(
