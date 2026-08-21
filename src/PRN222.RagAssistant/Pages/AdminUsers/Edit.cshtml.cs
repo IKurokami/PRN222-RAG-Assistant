@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using PRN222.RagAssistant.Application.Abstractions;
 using PRN222.RagAssistant.Domain.Entities;
 using PRN222.RagAssistant.Models.Admin;
 using PRN222.RagAssistant.Security;
@@ -12,10 +13,14 @@ namespace PRN222.RagAssistant.Pages.AdminUsers;
 public class EditModel : PageModel
 {
     private readonly UserManager<ApplicationUser> _userManager;
+    private readonly IManagementRealtimeNotifier _managementRealtimeNotifier;
 
-    public EditModel(UserManager<ApplicationUser> userManager)
+    public EditModel(
+        UserManager<ApplicationUser> userManager,
+        IManagementRealtimeNotifier managementRealtimeNotifier)
     {
         _userManager = userManager;
+        _managementRealtimeNotifier = managementRealtimeNotifier;
     }
 
     [BindProperty(SupportsGet = true)]
@@ -96,6 +101,8 @@ public class EditModel : PageModel
             Input.IsCurrentUser = isCurrentUser;
             return Page();
         }
+        var roleMutationPersisted = false;
+        var affectedSubjectIds = new HashSet<Guid>();
 
         if (!currentRoles.Contains(Input.Role, StringComparer.Ordinal))
         {
@@ -106,6 +113,7 @@ public class EditModel : PageModel
                 PopulateEditMetadata();
                 return Page();
             }
+            roleMutationPersisted = true;
         }
 
         var rolesToRemove = currentRoles
@@ -117,10 +125,17 @@ public class EditModel : PageModel
             var removeResult = await _userManager.RemoveFromRolesAsync(user, rolesToRemove);
             if (!removeResult.Succeeded)
             {
+                if (roleMutationPersisted)
+                {
+                    await PublishRoleChangedAsync(user.Id);
+                }
+
                 AddIdentityErrors(removeResult);
                 PopulateEditMetadata();
                 return Page();
             }
+
+            roleMutationPersisted = true;
         }
 
         if (!string.Equals(Input.Role, AppRoles.SubjectLeader, StringComparison.Ordinal))
@@ -135,15 +150,51 @@ public class EditModel : PageModel
                 var removeClaimsResult = await _userManager.RemoveClaimsAsync(user, subjectAssignments);
                 if (!removeClaimsResult.Succeeded)
                 {
+                    if (roleMutationPersisted)
+                    {
+                        await PublishRoleChangedAsync(user.Id);
+                    }
+
                     AddIdentityErrors(removeClaimsResult);
                     PopulateEditMetadata();
                     return Page();
                 }
+                foreach (var claim in subjectAssignments)
+                {
+                    if (Guid.TryParse(claim.Value, out var subjectId))
+                    {
+                        affectedSubjectIds.Add(subjectId);
+                    }
+                }
             }
+        }
+
+        if (roleMutationPersisted)
+        {
+            await PublishRoleChangedAsync(user.Id);
+        }
+
+        foreach (var subjectId in affectedSubjectIds)
+        {
+            await _managementRealtimeNotifier.PublishAsync(
+                new ManagementRealtimeEvent(
+                    ManagementResource.SubjectLeaderAssignments,
+                    ManagementChange.AssignmentsChanged,
+                    subjectId,
+                    subjectId));
         }
 
         TempData["StatusMessage"] = $"Updated {user.DisplayName} to role {AppRoles.GetDisplayName(Input.Role)}.";
         return RedirectToPage("/AdminUsers/Index");
+    }
+
+    private Task PublishRoleChangedAsync(Guid userId)
+    {
+        return _managementRealtimeNotifier.PublishAsync(
+            new ManagementRealtimeEvent(
+                ManagementResource.User,
+                ManagementChange.RoleChanged,
+                userId));
     }
 
     private void PopulateEditMetadata()

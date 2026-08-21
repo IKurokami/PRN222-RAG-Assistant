@@ -4,7 +4,10 @@
     ViewData["Title"] = $"Phân Trưởng Môn - {Model.SubjectCode}";
 }
 
-<div class="container py-4">
+<div class="container py-4"
+     data-management-realtime
+     data-realtime-scope="subject"
+     data-subject-id="@Model.SubjectId">
     <!-- Breadcrumb -->
     <div class="academic-breadcrumb mb-3">
         <a asp-page="/Index"><i class="bi bi-house-door"></i> Trang chủ</a>
@@ -85,3 +88,6 @@
         </div>
     </div>
 </div>
+@section Scripts {
+    <partial name="_ManagementRealtimeScripts" />
+}

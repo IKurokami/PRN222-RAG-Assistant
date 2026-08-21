@@ -7,7 +7,9 @@
     var totalDocuments = Model.Subjects.Sum(subject => subject.DocumentCount);
 }
 
-<div class="subjects-page">
+<div class="subjects-page"
+     data-management-realtime
+     data-realtime-scope="subject-catalog">
     <div class="container py-4 py-lg-5">
         <div class="academic-breadcrumb mb-4">
             <a asp-page="/Index"><i class="bi bi-house-door"></i> Trang chủ</a>
@@ -122,3 +124,6 @@
         }
     </div>
 </div>
+@section Scripts {
+    <partial name="_ManagementRealtimeScripts" />
+}

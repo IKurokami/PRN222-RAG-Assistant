@@ -10,7 +10,8 @@ public sealed class DocumentManagementService(
     ApplicationDbContext dbContext,
     IDocumentIndexingQueue indexingQueue,
     IConfiguration configuration,
-    ILogger<DocumentManagementService> logger) : IDocumentManagementService
+    ILogger<DocumentManagementService> logger,
+    IManagementRealtimeNotifier realtimeNotifier) : IDocumentManagementService
 {
     public async Task<IReadOnlyList<Document>> GetDocumentsAsync(
         Guid subjectId,
@@ -180,6 +181,13 @@ public sealed class DocumentManagementService(
             TryDeleteFile(storagePath);
             throw;
         }
+        await realtimeNotifier.PublishAsync(
+            new ManagementRealtimeEvent(
+                ManagementResource.Document,
+                ManagementChange.Created,
+                document.Id,
+                document.SubjectId),
+            CancellationToken.None);
 
         await indexingQueue.EnqueueAsync(document.Id, cancellationToken);
         return document;
@@ -216,6 +224,13 @@ public sealed class DocumentManagementService(
         document.Title = title;
         document.ChapterId = chapterId;
         await dbContext.SaveChangesAsync(cancellationToken);
+        await realtimeNotifier.PublishAsync(
+            new ManagementRealtimeEvent(
+                ManagementResource.Document,
+                ManagementChange.Updated,
+                document.Id,
+                document.SubjectId),
+            CancellationToken.None);
         return document;
     }
 
@@ -236,6 +251,14 @@ public sealed class DocumentManagementService(
         document.IndexedAtUtc = null;
 
         await dbContext.SaveChangesAsync(cancellationToken);
+        await realtimeNotifier.PublishAsync(
+            new ManagementRealtimeEvent(
+                ManagementResource.Document,
+                ManagementChange.IndexStatusChanged,
+                document.Id,
+                document.SubjectId,
+                document.IndexStatus.ToString()),
+            CancellationToken.None);
         await indexingQueue.EnqueueAsync(document.Id, cancellationToken);
         return document;
     }
@@ -260,6 +283,13 @@ public sealed class DocumentManagementService(
 
         dbContext.Documents.Remove(document);
         await dbContext.SaveChangesAsync(cancellationToken);
+        await realtimeNotifier.PublishAsync(
+            new ManagementRealtimeEvent(
+                ManagementResource.Document,
+                ManagementChange.Deleted,
+                document.Id,
+                document.SubjectId),
+            CancellationToken.None);
 
         TryDeleteFile(storagePath);
         return result;

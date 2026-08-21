@@ -1,15 +1,15 @@
 # Project status
 
-> Updated on 2026-08-21 after PR #42/#43.
+> Updated on 2026-08-21 for the PR #46/issue #47 implementation branch.
 >
-> This file distinguishes the **implemented runtime** from the **accepted target architecture**. The current docs PR changes documentation only.
+> This file distinguishes the **merged `master` state** from the **PR #46 branch state**. PR #46 is **not merged**; branch implementation notes are not merged contribution claims.
 
 ## Target presentation architecture
 
 All HTTP UI/actions must converge on Razor Pages.
 
 ```text
-Flow 1 Documents/Chapters: Razor Pages + SignalR notifications
+Flow 1 Documents/Chapters: Razor Pages + authorized ManagementHub
 Flow 2 Chat:               Razor Pages + SSE
 Flow 2 Evaluation:         Razor Pages
 Flow 3 Reports:            Razor Pages
@@ -17,22 +17,22 @@ Admin users/subjects:      Razor Pages
 Subject catalogue:         Razor Pages
 ```
 
-SignalR is only the realtime fan-out mechanism for Document Management. It does not replace Razor Page handlers or Chat SSE.
+SignalR is the authorized management fan-out mechanism for Documents, Chapters, Subjects, Subject Leader assignments, and Users/roles. It does not replace Razor Page handlers or Chat SSE.
 
 ## Migration status
 
-| Area | Target | Runtime status at this docs PR |
+| Area | Target | Runtime status |
 |---|---|---|
 | Account/auth | Razor Pages | Complete |
 | Chat/history/citations | Razor Pages + SSE | Complete after PR #42/#43 |
 | Reports | Razor Pages + `IReportQueryService` | Complete |
-| Documents/Chapters | Razor Pages + SignalR | Implementation pending |
+| Documents/Chapters | Razor Pages + ManagementHub | PR #46 branch implementation; not merged |
 | Evaluation | Razor Pages | Implementation pending |
-| Admin users/subjects | Razor Pages | Implementation pending |
-| Subject catalogue | Razor Pages | Implementation pending |
-| Legacy MVC presentation removal | Removed | Implementation pending |
+| Admin users/subjects | Razor Pages + ManagementHub | PR #46 branch implementation; not merged |
+| Subject catalogue | Razor Pages + ManagementHub | PR #46 branch implementation; not merged |
+| Legacy MVC presentation removal | Removed | Verify on PR #46 branch; merge pending |
 
-The migration is **not complete** until the follow-up code PR removes the legacy MVC presentation layer and controller routing after Razor Page parity is verified.
+The migration is **not complete on `master`** until the follow-up code PR merges and any remaining legacy MVC presentation/controller routing is verified after Razor Page parity.
 
 ## Relevant merged milestones
 
@@ -46,32 +46,44 @@ The migration is **not complete** until the follow-up code PR removes the legacy
 - **PR #42** - Chat product presentation migrated to Razor Pages.
 - **PR #43** - Chat PageModel direct DbContext usage replaced by `IChatPageService`.
 
-## Flow 1 target
+## PR #46 implementation state (branch only)
+
+The branch retains the completed PageModel/DbContext cleanup and implements issue #47 authorized management realtime for:
 
 ```text
-Document/Chapter Razor Page handler
- -> validate + authorize concrete Subject
- -> persist change through application/infrastructure boundary
- -> enqueue Document.Id when required
- -> publish realtime event
+Documents
+Chapters
+Subjects
+Subject Leader assignments
+Users/roles
+```
 
+The implementation uses Razor Page handlers for writes, server-side policy and concrete-subject authorization, post-commit `IManagementRealtimeNotifier` broadcasts, scoped ManagementHub groups, automatic reconnect, and reload fallback. This is implementation state only; PR #46 is not merged.
+
+## Flow 1 target and branch behavior
+
+```text
+management Razor Page handler
+ -> validate + authorize policy/concrete Subject
+ -> persist change
+ -> enqueue Document.Id when required
+ -> commit succeeds
+ -> publish ManagementChanged through ManagementHub
+```
+
+Document indexing remains separate:
+
+```text
 Document indexing worker
  -> parser/chunker
  -> ITextEmbeddingService
  -> DocumentChunks/index status
- -> publish DocumentIndexStatusChanged
+ -> publish (Document, IndexStatusChanged, Status)
 ```
 
-Document SignalR events should include:
+The common management event envelope carries `Resource`, `Change`, `EntityId`, optional `SubjectId`, and optional `Status`. Resources are Document, Chapter, Subject, SubjectLeaderAssignments, and User; changes are Created, Updated, Deleted, IndexStatusChanged, AssignmentsChanged, and RoleChanged.
 
-```text
-DocumentCreated
-DocumentUpdated
-DocumentDeleted
-DocumentIndexStatusChanged
-```
-
-Writes remain Razor Page handlers with antiforgery and server-side authorization. SignalR broadcasts only after successful persistence.
+Writes remain Razor Page handlers with antiforgery and server-side authorization. ManagementHub broadcasts only after successful persistence.
 
 ## Flow 2
 
@@ -130,17 +142,17 @@ master checks pass
  -> Render checksPass auto deploy
 ```
 
-A documentation-only PR does not validate the planned migration by itself. The implementation PR must add/update tests for Razor Page authorization/handlers and SignalR subject subscription/realtime behavior.
+The PR #46 branch includes the management realtime implementation and must add/update regression coverage for Razor Page authorization/handlers and ManagementHub subscription/realtime behavior before merge. This branch status does not claim PR #46 is merged.
 
 ## Remaining technical debt
 
 Primary follow-up work:
 
-- complete all remaining legacy MVC -> Razor Pages migrations;
-- remove MVC presentation registration/routing once no product surface depends on it;
-- add the Document SignalR hub/notifier/client and reconnect behavior;
-- preserve Chat SSE as-is;
-- add Razor Page/SignalR authorization regression tests;
+- merge PR #46 after review and validation, then reconcile canonical docs against the merged source;
+- complete/remove any remaining legacy MVC presentation registration/routing after parity;
+- preserve authorized ManagementHub group isolation and post-commit fan-out;
+- preserve Chat SSE as-is and prohibit a SignalR Chat migration;
+- add/retain Razor Page and management realtime authorization regression tests;
 - deeper DOCX/PPTX/complex-PDF fixtures;
 - durable hosted storage for uploaded source files.
 

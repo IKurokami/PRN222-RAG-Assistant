@@ -13,7 +13,8 @@ namespace PRN222.RagAssistant.Pages.AdminSubjects;
 [Authorize(Policy = AppPolicies.ManageSubjects)]
 public class LeadersModel(
     ISubjectCatalogService subjectCatalogService,
-    UserManager<ApplicationUser> userManager) : PageModel
+    UserManager<ApplicationUser> userManager,
+    IManagementRealtimeNotifier managementRealtimeNotifier) : PageModel
 {
     [BindProperty(SupportsGet = true)]
     public Guid Id { get; set; }
@@ -84,6 +85,8 @@ public class LeadersModel(
         }
 
         var claimValue = Id.ToString("D");
+        var assignmentsChanged = false;
+
         foreach (var leader in leaders)
         {
             var claims = await userManager.GetClaimsAsync(leader);
@@ -102,6 +105,10 @@ public class LeadersModel(
                     {
                         AddIdentityErrors(result);
                     }
+                    else
+                    {
+                        assignmentsChanged = true;
+                    }
                 }
             }
             else if (existingClaims.Count > 0)
@@ -111,7 +118,21 @@ public class LeadersModel(
                 {
                     AddIdentityErrors(result);
                 }
+                else
+                {
+                    assignmentsChanged = true;
+                }
             }
+        }
+        if (assignmentsChanged)
+        {
+            await managementRealtimeNotifier.PublishAsync(
+                new ManagementRealtimeEvent(
+                    ManagementResource.SubjectLeaderAssignments,
+                    ManagementChange.AssignmentsChanged,
+                    Id,
+                    Id),
+                CancellationToken.None);
         }
 
         if (!ModelState.IsValid)

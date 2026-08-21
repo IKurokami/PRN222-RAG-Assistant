@@ -5,7 +5,9 @@ using PRN222.RagAssistant.Domain.Entities;
 
 namespace PRN222.RagAssistant.Infrastructure.Services;
 
-public sealed class SubjectCatalogService(ApplicationDbContext dbContext) : ISubjectCatalogService
+public sealed class SubjectCatalogService(
+    ApplicationDbContext dbContext,
+    IManagementRealtimeNotifier realtimeNotifier) : ISubjectCatalogService
 {
     public async Task<IReadOnlyList<Subject>> GetSubjectsAsync(
         bool activeOnly = false,
@@ -105,6 +107,12 @@ public sealed class SubjectCatalogService(ApplicationDbContext dbContext) : ISub
 
         dbContext.Subjects.Add(subject);
         await dbContext.SaveChangesAsync(cancellationToken);
+        await realtimeNotifier.PublishAsync(
+            new ManagementRealtimeEvent(
+                ManagementResource.Subject,
+                ManagementChange.Created,
+                subject.Id),
+            CancellationToken.None);
         return subject;
     }
 
@@ -127,6 +135,12 @@ public sealed class SubjectCatalogService(ApplicationDbContext dbContext) : ISub
         subject.Name = name;
         subject.IsActive = isActive;
         await dbContext.SaveChangesAsync(cancellationToken);
+        await realtimeNotifier.PublishAsync(
+            new ManagementRealtimeEvent(
+                ManagementResource.Subject,
+                ManagementChange.Updated,
+                subject.Id),
+            CancellationToken.None);
         return subject;
     }
 }

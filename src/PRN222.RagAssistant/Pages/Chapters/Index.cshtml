@@ -4,6 +4,14 @@
     ViewData["Title"] = $"Quản lý chương - {Model.SubjectCode}";
 }
 
+@if (Model.CanManageDocuments)
+{
+    <div data-management-realtime
+         data-realtime-scope="subject"
+         data-subject-id="@Model.SubjectId"
+         hidden></div>
+}
+
 <div class="container py-4">
     <!-- Breadcrumb -->
     <div class="academic-breadcrumb mb-3">
@@ -123,3 +131,9 @@
         </div>
     }
 </div>
+@section Scripts {
+    @if (Model.CanManageDocuments)
+    {
+        <partial name="_ManagementRealtimeScripts" />
+    }
+}

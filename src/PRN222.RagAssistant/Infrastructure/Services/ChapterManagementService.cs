@@ -5,7 +5,9 @@ using PRN222.RagAssistant.Domain.Entities;
 
 namespace PRN222.RagAssistant.Infrastructure.Services;
 
-public sealed class ChapterManagementService(ApplicationDbContext dbContext) : IChapterManagementService
+public sealed class ChapterManagementService(
+    ApplicationDbContext dbContext,
+    IManagementRealtimeNotifier realtimeNotifier) : IChapterManagementService
 {
     public async Task<IReadOnlyList<Chapter>> GetChaptersAsync(
         Guid subjectId,
@@ -86,9 +88,16 @@ public sealed class ChapterManagementService(ApplicationDbContext dbContext) : I
             Number = chapterNumber,
             Title = title
         };
-
         dbContext.Chapters.Add(chapter);
+
         await dbContext.SaveChangesAsync(cancellationToken);
+        await realtimeNotifier.PublishAsync(
+            new ManagementRealtimeEvent(
+                ManagementResource.Chapter,
+                ManagementChange.Created,
+                chapter.Id,
+                chapter.SubjectId),
+            CancellationToken.None);
         return chapter;
     }
 
@@ -109,6 +118,13 @@ public sealed class ChapterManagementService(ApplicationDbContext dbContext) : I
         chapter.Number = chapterNumber;
         chapter.Title = title;
         await dbContext.SaveChangesAsync(cancellationToken);
+        await realtimeNotifier.PublishAsync(
+            new ManagementRealtimeEvent(
+                ManagementResource.Chapter,
+                ManagementChange.Updated,
+                chapter.Id,
+                chapter.SubjectId),
+            CancellationToken.None);
         return chapter;
     }
 
@@ -138,6 +154,13 @@ public sealed class ChapterManagementService(ApplicationDbContext dbContext) : I
         dbContext.Chapters.Remove(chapter);
         await dbContext.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
+        await realtimeNotifier.PublishAsync(
+            new ManagementRealtimeEvent(
+                ManagementResource.Chapter,
+                ManagementChange.Deleted,
+                chapter.Id,
+                chapter.SubjectId),
+            CancellationToken.None);
 
         return new ChapterDeleteResult(chapter, affectedDocuments.Count);
     }

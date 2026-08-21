@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using PRN222.RagAssistant.Application.Abstractions;
 using PRN222.RagAssistant.Domain.Entities;
 using PRN222.RagAssistant.Models.Admin;
 using PRN222.RagAssistant.Security;
@@ -12,10 +13,14 @@ namespace PRN222.RagAssistant.Pages.AdminUsers;
 public class CreateModel : PageModel
 {
     private readonly UserManager<ApplicationUser> _userManager;
+    private readonly IManagementRealtimeNotifier _managementRealtimeNotifier;
 
-    public CreateModel(UserManager<ApplicationUser> userManager)
+    public CreateModel(
+        UserManager<ApplicationUser> userManager,
+        IManagementRealtimeNotifier managementRealtimeNotifier)
     {
         _userManager = userManager;
+        _managementRealtimeNotifier = managementRealtimeNotifier;
     }
 
     [BindProperty]
@@ -69,6 +74,12 @@ public class CreateModel : PageModel
             AddIdentityErrors(roleResult);
             return Page();
         }
+
+        await _managementRealtimeNotifier.PublishAsync(
+            new ManagementRealtimeEvent(
+                ManagementResource.User,
+                ManagementChange.Created,
+                user.Id));
 
         TempData["StatusMessage"] = $"Created {user.DisplayName} with role {AppRoles.GetDisplayName(Input.Role)}.";
         return RedirectToPage("/AdminUsers/Index");

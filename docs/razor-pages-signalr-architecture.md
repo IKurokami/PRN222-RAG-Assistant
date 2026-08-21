@@ -1,8 +1,8 @@
 # Razor Pages + SignalR target architecture
 
-> Documentation-only architecture decision, 2026-08-21.
+> Canonical architecture and implementation-state note, 2026-08-21.
 >
-> This document defines the required end state. The documentation PR does **not** migrate runtime source code. A follow-up implementation PR must make the code match this target before the migration is considered complete.
+> PR #46 retains the completed PageModel/DbContext cleanup and implements issue #47 management realtime on its branch. PR #46 is **not merged**; this document distinguishes that branch state from the merged PR #42/#43 baseline and the required target.
 
 ## Decision
 
@@ -17,7 +17,7 @@ After the implementation migration:
 - no product route depends on MVC controller routing;
 - no duplicate Razor Page and MVC surface may exist for the same workflow.
 
-SignalR is the one intentional non-Page presentation transport. It is used only to push realtime Document Management changes to connected browsers. It is not an MVC replacement and must not contain business CRUD logic.
+SignalR is the one intentional non-Page presentation transport. It pushes authorized management changes for Documents, Chapters, Subjects, Subject Leader assignments, and Users/roles to connected browsers. It is not an MVC replacement and must not contain business CRUD logic.
 
 ## Target page map
 
@@ -77,19 +77,21 @@ Razor Page / PageModel
 
 Direct EF Core access in new PageModels should be avoided when a purpose-specific service boundary is practical.
 
-## Flow 1 - Document Management
+## Flow 1 - Management pages and indexing
 
 Target HTTP flow:
 
 ```text
-Documents/Chapters Razor Page handler
- -> validate subject/resource/file
- -> authorize concrete Subject
- -> persist requested change through the application/infrastructure boundary
+management Razor Page handler
+ -> validate subject/resource
+ -> authorize the corresponding policy and concrete Subject
+ -> persist the requested change through the application/infrastructure boundary
  -> enqueue Document.Id when indexing/re-indexing is required
- -> publish a realtime document event
+ -> publish through IManagementRealtimeNotifier after commit succeeds
  -> return/redirect with subject context preserved
 ```
+
+CRUD and other writes stay in Razor Page handlers. The realtime layer only fans out committed changes.
 
 Background indexing remains separate from request handling:
 
@@ -100,39 +102,62 @@ IDocumentIndexingQueue
  -> parser/chunker
  -> ITextEmbeddingService
  -> DocumentChunk replacement + index status
- -> publish realtime status event
+ -> publish ManagementChanged(Document, IndexStatusChanged)
 ```
 
-## Document SignalR scope
+## Management SignalR scope
 
-SignalR is required for the Document Management page so browsers viewing the same authorized subject can reflect changes without manual refresh.
-
-Recommended hub route:
+Authorized management pages use one hub:
 
 ```text
-/hubs/documents
+namespace PRN222.RagAssistant.Realtime
+class ManagementHub
+route /hubs/management
+server event ManagementChanged
 ```
 
-Recommended server-to-client events:
+The Application-facing notifier is:
+
+```csharp
+Task PublishAsync(
+    ManagementRealtimeEvent notification,
+    CancellationToken cancellationToken = default);
+```
+
+`ManagementRealtimeEvent` is the common envelope:
 
 ```text
-DocumentCreated
-DocumentUpdated
-DocumentDeleted
-DocumentIndexStatusChanged
+Resource: Document | Chapter | Subject | SubjectLeaderAssignments | User
+Change:   Created | Updated | Deleted | IndexStatusChanged
+          | AssignmentsChanged | RoleChanged
+EntityId: Guid
+SubjectId: Guid?
+Status:   string?
 ```
 
-The implementation may use a compact common envelope, but every event must carry enough stable identity to update or invalidate the affected UI row safely.
+Document index transitions retain their special status behavior: they use `Resource = Document`, `Change = IndexStatusChanged`, and carry the current `Status`.
 
-### Subject-scoped groups
+### Scoped groups and subscriptions
 
-Connections should be grouped by subject, for example:
+The hub uses only these groups:
 
 ```text
-subject:{SubjectId}
+subject:{guid:D}
+admin:users
+admin:subjects
+subjects:catalog
 ```
 
-Joining/subscribing must be authorized server-side. The client cannot gain access to another subject merely by supplying a different `SubjectId`.
+Its subscription methods are:
+
+```text
+SubscribeToSubject(Guid subjectId)
+SubscribeToAdminUsers()
+SubscribeToAdminSubjects()
+SubscribeToSubjectCatalog()
+```
+
+Every subscription checks the authenticated user's applicable policy and concrete subject access on the server. A client-supplied subject ID is never sufficient authorization. Subject events are sent only to the affected subject group; user/role and subject-management events use the corresponding authorized admin/catalog groups.
 
 ### CRUD stays in Page Handlers
 
@@ -143,41 +168,45 @@ Required pattern:
 ```text
 browser form/fetch
  -> Razor Page handler
- -> authorization + validation + write
- -> commit succeeds
- -> IHubContext / realtime notifier broadcasts event
- -> connected Document pages update
+ -> policy + subject authorization, validation and antiforgery
+ -> write transaction commits
+ -> IManagementRealtimeNotifier / ManagementHub broadcasts
+ -> authorized connected management pages update
 ```
 
-This keeps normal Razor Pages validation, antiforgery, ownership, and redirect semantics intact while SignalR handles fan-out only.
+This keeps normal Razor Pages validation, antiforgery, ownership, policy and redirect semantics intact while SignalR handles fan-out only. No hub method creates, edits, deletes, re-indexes, assigns leaders, or changes roles.
 
 ### Client behavior
 
-The Document page should:
+Management page markup opts in with `data-management-realtime`, `data-realtime-scope` values `subject`, `admin-users`, `admin-subjects`, or `subject-catalog`, and an optional `data-subject-id` for the subject scope.
 
-- connect after the page has a validated subject context;
-- subscribe to document events;
-- update/remove the affected row when safe;
-- fall back to reloading the list or fetching a fresh partial/read model when an event is insufficient;
+The browser client should:
+
+- connect after the page has a validated scope;
+- invoke only the matching subscription method;
 - enable automatic reconnect;
-- tolerate duplicate/out-of-order notifications by using stable IDs and fresh server state when needed.
+- handle `ManagementChanged` using stable resource/entity IDs;
+- reload the authorized page/list when an event is insufficient, after reconnect, or when state may be stale;
+- tolerate duplicate/out-of-order notifications by fetching fresh server state.
 
-The browser SignalR client is a separate client-side dependency; the server is configured with `AddSignalR()` and `MapHub(...)` in the implementation PR.
+The browser SignalR client is a separate client-side dependency; the server is configured with `AddSignalR()` and `MapHub<ManagementHub>("/hubs/management")` in the implementation.
 
 ## Flow 2 transport remains SSE
 
 Chat is already a Razor Page after PR #42, with PageModel data access moved behind `IChatPageService` in PR #43.
 
-Chat keeps its current Server-Sent Events contract for progress/typewriter output. Do **not** move Chat to SignalR as part of the Document Management realtime work.
+Chat keeps its current Server-Sent Events contract for progress/typewriter output. Do **not** move Chat to SignalR as part of the management realtime work.
 
 Target separation:
 
 ```text
-Chat               -> Razor Pages + SSE
-Document Management -> Razor Pages + SignalR notifications
-Evaluation         -> Razor Pages
-Reports            -> Razor Pages
-Admin/Subjects     -> Razor Pages
+Chat                 -> Razor Pages + SSE
+Management pages     -> Razor Pages + authorized ManagementHub
+  Documents/Chapters -> subject-scoped SignalR groups
+  Subjects/assignments -> authorized subject-admin/catalog groups
+  Users/roles        -> authorized users-admin group
+Evaluation           -> Razor Pages
+Reports              -> Razor Pages
 ```
 
 ## Authorization
@@ -196,7 +225,7 @@ ManageDocuments
 
 Razor Page authorization must preserve current server-side rules. UI visibility is not authorization.
 
-Document/Chapter handlers and SignalR subscription logic must continue to enforce concrete subject access through `ISubjectAccessService` or the equivalent authorized application boundary.
+All management handlers and SignalR subscription methods must enforce the applicable policy and concrete subject access through `ISubjectAccessService` or the equivalent authorized application boundary.
 
 ## Program startup target
 
@@ -206,7 +235,7 @@ The implementation PR should converge on a startup model conceptually equivalent
 AddRazorPages()
 AddSignalR()
 ...
-MapHub<DocumentHub>("/hubs/documents")
+MapHub<ManagementHub>("/hubs/management")
 MapRazorPages()
 ```
 
@@ -214,21 +243,24 @@ MVC controller/view registration and conventional controller routing are migrati
 
 ## Render deployment
 
-Render web services support WebSocket connections, so the existing web-service deployment model is compatible with SignalR WebSockets. Clients must still reconnect because deploys/platform maintenance can replace an instance and close active connections.
+Render web services support WebSocket connections, so the existing web-service deployment model is compatible with the ManagementHub WebSocket endpoint. Clients must still reconnect because deploys/platform maintenance can replace an instance and close active connections; management pages use reload fallback when fresh state is required.
 
 For the current single-instance demo, in-process SignalR fan-out is sufficient. If the application later scales to multiple instances, realtime scale-out/shared-state requirements must be reviewed rather than assumed.
 
 ## Migration acceptance criteria
 
-The code migration is complete only when all of the following are true:
+The implementation is complete only when all of the following are true:
 
 - all product HTTP UI/action surfaces are Razor Pages;
 - legacy MVC presentation code and controller routes are removed;
 - navigation/forms no longer target MVC actions;
 - existing URLs either continue to work or have an explicit compatibility decision;
-- Chat SSE behavior remains working;
-- Document create/update/delete events appear on other connected authorized Document pages through SignalR;
-- indexing status updates can be pushed through the same Document realtime channel;
-- authorization tests cover Razor Page handlers and SignalR subject subscriptions;
+- Chat SSE behavior remains working and is not replaced by SignalR;
+- authorized management pages receive `ManagementChanged` notifications for Document, Chapter, Subject, Subject Leader assignment, and User/role changes through `/hubs/management`;
+- Document `IndexStatusChanged` notifications carry status and reach only authorized affected-subject clients;
+- subscriptions use the four scoped groups and server-side policy/subject authorization;
+- writes remain in Razor Page handlers and broadcasts occur only after commit;
+- clients automatically reconnect and reload authorized state when an event is insufficient;
+- authorization tests cover Razor Page handlers and SignalR subscriptions/realtime behavior;
 - build/tests/EF/PostgreSQL/Docker CI remains green;
-- canonical docs are reconciled again after the implementation PR.
+- canonical docs are reconciled after PR #46 is merged, without describing PR #46 as merged beforehand.

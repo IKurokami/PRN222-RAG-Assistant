@@ -3,6 +3,7 @@ using PRN222.RagAssistant.Application.Abstractions;
 using PRN222.RagAssistant.Data;
 using PRN222.RagAssistant.Infrastructure;
 using PRN222.RagAssistant.Infrastructure.Services;
+using PRN222.RagAssistant.Realtime;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -14,6 +15,8 @@ builder.Configuration["ConnectionStrings:Postgres"] =
 // Full Razor Pages architecture (controller-based pages migrated to Razor Pages)
 builder.Services.AddRazorPages();
 builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddSignalR();
+builder.Services.AddScoped<IManagementRealtimeNotifier, SignalRManagementRealtimeNotifier>();
 builder.Services.AddScoped<ISubjectCatalogService, SubjectCatalogService>();
 builder.Services.AddScoped<IChapterManagementService, ChapterManagementService>();
 builder.Services.AddScoped<IDocumentManagementService, DocumentManagementService>();
@@ -47,6 +50,7 @@ app.MapGet("/healthz", () => Results.Ok(new { status = "ok" }))
    .AllowAnonymous();
 
 app.MapStaticAssets();
+app.MapHub<ManagementHub>("/hubs/management");
 app.MapRazorPages()
    .WithStaticAssets();
 

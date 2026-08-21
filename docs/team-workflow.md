@@ -1,18 +1,18 @@
 # Team workflow and ownership
 
-> Updated on 2026-08-21 for the Razor Pages + SignalR target architecture. Ownership and merged contribution credit remain separate.
+> Updated on 2026-08-21 for the PR #46/issue #47 management realtime implementation branch. Ownership and merged contribution credit remain separate; PR #46 is not merged.
 
 ## Product milestone and presentation migration
 
-The core product behaviors exist, but presentation architecture is undergoing a cleanup target:
+The core product behaviors exist, and the presentation architecture is converging on:
 
 ```text
 HTTP product/admin presentation -> Razor Pages only
 Chat progress/realtime          -> SSE
-Document Management realtime    -> SignalR notifications
+Management realtime             -> authorized SignalR notifications
 ```
 
-Chat is already Razor Pages after PR #42/#43. Remaining legacy MVC product/admin surfaces must be migrated in a follow-up implementation PR before the presentation cleanup is complete.
+Chat is already Razor Pages after merged PR #42/#43. PR #46 retains the completed PageModel/DbContext cleanup and implements authorized management fan-out for Documents, Chapters, Subjects, Subject Leader assignments, and Users/roles on its branch. Do not describe that branch implementation as merged.
 
 ## Member 1 - Core/Data/RBAC/multi-subject/provider/docs
 
@@ -38,7 +38,7 @@ Maintains established behavior for:
 - validation/authorization around Flow 1 requests;
 - read-only Report & Statistics behavior.
 
-The Flow 1 Razor Pages migration must preserve these semantics. SignalR only adds realtime fan-out after successful changes.
+The Flow 1 Razor Pages migration must preserve these semantics. Management SignalR only adds authorized realtime fan-out after successful changes; it does not replace handlers or application-facing writes.
 
 ## Member 3 - indexing maintenance + cross-app UI baseline
 
@@ -49,7 +49,7 @@ Maintains:
 - indexing state transitions/startup recovery;
 - cross-application UI/UX baseline.
 
-For SignalR, indexing status transitions should publish document status notifications without moving indexing work into the realtime hub.
+For SignalR, indexing status transitions should publish Document `IndexStatusChanged` notifications through the management notifier without moving indexing work into the realtime hub.
 
 ## Member 4 - Flow 2 RAG backend maintenance
 
@@ -73,25 +73,33 @@ Target presentation:
 - Evaluation migrates to Razor Pages;
 - no parallel product MVC surface remains after the migration.
 
-## Presentation migration work map
+## Management realtime work map
 
 ```text
-Razor Pages migration
-  Admin users/subjects
-  Subject catalogue
-  Documents/Chapters
-  Evaluation
-
-Document realtime
-  Razor Page handler writes
-    -> successful persistence
-    -> realtime notifier / SignalR
-    -> subject-scoped clients
-
-Chat
-  Razor Pages
-    -> existing SSE progress/result contract
+Razor Page handler writes
+  -> policy + concrete-subject authorization
+  -> successful persistence commit
+  -> IManagementRealtimeNotifier
+  -> ManagementHub / ManagementChanged
+  -> authorized scoped clients
 ```
+
+Managed resources:
+
+```text
+Document, Chapter, Subject, SubjectLeaderAssignments, User
+```
+
+ManagementHub subscriptions use `subject:{guid:D}`, `admin:users`, `admin:subjects`, and `subjects:catalog` through `SubscribeToSubject(Guid)`, `SubscribeToAdminUsers()`, `SubscribeToAdminSubjects()`, and `SubscribeToSubjectCatalog()`. Clients reconnect automatically and reload authorized state when an event is insufficient.
+
+Chat remains:
+
+```text
+Razor Pages
+  -> existing SSE progress/result contract
+```
+
+SignalR must never become a Chat transport.
 
 ## Migration review rules
 
@@ -99,12 +107,14 @@ A code PR implementing this architecture should be reviewed for:
 
 - functional parity with the replaced product/admin surfaces;
 - no duplicate MVC + Razor Page product implementations left behind;
-- server-side role/subject authorization;
+- server-side role/policy and concrete-subject authorization;
 - antiforgery on state-changing Page Handlers;
 - PageModel/service boundaries instead of provider/pgvector logic in presentation;
-- SignalR subject isolation and reconnect behavior;
-- SignalR fan-out occurring only after successful writes;
-- Chat SSE remaining unchanged;
+- ManagementHub group isolation and authorized subscription methods;
+- ManagementChanged fan-out occurring only after successful writes;
+- Document index-status notifications retaining their status payload;
+- automatic reconnect and reload fallback on stale/insufficient events;
+- Chat SSE remaining unchanged and no SignalR Chat migration;
 - updated navigation/forms using Razor Page routing;
 - build/test/EF/PostgreSQL/Docker checks.
 
@@ -120,6 +130,6 @@ Real API keys live only in local/deployment secret environments. Do not put keys
 
 ## Documentation workflow
 
-After the implementation PR lands, reconcile canonical docs against actual source again and remove migration-pending warnings only when legacy MVC presentation/routing is actually gone.
+After PR #46 lands, reconcile canonical docs against actual source and remove migration-pending warnings only when legacy MVC presentation/routing is actually gone. Until then, keep branch implementation state separate from merged status.
 
 Contribution accounting uses Member numbers and auditable PR numbers; see `member-contributions.md`.
