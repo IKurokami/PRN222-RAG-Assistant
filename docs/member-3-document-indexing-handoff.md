@@ -1,22 +1,20 @@
 # Member 3 handoff - Document Indexing/Ingestion
 
-> Updated after PR #30 merged. Member 3 remains the maintenance owner for this scope.
+> Synchronized after PR #37/#40. Member 3 remains the maintenance owner for indexing/ingestion.
 
 ## Status
 
 The indexing pipeline is complete and active for every Subject.
 
-Current pipeline:
-
 ```text
 Document upload/re-index
-  -> IDocumentIndexingQueue
-  -> DocumentIndexingWorker
-  -> parser (PDF/DOCX/PPTX)
-  -> TextChunker
-  -> ITextEmbeddingService
-  -> replace DocumentChunk rows
-  -> Indexed / Failed
+ -> IDocumentIndexingQueue
+ -> DocumentIndexingWorker
+ -> parser (PDF/DOCX/PPTX)
+ -> TextChunker
+ -> ITextEmbeddingService
+ -> replace DocumentChunk rows
+ -> Indexed / Failed
 ```
 
 ## Maintenance ownership
@@ -35,20 +33,16 @@ Member 3 owns ongoing maintenance of:
 
 ## Contribution accounting
 
-Maintenance ownership is **not** the same as implementation credit.
+Maintenance ownership is not the same as implementation credit.
 
-Actual merged contribution is recorded as follows:
+- original end-to-end indexing implementation in PR #9: credited in the canonical ledger to Member 1;
+- chunk preview/chunking/PDF work in PR #23: credited to Member 1;
+- issue #27 remediation in PR #30: credited to Member 4;
+- Member 3 retains maintenance ownership of the resulting indexing scope.
 
-- the original end-to-end indexing implementation merged in PR #9 is credited to Member 1;
-- the document chunk preview/chunking/PDF improvements merged in PR #23 are credited to Member 1;
-- the issue #27 remediation merged in PR #30 is credited to Member 4;
-- Member 3 retains ownership of the resulting indexing/ingestion scope going forward.
+See `member-contributions.md`.
 
-This prevents double-crediting implementation simply because Member 3 owns the area.
-
-Canonical details: `docs/member-contributions.md`.
-
-## Provider-neutral embedding handoff
+## Provider-neutral embedding
 
 Indexing consumes only:
 
@@ -56,55 +50,42 @@ Indexing consumes only:
 ITextEmbeddingService
 ```
 
-Concrete provider selection belongs to Member 1 infrastructure.
+Concrete provider selection belongs to cross-cutting provider infrastructure. The indexing worker/service must not branch on provider names or create provider-specific indexing pipelines.
 
-Supported provider layer includes Ollama, Gemini, OpenAI and OpenRouter. The worker/indexing service must not branch by provider name and must not create provider-specific indexing pipelines.
+## Embedding migration behavior after PR #37
 
-## Embedding compatibility
+A full corpus re-index is still required when embedding provider/model/dimension changes.
 
-The corpus must use one embedding vector space at a time.
+PR #37 changed how a **dimension-changing** migration behaves while it is in progress:
 
-If embedding provider/model/dimension changes:
+1. new document chunks can be written with the active embedding dimension;
+2. older rows with another dimension may temporarily remain;
+3. pgvector retrieval filters `vector_dims(Embedding)` to the query dimension before cosine distance;
+4. old-dimension rows are excluded rather than causing a dimension exception;
+5. each document becomes searchable again as it is re-indexed with the active configuration.
 
-1. treat existing stored embeddings as stale;
-2. re-index the entire searchable corpus;
-3. do not mix old/new embedding vectors during retrieval.
-
-Changing only chat provider/model/fallback order does not require document re-indexing.
+Do not generalize this to semantic compatibility. If two different embedding models both emit 1024-dimensional vectors, `vector_dims` cannot tell them apart. Those vector spaces still must not be intentionally mixed as if they were equivalent.
 
 ## Multi-subject behavior
 
-No per-subject indexing worker is required.
+No per-subject indexing worker is required. The queue carries `Document.Id`; the persisted Document carries `SubjectId`. Flow 2 retrieval uses the subject boundary independently.
 
-Flow 1 queues only `Document.Id`. The persisted document carries `SubjectId`, while Flow 2 retrieval uses subject context to constrain candidate documents/chunks.
-
-## Issue #27 merged changes
+## Issue #27 baseline
 
 PR #30 closed issue #27 and added/hardened:
 
 - bounded overlap and deterministic forward progress;
 - Unicode normalization and safer grapheme boundaries;
-- configurable `ChunkingOptions` with startup validation;
-- improved PDF two-column reading order and PDF regression tests;
-- DOCX blank paragraphs no longer become fake pages/page numbers;
-- additional DOCX/PPTX extraction and integration coverage.
+- configurable chunking options;
+- improved PDF two-column reading order;
+- PDF regression tests;
+- DOCX page-number correction;
+- additional DOCX/PPTX parser/integration coverage.
 
-PDF is the primary real-world ingestion format currently receiving the most active testing.
+## Deferred quality debt
 
-## Deferred follow-up debt
+- deeper complex DOCX list/table/layout fixtures;
+- deeper PPTX grouped-shape/table/transform fixtures;
+- additional difficult PDF table/side-note/rotated-text cases.
 
-Later focused work should add deeper coverage for:
-
-- complex DOCX list/table/layout combinations;
-- PPTX grouped shapes, tables and parent-group transform handling;
-- more difficult PDF tables, side notes and rotated text.
-
-These are follow-up quality improvements and are not blockers for the completed PR #30 milestone.
-
-## Other Member 3 ownership
-
-Member 3 also owns the completed cross-application UI/UX baseline from PR #19.
-
-Any documentation/status impact is reported to Member 1 for repository-wide synchronization.
-
-Project documentation uses Member numbers only and must not add GitHub usernames.
+These are quality follow-ups, not missing core indexing behavior.

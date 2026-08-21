@@ -1,10 +1,10 @@
 # Member 1 handoff - Core/Data/RBAC/Multi-subject/AI Providers/Documentation
 
-> Synchronized after PR #30 merged on 2026-08-18.
+> Synchronized with `master` after PR #40 on 2026-08-21.
 
 ## Ownership
 
-Member 1 owns:
+Member 1 owns the cross-cutting platform/integration scope:
 
 - Domain/Data/Security baseline;
 - Identity roles and policies;
@@ -14,68 +14,51 @@ Member 1 owns:
 - Subject Leader assignment;
 - subject-specific authorization service;
 - cross-workflow subject-context integration;
-- role/subject regression tests;
 - AI provider selection/configuration;
-- Ollama/Gemini/OpenAI/OpenRouter adapters behind provider-neutral interfaces;
-- OpenRouter free chat-model routing/fallback;
-- API-key/env wiring and startup validation;
-- embedding dimension/vector-space/re-index coordination;
+- Ollama/Gemini/OpenAI/OpenRouter adapters;
+- API-key/env/startup validation;
+- embedding migration compatibility rules;
+- Data Protection persistence coordination;
+- deployment/configuration integration;
 - repository-wide documentation synchronization.
 
-## Actual merged contribution credit
+## Provider/runtime milestones
 
-Member 1 also delivered merged implementation outside nominal ownership:
+Representative merged provider/infrastructure work includes:
 
-- original end-to-end indexing pipeline in PR #9;
-- document chunk preview, semantic chunking and PDF extraction improvements in PR #23;
-- repeated cross-workflow integration/review/doc synchronization around Flow 1/2/3.
+- PR #21 - provider-neutral Ollama/Gemini/OpenAI runtime;
+- PR #28 - OpenRouter routing and independent chat/embedding provider selection;
+- PR #37 - Gemini output dimensionality + pgvector dimension-safe transition;
+- PR #38 - PostgreSQL Data Protection key persistence + expanded OpenRouter Chat fallback;
+- PR #39 - Render Chat override to Gemini while preserving OpenRouter embeddings.
 
-These contributions are credited to Member 1 even though Member 3 retains ongoing indexing maintenance ownership.
-
-Canonical ledger: `docs/member-contributions.md`.
-
-## AI provider infrastructure
-
-Supported runtime choices:
+Current Render provider split:
 
 ```text
-Ollama
-Gemini
-OpenRouter
-OpenAI
+Chat:      Gemini / gemini-3.6-flash
+Embedding: OpenRouter / nvidia/llama-nemotron-embed-vl-1b-v2:free
+Dimensions: 1024
 ```
 
-Application/workflow code remains provider-neutral through:
+## Data Protection
 
-```text
-ITextEmbeddingService
-IChatCompletionService
-```
+PR #38 adds `DataProtectionKeyDbContext` and stores ASP.NET Core Data Protection keys in PostgreSQL. This is now part of the runtime durability baseline and should not be reverted to filesystem-only key storage for Render.
 
-Backward-compatible selection:
+## Embedding migration rule
 
-```text
-RAG_PROVIDER
-```
+Changing embedding provider/model/dimension requires complete corpus re-indexing.
 
-Optional overrides:
-
-```text
-RAG_CHAT_PROVIDER
-RAG_EMBEDDING_PROVIDER
-```
-
-No real API key belongs in tracked files.
-
-## Embedding invariant
-
-Embedding uses one semantic vector space per searchable corpus.
-
-If embedding provider/model/dimension changes, Member 1 coordinates a complete corpus re-index before retrieval. Same-sized vectors from different models are not interchangeable.
-
-Chat provider/model changes alone do not require re-indexing.
+PR #37 allows different-dimension rows to coexist temporarily while a full re-index is in progress because retrieval filters by `vector_dims` before cosine distance. This is migration safety, not semantic compatibility between embedding models.
 
 ## Multi-subject baseline
+
+```text
+Subject
+  -> Chapters
+  -> Documents
+  -> ChatSessions
+  -> Reports
+```
 
 Roles:
 
@@ -93,27 +76,35 @@ ManageSubjects
 ManageDocuments
 ```
 
-Admin manages users/roles and all Subjects. Subject Leaders manage assigned Subjects only.
+Admin manages all subjects. Subject Leaders manage assigned subjects. Public registration creates Students only.
 
-Assignments use Identity claims:
+## Flow 3 integration after PR #40
+
+PR #40 added a shared Application-facing report contract:
 
 ```text
-prn222:managed-subject -> Subject Guid
+IReportQueryService
+SubjectReportSnapshot
 ```
 
-`ChatSession.SubjectId` is now persisted after PR #30. Member 1 remains migration/schema coordinator for future cross-workflow model changes.
+Infrastructure implements it through `ReportQueryService`; the Razor Page no longer reads `ApplicationDbContext` directly. Chat/report totals are subject-scoped.
+
+This is cross-cutting architecture/integration under Member 1's coordination scope; Member 2 retains Flow 3 behavior ownership.
+
+## Actual merged contribution outside nominal ownership
+
+The canonical ledger continues to credit implementation based on merged work rather than nominal ownership. See `member-contributions.md` for PR #9, #23, #30, #34/#35 and later cross-cutting integrations.
 
 ## Cross-workflow boundary
 
-- Member 2 owns Flow 1 request/business behavior and Flow 3 reporting behavior.
-- Member 3 owns ongoing indexing/ingestion maintenance and the UI/UX baseline.
-- Member 4 now owns a merged Flow 2 RAG backend baseline.
-- Member 5 owns the remaining Flow 2 MVC/history/citation/evaluation product layer.
-
-Member 1 owns provider plumbing and schema/contract coordination, not Member 4's retrieval/grounding semantics.
+- Member 2: Flow 1 request/business behavior + Flow 3 reporting behavior.
+- Member 3: indexing/ingestion maintenance + cross-app UI baseline.
+- Member 4: Flow 2 RAG backend maintenance.
+- Member 5: completed Flow 2 MVC Chat/history/citation/evaluation product layer.
+- Member 1: shared contracts/schema/security/provider/deployment/docs coordination.
 
 ## Documentation responsibility
 
-Member 1 exclusively edits README, AGENTS files and `docs/*` after reconciling merged changes from the whole team.
+**Member 1 is the sole documentation editor** for README, AGENTS files and `docs/*` after reconciling merged changes from the whole team.
 
-Project documentation uses Member numbers only and must not add GitHub usernames.
+Members 2-5 report documentation/status impacts to Member 1. Project documentation uses Member numbers only and must not add GitHub usernames.

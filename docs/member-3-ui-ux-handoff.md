@@ -1,53 +1,43 @@
-# Member 3 handoff - UI/UX Redesign
+# Member 3 handoff - Cross-application UI/UX baseline
 
-> Status: **Complete / merged in PR #19** on 2026-08-15.
+> Cross-app baseline completed in PR #19; synchronized with later Flow 2/3 changes on 2026-08-21.
 
-## Assignment
+## Completed baseline
 
-The application-wide UI/UX redesign delivered in PR #19 is assigned to **Member 3**.
+Member 3 delivered the shared application presentation baseline, including:
 
-This task is completed. It must not appear in future planning as unassigned work unless a new UI task is explicitly created.
+- landing page and application shell redesign;
+- shared design tokens/components/site styling;
+- Bootstrap Icons integration;
+- authentication/account presentation;
+- Subject/Admin/Chapter/Document/Report screen refresh;
+- public Student registration presentation;
+- responsive application-shell polish.
 
-## Completed scope
+## Ownership boundary after Flow 2 completion
 
-Member 3 delivered the current presentation baseline across the application:
+PR #34/#35 later added a specialized full-screen Flow 2 Chat experience and Evaluation UI under Member 5's product scope. That work builds on the application shell but introduces purpose-specific Chat layout/interaction patterns such as:
 
-- redesigned landing page and application shell;
-- shared `wwwroot/css/design-tokens.css` design tokens;
-- shared `wwwroot/css/components.css` component primitives;
-- refreshed `wwwroot/css/site.css` integration;
-- Bootstrap Icons through `libman.json`;
-- redesigned Login, Register, Logout, AccessDenied, Error, and Privacy screens;
-- public Student registration introduced with the redesigned auth experience;
-- refreshed Subject catalogue;
-- refreshed Admin User and Admin Subject management screens;
-- refreshed Chapter and Document MVC screens;
-- refreshed Flow 3 Reports presentation;
-- document title/file-name search and index-status filtering UI;
-- preservation of current search/status/chapter filters after delete/re-index actions;
-- landing showcase carousel, testimonials, FAQ, CTA/support presentation, and local image/video assets.
+- session sidebar and subject switcher;
+- borderless chat workspace;
+- Markdown rendering and code copy;
+- SSE progress/typewriter rendering;
+- citation pills and citation reader;
+- tool/progress timeline.
 
-## Ownership boundary
+Those Flow 2 changes do not transfer the original cross-app UI baseline ownership away from Member 3.
 
-This is a presentation/UI assignment. Existing functional ownership remains:
+## Current functional ownership
 
-- Member 1: Identity/RBAC, multi-subject authorization, shared contracts/schema coordination, docs;
-- Member 2: Flow 1 request/business behavior and Flow 3 reporting behavior;
-- Member 3: indexing implementation plus this completed cross-app UI/UX redesign;
-- Member 4: pending Flow 2 backend;
-- Member 5: pending Flow 2 MVC/history/citations/evaluation.
+- Member 1: security/multi-subject/provider/shared integration/docs.
+- Member 2: Flow 1 request behavior + Flow 3 reporting behavior.
+- Member 3: indexing maintenance + cross-app visual baseline.
+- Member 4: Flow 2 RAG backend maintenance.
+- Member 5: completed Flow 2 MVC Chat/history/citations/evaluation product layer.
 
-PR #19 may contain small supporting behavior required by the redesigned experience, but it does not transfer authorization or workflow ownership away from the members above.
+## Design-system rule
 
-## Public registration rule
-
-The public registration flow creates only `Student` accounts.
-
-Do not expose Admin or SubjectLeader role selection in public registration. Elevated roles remain Admin-managed.
-
-## Design-system rule for future work
-
-Future UI work should reuse the PR #19 baseline before creating new patterns:
+For normal application screens, reuse the shared design system before introducing one-off styles:
 
 ```text
 wwwroot/css/design-tokens.css
@@ -56,29 +46,22 @@ wwwroot/css/site.css
 libman.json -> bootstrap-icons
 ```
 
-Guidelines:
-
-- prefer reusable tokens/components over one-off CSS;
-- preserve responsive behavior;
-- preserve semantic/accessibility attributes;
-- do not hide authorization logic in UI-only checks;
-- keep MVC/Razor allocation unchanged by styling decisions;
-- future Flow 2 MVC screens should follow this visual language.
+Flow 2 may preserve its specialized current chat layout where appropriate, but should still maintain responsive/accessibility behavior and application-wide identity.
 
 ## Flow-specific notes
 
 ### Flow 1
 
-Visual changes must preserve subject context, upload/CRUD/re-index semantics, authorization, and indexing queue boundaries.
-
-### Flow 3
-
-Visual changes must preserve the read-only, subject-scoped report behavior. Chat metrics remain transitional/global until Flow 2 persists subject ownership.
+Visual changes must preserve subject context, CRUD/re-index semantics, authorization and indexing boundaries.
 
 ### Flow 2
 
-Member 5 owns future Flow 2 MVC presentation. Member 5 should integrate with this design system rather than create a parallel UI framework.
+Chat is now complete MVC. Do not recreate an internal `RagDemo` page. The current product uses SSE over fetch, not SignalR.
+
+### Flow 3
+
+Reports are read-only and subject-scoped. PR #40 also scopes Chat metrics to the report subject; the old transitional/global warning is obsolete.
 
 ## Documentation
 
-Member 3 reports future UI changes to Member 1. Member 1 remains the sole editor of README/AGENTS/docs.
+Future UI changes with architecture/status impact should be reflected through the canonical documentation synchronization process.

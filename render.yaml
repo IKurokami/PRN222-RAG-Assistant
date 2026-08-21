@@ -38,17 +38,21 @@ services:
       - key: Rag__Provider
         value: OpenRouter
       - key: Rag__ChatProvider
-        value: OpenRouter
+        value: Gemini
       - key: Rag__EmbeddingProvider
         value: OpenRouter
       - key: Rag__EmbeddingDimensions
         value: "1024"
+      - key: Rag__Gemini__BaseUrl
+        value: https://generativelanguage.googleapis.com/
+      - key: Rag__Gemini__ApiKey
+        sync: false
+      - key: Rag__Gemini__ChatModel
+        value: gemini-3.6-flash
       - key: Rag__OpenRouter__BaseUrl
         value: https://openrouter.ai/api/v1/
       - key: Rag__OpenRouter__ApiKey
         sync: false
-      - key: Rag__OpenRouter__ChatModels
-        value: nvidia/nemotron-3.5-lightning:free,nvidia/nemotron-3-ultra-550b-a55b:free,nvidia/nemotron-3-super-120b-a12b:free,google/gemma-4-26b-a4b-it:free,openai/gpt-oss-20b:free,openrouter/free
       - key: Rag__OpenRouter__EmbeddingModel
         value: nvidia/llama-nemotron-embed-vl-1b-v2:free
       - key: Rag__OpenRouter__AppTitle

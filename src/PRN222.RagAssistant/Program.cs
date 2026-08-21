@@ -9,11 +9,13 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Configuration["ConnectionStrings:Postgres"] =
     PostgresConnectionStringResolver.Resolve(builder.Configuration);
 
-// Flow 1 and Flow 2 use MVC Controllers + Views.
-// Razor Pages remain enabled for authentication, shell pages, and Flow 3 reporting.
+// MVC remains enabled for controller-based areas, while authentication,
+// Chat UI, shell pages, and reporting use Razor Pages.
 builder.Services.AddControllersWithViews();
 builder.Services.AddRazorPages();
 builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddChatPageServices();
+builder.Services.AddReporting();
 builder.Services
     .AddDataProtection()
     .PersistKeysToDbContext<DataProtectionKeyDbContext>()

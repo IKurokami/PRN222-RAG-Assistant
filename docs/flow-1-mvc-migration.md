@@ -1,12 +1,10 @@
 # Flow 1 MVC architecture
 
-> Updated for provider-neutral embedding support.
+> Synchronized with the post-PR #40 baseline on 2026-08-21.
 
 ## Status
 
-Flow 1 presentation remains MVC and functional behavior is complete.
-
-Current locations:
+Flow 1 presentation is MVC and functional behavior is complete.
 
 ```text
 Controllers/DocumentsController.cs
@@ -17,11 +15,11 @@ Views/Documents/
 Views/Chapters/
 ```
 
-Do not recreate removed Razor Pages implementations.
+Do not recreate the removed Flow 1 Razor Pages implementation.
 
-## Multi-subject update
+## Multi-subject behavior
 
-Flow 1 is not scoped to `SeedData.Prn222SubjectId`. Routes/actions carry subject context and server-side authorization uses `ISubjectAccessService`.
+Flow 1 is not hard-coded to the seeded PRN222 subject. Routes/actions preserve a concrete subject context and server-side authorization uses `ISubjectAccessService` for management operations.
 
 ## Request/indexing boundary
 
@@ -33,27 +31,30 @@ MVC action
  -> redirect preserving subject context
 
 background indexing
- -> parse/chunk
+ -> parse PDF/DOCX/PPTX
+ -> TextChunker
  -> ITextEmbeddingService
- -> persist DocumentChunk
+ -> replace DocumentChunk rows / update status
 ```
 
-The MVC layer does not parse/chunk/embed/call Ollama/Gemini/OpenAI/query pgvector.
+The MVC layer does not parse/chunk/embed/call AI providers/query pgvector.
 
-## Provider impact
+## Re-index after embedding changes
 
-Flow 1 request semantics do not change when `RAG_PROVIDER` changes.
+Changing embedding provider/model/dimension requires a complete corpus re-index through the existing Flow 1 re-index/indexing pipeline.
 
-AI provider selection is Member 1-owned Infrastructure. Indexing remains Member 3-owned and consumes the same `ITextEmbeddingService` contract.
+PR #37 makes a dimension-changing migration safer for retrieval: old vectors whose dimensions do not match the current query embedding are excluded before cosine distance. This allows gradual document processing without dimension exceptions, but the full corpus still needs to be re-indexed to finish the migration.
 
-If the embedding provider/model/dimension changes, all indexed documents must be re-indexed before retrieval. Re-indexing uses the existing Flow 1 action/queue/indexing pipeline; no provider-specific controller action is added.
+Same-dimension embeddings from different models remain semantically incompatible even though `vector_dims` cannot distinguish them.
 
 ## Chapter deletion
 
-Deleting a Chapter keeps Documents and sets affected `ChapterId` values to null. The operation is scoped to the same Subject.
+Deleting a Chapter preserves its Documents by setting affected `ChapterId` values to null within the same Subject.
 
 ## Ownership
 
-- Member 2: established Flow 1 request/business behavior.
-- Member 1: multi-subject/RBAC/provider configuration.
-- Member 3: indexing and completed PR #19 visual redesign.
+- Member 2 owns established Flow 1 request/business behavior.
+- Member 3 owns ongoing indexing/ingestion maintenance.
+- Member 1 owns cross-cutting RBAC/provider/schema/documentation coordination.
+
+See `member-contributions.md` for merged implementation credit.
