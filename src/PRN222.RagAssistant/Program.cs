@@ -9,9 +9,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Configuration["ConnectionStrings:Postgres"] =
     PostgresConnectionStringResolver.Resolve(builder.Configuration);
 
-// MVC remains enabled for controller-based areas, while authentication,
-// Chat UI, shell pages, and reporting use Razor Pages.
-builder.Services.AddControllersWithViews();
+// Full Razor Pages architecture (controller-based pages migrated to Razor Pages)
 builder.Services.AddRazorPages();
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddChatPageServices();
@@ -43,9 +41,6 @@ app.MapGet("/healthz", () => Results.Ok(new { status = "ok" }))
    .AllowAnonymous();
 
 app.MapStaticAssets();
-app.MapControllerRoute(
-    name: "default",
-    pattern: "{controller=Home}/{action=Index}/{id?}");
 app.MapRazorPages()
    .WithStaticAssets();
 

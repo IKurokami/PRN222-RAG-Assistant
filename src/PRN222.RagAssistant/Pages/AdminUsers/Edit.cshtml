@@ -1,0 +1,72 @@
+@page "/admin/users/{id:guid}/role"
+@model PRN222.RagAssistant.Pages.AdminUsers.EditModel
+@{
+    ViewData["Title"] = $"Đổi Vai Trò: {Model.Input.DisplayName} - Admin";
+}
+
+<div class="container py-4">
+    <!-- Breadcrumb -->
+    <div class="academic-breadcrumb mb-3">
+        <a asp-page="/Index"><i class="bi bi-house-door"></i> Trang chủ</a>
+        <span class="academic-breadcrumb-separator">/</span>
+        <a asp-page="/AdminUsers/Index">Quản trị người dùng</a>
+        <span class="academic-breadcrumb-separator">/</span>
+        <span class="text-slate-800 fw-semibold">Đổi vai trò</span>
+    </div>
+
+    <div class="row justify-content-center">
+        <div class="col-lg-7 col-xl-6">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <h1 class="fw-bold fs-3 text-slate-900 mb-1">
+                        <i class="bi bi-person-gear text-primary me-2"></i>Điều Chỉnh Vai Trò
+                    </h1>
+                    <p class="text-slate-500 mb-0"><strong>@Model.Input.DisplayName</strong> — <code class="text-slate-600">@Model.Input.Email</code></p>
+                </div>
+                <a asp-page="/AdminUsers/Index" class="btn btn-sm btn-academic-outline">
+                    <i class="bi bi-arrow-left"></i> Quay lại
+                </a>
+            </div>
+
+            <div class="academic-card shadow-sm">
+                @if (Model.Input.IsCurrentUser)
+                {
+                    <div class="alert alert-warning d-flex align-items-center gap-2 small mb-4" role="alert">
+                        <i class="bi bi-shield-exclamation text-warning fs-5 flex-shrink-0"></i>
+                        <div>
+                            Đây là tài khoản Quản trị viên bạn đang đăng nhập. Hệ thống bảo mật sẽ chặn việc bạn tự giáng chức tài khoản chính mình.
+                        </div>
+                    </div>
+                }
+
+                <form method="post">
+                    <input type="hidden" name="Id" value="@Model.Id" />
+                    <div asp-validation-summary="ModelOnly" class="alert alert-danger d-flex align-items-center gap-2 mb-4" role="alert"></div>
+
+                    <div class="mb-4">
+                        <label asp-for="Input.Role" class="form-label fw-bold text-slate-800">
+                            Vai trò tài khoản (Application Role) <span class="text-danger">*</span>
+                        </label>
+                        <select asp-for="Input.Role" class="form-select">
+                            <option value="@AppRoles.Student">Sinh viên (Student) — Tra cứu &amp; Hỏi đáp RAG</option>
+                            <option value="@AppRoles.SubjectLeader">Trưởng môn (SubjectLeader) — Quản lý môn học được giao</option>
+                            <option value="@AppRoles.Admin">Quản trị viên (Admin) — Toàn quyền hệ thống</option>
+                        </select>
+                        <span asp-validation-for="Input.Role" class="text-danger small mt-1 d-block"></span>
+                    </div>
+
+                    <div class="d-flex justify-content-end gap-2 mt-4">
+                        <a asp-page="/AdminUsers/Index" class="btn btn-academic-outline">Hủy bỏ</a>
+                        <button type="submit" class="btn-academic-primary px-4">
+                            <i class="bi bi-check2"></i> Lưu thay đổi
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

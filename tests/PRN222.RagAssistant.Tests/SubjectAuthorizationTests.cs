@@ -1,11 +1,11 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authorization.Infrastructure;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using PRN222.RagAssistant.Controllers;
 using PRN222.RagAssistant.Infrastructure;
 using PRN222.RagAssistant.Security;
+using PRN222.RagAssistant.Pages.AdminSubjects;
+using PRN222.RagAssistant.Pages.Subjects;
 
 namespace PRN222.RagAssistant.Tests;
 
@@ -53,39 +53,43 @@ public sealed class SubjectAuthorizationTests
     }
 
     [Fact]
-    public void AdminSubjects_controller_requires_ManageSubjects_policy()
+    public void AdminSubjects_page_model_requires_ManageSubjects_policy()
     {
         var authorizeAttribute = Assert.Single(
-            typeof(AdminSubjectsController)
+            typeof(PRN222.RagAssistant.Pages.AdminSubjects.IndexModel)
                 .GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
                 .Cast<AuthorizeAttribute>());
 
         Assert.Equal(AppPolicies.ManageSubjects, authorizeAttribute.Policy);
     }
 
-    [Theory]
-    [InlineData(nameof(AdminSubjectsController.Create))]
-    [InlineData(nameof(AdminSubjectsController.Edit))]
-    [InlineData(nameof(AdminSubjectsController.Leaders))]
-    public void AdminSubjects_POST_actions_validate_anti_forgery_tokens(string actionName)
+    [Fact]
+    public void AdminSubjects_Create_Edit_Leaders_require_ManageSubjects_policy()
     {
-        var postMethods = typeof(AdminSubjectsController)
-            .GetMethods()
-            .Where(method => method.Name == actionName)
-            .Where(method => method.GetCustomAttributes(typeof(HttpPostAttribute), inherit: true).Any())
-            .ToList();
+        var pageTypes = new[]
+        {
+            typeof(PRN222.RagAssistant.Pages.AdminSubjects.CreateModel),
+            typeof(PRN222.RagAssistant.Pages.AdminSubjects.EditModel),
+            typeof(PRN222.RagAssistant.Pages.AdminSubjects.LeadersModel)
+        };
 
-        Assert.NotEmpty(postMethods);
-        Assert.All(postMethods, method => Assert.Contains(
-            method.GetCustomAttributes(typeof(ValidateAntiForgeryTokenAttribute), inherit: true),
-            attribute => attribute is ValidateAntiForgeryTokenAttribute));
+        foreach (var pageType in pageTypes)
+        {
+            var attributes = pageType
+                .GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
+                .Cast<AuthorizeAttribute>()
+                .ToList();
+
+            Assert.NotEmpty(attributes);
+            Assert.Contains(attributes, a => a.Policy == AppPolicies.ManageSubjects);
+        }
     }
 
     [Fact]
-    public void Subject_catalog_requires_authentication()
+    public void Subjects_Index_requires_authentication()
     {
         var authorizeAttribute = Assert.Single(
-            typeof(SubjectsController)
+            typeof(PRN222.RagAssistant.Pages.Subjects.IndexModel)
                 .GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
                 .Cast<AuthorizeAttribute>());
 

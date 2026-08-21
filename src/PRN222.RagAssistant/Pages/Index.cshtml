@@ -1,5 +1,5 @@
 @page
-@model IndexModel
+@model PRN222.RagAssistant.Pages.IndexModel
 @{
     ViewData["Title"] = "Nền tảng tri thức môn học";
 }
@@ -24,7 +24,7 @@
                     <div class="landing-hero-actions">
                         @if (User.Identity?.IsAuthenticated == true)
                         {
-                            <a asp-controller="Subjects" asp-action="Index" class="landing-btn landing-btn-primary">
+                            <a asp-page="/Subjects/Index" class="landing-btn landing-btn-primary">
                                 Mở danh mục môn học
                                 <i class="bi bi-arrow-right" aria-hidden="true"></i>
                             </a>
@@ -149,7 +149,7 @@
                     <p class="landing-section-kicker">Quy trình rõ ràng</p>
                     <h2>Từ tệp nguồn đến dữ liệu có thể kiểm chứng.</h2>
                     <p>Mỗi tài liệu đi qua một pipeline duy nhất. Controller chỉ tiếp nhận yêu cầu; worker nền xử lý nội dung và cập nhật trạng thái độc lập.</p>
-                    <a asp-controller="Subjects" asp-action="Index" class="landing-inline-link">
+                        <a asp-page="/Subjects/Index" class="landing-inline-link">
                         Xem không gian môn học
                         <i class="bi bi-arrow-up-right" aria-hidden="true"></i>
                     </a>
@@ -264,7 +264,7 @@
                 </div>
                 @if (User.Identity?.IsAuthenticated == true)
                 {
-                    <a asp-controller="Subjects" asp-action="Index" class="landing-btn landing-btn-light">
+                    <a asp-page="/Subjects/Index" class="landing-btn landing-btn-light">
                         Mở danh mục môn học
                         <i class="bi bi-arrow-right" aria-hidden="true"></i>
                     </a>

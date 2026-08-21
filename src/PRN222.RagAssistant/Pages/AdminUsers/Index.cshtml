@@ -1,0 +1,119 @@
+@page "/admin/users"
+@model PRN222.RagAssistant.Pages.AdminUsers.IndexModel
+@{
+    ViewData["Title"] = "Quản Lý Tài Khoản Người Dùng - Admin";
+}
+
+<div class="container py-4">
+    <!-- Breadcrumb -->
+    <div class="academic-breadcrumb mb-3">
+        <a asp-page="/Index"><i class="bi bi-house-door"></i> Trang chủ</a>
+        <span class="academic-breadcrumb-separator">/</span>
+        <span class="text-slate-800 fw-semibold">Quản trị người dùng</span>
+    </div>
+
+    <!-- Header Section -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4 pb-2 border-bottom">
+        <div>
+            <h1 class="fw-bold fs-3 text-slate-900 mb-1">
+                <i class="bi bi-people-fill text-primary me-2"></i>Quản Lý Người Dùng &amp; Phân Quyền
+            </h1>
+            <p class="text-slate-500 mb-0">Tạo tài khoản người dùng và thiết lập vai trò quản trị trong hệ thống.</p>
+        </div>
+        <div class="d-flex gap-2">
+            <a asp-page="/AdminSubjects/Index" class="btn btn-sm btn-academic-outline">
+                <i class="bi bi-gear"></i> Quản trị môn học
+            </a>
+            <a asp-page="/AdminUsers/Create" class="btn-academic-accent text-decoration-none">
+                <i class="bi bi-person-plus-fill"></i> Thêm người dùng mới
+            </a>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(Model.StatusMessage))
+    {
+        <div class="alert alert-success d-flex align-items-center gap-2 alert-dismissible fade show shadow-xs mb-4" role="alert">
+            <i class="bi bi-check-circle-fill text-success fs-5"></i>
+            <div>@Model.StatusMessage</div>
+            <button type="button" class="btn-close ms-auto" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    }
+
+    <div class="academic-card p-0 overflow-hidden mb-4">
+        @if (Model.Users.Count == 0)
+        {
+            <div class="text-center py-5 text-slate-500">
+                <i class="bi bi-people fs-2 d-block mb-2 text-slate-400"></i>
+                Không tìm thấy người dùng nào trong hệ thống.
+            </div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table table-academic align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th scope="col" class="ps-4" style="min-width: 250px;">Họ tên &amp; Email</th>
+                            <th scope="col" style="width: 180px;">Vai trò (Role)</th>
+                            <th scope="col" style="width: 200px;">Ngày tạo tài khoản</th>
+                            <th scope="col" class="text-end pe-4" style="width: 150px;">Thao tác</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var user in Model.Users)
+                        {
+                            <tr>
+                                <td class="ps-4">
+                                    <div class="fw-bold text-slate-900 fs-6">@user.DisplayName</div>
+                                    <div class="small text-slate-500 font-monospace">@user.Email</div>
+                                    @if (user.IsCurrentUser)
+                                    {
+                                        <span class="badge bg-light text-primary border border-primary-subtle mt-1 small">
+                                            <i class="bi bi-person-check-fill me-1"></i>Tài khoản hiện tại của bạn
+                                        </span>
+                                    }
+                                </td>
+                                <td>
+                                    @if (user.Roles.Count == 0)
+                                    {
+                                        <span class="badge bg-secondary-subtle text-secondary px-2.5 py-1">Chưa phân vai trò</span>
+                                    }
+                                    else
+                                    {
+                                        @foreach (var role in user.Roles)
+                                        {
+                                            if (role == AppRoles.Admin)
+                                            {
+                                                <span class="badge bg-danger text-white px-2.5 py-1">Admin</span>
+                                            }
+                                            else if (role == AppRoles.SubjectLeader)
+                                            {
+                                                <span class="badge bg-warning text-dark px-2.5 py-1">Trưởng Môn</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-primary text-white px-2.5 py-1">Sinh Viên</span>
+                                            }
+                                        }
+                                    }
+                                </td>
+                                <td class="small text-slate-500 font-monospace">
+                                    @user.CreatedAtUtc.ToLocalTime().ToString("dd/MM/yyyy HH:mm")
+                                </td>
+                                <td class="text-end pe-4">
+                                    <a asp-page="/AdminUsers/Edit"
+                                       asp-route-id="@user.Id"
+                                       class="btn btn-sm btn-academic-outline"
+                                       title="Điều chỉnh vai trò người dùng">
+                                        <i class="bi bi-pencil"></i> Đổi vai trò
+                                    </a>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+
+</div>
