@@ -1,43 +1,53 @@
 # Member 3 handoff - Cross-application UI/UX baseline
 
-> Cross-app baseline completed in PR #19; synchronized with later Flow 2/3 changes on 2026-08-21.
+> Updated on 2026-08-21 for the Razor Pages + SignalR target architecture.
 
 ## Completed baseline
 
-Member 3 delivered the shared application presentation baseline, including:
+Member 3 delivered the shared application presentation baseline, including the application shell, shared design tokens/components, authentication presentation, refreshed workflow screens, and responsive polish.
 
-- landing page and application shell redesign;
-- shared design tokens/components/site styling;
-- Bootstrap Icons integration;
-- authentication/account presentation;
-- Subject/Admin/Chapter/Document/Report screen refresh;
-- public Student registration presentation;
-- responsive application-shell polish.
+## Presentation target
 
-## Ownership boundary after Flow 2 completion
+All normal HTTP UI/action surfaces must converge on Razor Pages.
 
-PR #34/#35 later added a specialized full-screen Flow 2 Chat experience and Evaluation UI under Member 5's product scope. That work builds on the application shell but introduces purpose-specific Chat layout/interaction patterns such as:
+```text
+Account/authentication -> Razor Pages
+Admin users/subjects    -> Razor Pages
+Subject catalogue      -> Razor Pages
+Documents/Chapters     -> Razor Pages
+Chat                   -> Razor Pages + SSE
+Evaluation             -> Razor Pages
+Reports                -> Razor Pages
+```
 
-- session sidebar and subject switcher;
-- borderless chat workspace;
-- Markdown rendering and code copy;
-- SSE progress/typewriter rendering;
-- citation pills and citation reader;
-- tool/progress timeline.
+The follow-up implementation migration must preserve the existing design system while removing duplicate/legacy MVC product presentation after parity is verified.
 
-Those Flow 2 changes do not transfer the original cross-app UI baseline ownership away from Member 3.
+## Flow 1 realtime UX
 
-## Current functional ownership
+Document Management adds SignalR notifications for connected authorized browsers.
 
-- Member 1: security/multi-subject/provider/shared integration/docs.
-- Member 2: Flow 1 request behavior + Flow 3 reporting behavior.
-- Member 3: indexing maintenance + cross-app visual baseline.
-- Member 4: Flow 2 RAG backend maintenance.
-- Member 5: completed Flow 2 MVC Chat/history/citations/evaluation product layer.
+Expected UI behaviors:
+
+- newly created Documents can appear without manual refresh;
+- edited Document metadata/status can update the matching row;
+- deleted Documents can disappear from the current list;
+- indexing state transitions can update status indicators;
+- the UI can fall back to re-fetch/reload when an event payload is intentionally minimal;
+- reconnect behavior handles transient disconnects/deploys.
+
+SignalR is not the write path. Forms/fetch operations still call Razor Page handlers; realtime events only reflect successful server-side changes.
+
+## Flow 2
+
+Chat is already Razor Pages after PR #42 and keeps its specialized full-screen layout and SSE progress/typewriter behavior.
+
+Do not move Chat to SignalR merely because Document Management uses SignalR.
+
+Evaluation should migrate to Razor Pages while preserving its existing visual/functionality baseline.
 
 ## Design-system rule
 
-For normal application screens, reuse the shared design system before introducing one-off styles:
+For normal application screens, reuse:
 
 ```text
 wwwroot/css/design-tokens.css
@@ -46,22 +56,23 @@ wwwroot/css/site.css
 libman.json -> bootstrap-icons
 ```
 
-Flow 2 may preserve its specialized current chat layout where appropriate, but should still maintain responsive/accessibility behavior and application-wide identity.
+The Document SignalR JavaScript client is an additional runtime client dependency in the implementation PR; it should integrate with the existing page UX rather than introduce a separate SPA architecture.
 
-## Flow-specific notes
+## Accessibility/responsiveness
 
-### Flow 1
+Realtime updates must not reduce usability:
 
-Visual changes must preserve subject context, CRUD/re-index semantics, authorization and indexing boundaries.
+- preserve keyboard/focus behavior;
+- expose meaningful status changes accessibly where practical;
+- do not reorder the page unexpectedly without a clear rule;
+- keep no-JavaScript/server-rendered behavior functional enough to recover via normal navigation/refresh.
 
-### Flow 2
+## Functional ownership
 
-Chat is now complete MVC. Do not recreate an internal `RagDemo` page. The current product uses SSE over fetch, not SignalR.
+- Member 1: security/multi-subject/provider/shared integration/docs.
+- Member 2: Flow 1 request behavior + Flow 3 reporting behavior.
+- Member 3: indexing maintenance + cross-app visual baseline.
+- Member 4: Flow 2 RAG backend maintenance.
+- Member 5: Flow 2 product presentation/evaluation behavior.
 
-### Flow 3
-
-Reports are read-only and subject-scoped. PR #40 also scopes Chat metrics to the report subject; the old transitional/global warning is obsolete.
-
-## Documentation
-
-Future UI changes with architecture/status impact should be reflected through the canonical documentation synchronization process.
+See `razor-pages-signalr-architecture.md` for the migration contract.
