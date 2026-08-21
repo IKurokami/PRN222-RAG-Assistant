@@ -1,16 +1,19 @@
 # Application-layer instructions
 
-> Synchronized with `master` after PR #40 on 2026-08-21.
+> Updated on 2026-08-21 after PR #42/#43 and the accepted Razor Pages + SignalR documentation target.
 
-This subtree contains provider-neutral, presentation-safe cross-workflow contracts/models. Keep it independent from MVC/Razor runtime types, provider-specific payloads, and PostgreSQL implementation details.
+This subtree contains provider-neutral, presentation-safe cross-workflow contracts/models. Keep it independent from Razor runtime types, SignalR hub types, provider-specific payloads, and PostgreSQL implementation details.
 
-## Current workflow state
+## Target workflow presentation
 
-1. Flow 1 - Document Management & Indexing - complete - MVC + background services.
-2. Flow 2 RAG backend - complete.
-3. Flow 2 MVC Chat/history/citations/evaluation - complete.
-4. Flow 3 Report & Statistics - complete - Razor Pages behind `IReportQueryService`.
-5. Provider-neutral AI runtime - complete.
+1. Flow 1 - Document Management & Indexing - Razor Pages + background services + SignalR notifications.
+2. Flow 2 RAG backend - complete and provider-neutral.
+3. Flow 2 Chat/history/citations - Razor Pages + SSE.
+4. Flow 2 Evaluation - target Razor Pages.
+5. Flow 3 Report & Statistics - Razor Pages behind `IReportQueryService`.
+6. Admin/Subject catalogue - target Razor Pages.
+
+The remaining runtime MVC surfaces are implementation debt. Do not add new Application contracts that assume MVC controllers/views.
 
 ## Provider-neutral boundary
 
@@ -21,7 +24,7 @@ ITextEmbeddingService
 IChatCompletionService
 ```
 
-Infrastructure selects Ollama, Gemini, OpenAI, or OpenRouter implementations. Chat and embedding providers may be configured independently. OpenRouter may perform ordered chat-model fallback inside Infrastructure when OpenRouter chat is explicitly selected.
+Infrastructure selects Ollama, Gemini, OpenAI, or OpenRouter implementations. Chat and embedding providers may be configured independently.
 
 Do not:
 
@@ -31,7 +34,7 @@ Do not:
 - implement provider/model routing in Application;
 - assume equal embedding dimensions mean compatible vector spaces.
 
-Changing embedding provider/model/dimension requires a complete corpus re-index. PR #37 only makes different-dimension transition periods safe at the retrieval layer; it does not make different embedding models interchangeable.
+Changing embedding provider/model/dimension requires a complete corpus re-index.
 
 ## Subject boundary
 
@@ -48,40 +51,47 @@ Do not add a product contract that silently drops subject context or intentional
 ## Flow 1 boundary
 
 ```text
-subject-aware MVC action
- -> persist Document/Chapter
- -> IDocumentIndexingQueue
+subject-aware Razor Page handler
+ -> application-facing Document/Chapter behavior boundary
+ -> persist requested change
+ -> IDocumentIndexingQueue when required
+ -> realtime notification after successful persistence
+```
+
+Indexing remains:
+
+```text
+IDocumentIndexingQueue
  -> IDocumentIndexingService
  -> ITextEmbeddingService
 ```
 
-Application contracts remain unaware of the selected concrete embedding provider.
+Application code must not depend on SignalR `Hub`, `IHubContext`, JavaScript client types, or PageModel. A realtime notifier abstraction may be introduced if needed, with the SignalR implementation in Presentation/Infrastructure wiring.
 
 ## Flow 2 boundary
 
 ```text
-MVC Chat/Evaluation
- -> IRagQueryService / IEvaluationService
+Chat Razor Page
+ -> IChatPageService / IRagQueryService
  -> provider-neutral embedding + chat contracts
  -> subject-scoped persistence/retrieval
+
+Evaluation Razor Page target
+ -> IEvaluationService
 ```
 
-`RagAnswer` and `RagCitation` are presentation-safe result models. The MVC layer must not need pgvector/provider payload types.
+`RagAnswer` and `RagCitation` are presentation-safe result models.
 
-The browser transport used by Chat is SSE, but SSE implementation details belong in Presentation (`ChatController`/View JavaScript), not Application contracts.
+Chat transport is SSE, but SSE response details stay in Presentation rather than Application contracts.
 
-## Flow 3 boundary after PR #40
-
-Flow 3 now has an explicit Application query contract:
+## Flow 3 boundary
 
 ```text
 IReportQueryService
   -> Task<SubjectReportSnapshot?> GetSubjectReportAsync(...)
 ```
 
-`SubjectReportSnapshot` and its report read models are presentation-safe. EF Core query implementation belongs in Infrastructure (`ReportQueryService`).
-
-Do not move `ApplicationDbContext`, `DbSet`, EF expressions, or Npgsql types into the Razor Page or Application model contract.
+`SubjectReportSnapshot` and report read models are presentation-safe. EF Core query implementation belongs in Infrastructure.
 
 ## Shared contracts/models
 
@@ -90,6 +100,7 @@ Do not move `ApplicationDbContext`, `DbSet`, EF expressions, or Npgsql types int
 - `ITextEmbeddingService`
 - `IChatCompletionService`
 - `IRagQueryService`
+- `IChatPageService`
 - `IEvaluationService`
 - `IReportQueryService`
 - `RagAnswer` / `RagCitation`
@@ -99,11 +110,10 @@ Prefer additive, purpose-specific contracts. Keep infrastructure payloads under 
 
 ## Dependency rules
 
-- Application abstractions do not depend on MVC, Razor `PageModel`, `HttpContext`, provider-specific SDK/DTOs, EF Core query types, Npgsql, CSS, or JavaScript.
+- Application abstractions do not depend on MVC, Razor `PageModel`, `HttpContext`, SignalR hub types, provider-specific SDK/DTOs, EF Core query types, Npgsql, CSS, or JavaScript.
 - Infrastructure implements provider adapters, pgvector retrieval, reporting queries and persistence details.
-- Flow 1 controllers do not parse/chunk/embed/call providers.
-- Flow 2 controllers call application services rather than providers/pgvector directly.
-- Flow 3 PageModels call `IReportQueryService` rather than `ApplicationDbContext` directly.
+- PageModels call application-facing services instead of provider/pgvector implementations directly.
+- SignalR fan-out does not become a business-write path.
 
 ## Documentation identity rule
 

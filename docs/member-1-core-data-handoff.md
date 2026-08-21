@@ -1,6 +1,6 @@
 # Member 1 handoff - Core/Data/RBAC/Multi-subject/AI Providers/Documentation
 
-> Synchronized with `master` after PR #40 on 2026-08-21.
+> Updated on 2026-08-21 after PR #42/#43 and the accepted Razor Pages + SignalR target architecture.
 
 ## Ownership
 
@@ -15,40 +15,51 @@ Member 1 owns the cross-cutting platform/integration scope:
 - subject-specific authorization service;
 - cross-workflow subject-context integration;
 - AI provider selection/configuration;
-- Ollama/Gemini/OpenAI/OpenRouter adapters;
-- API-key/env/startup validation;
-- embedding migration compatibility rules;
-- Data Protection persistence coordination;
 - deployment/configuration integration;
+- Data Protection persistence coordination;
 - repository-wide documentation synchronization.
+
+## Presentation architecture coordination
+
+The accepted target is:
+
+```text
+HTTP UI/actions               -> Razor Pages only
+Chat progress/result          -> SSE
+Document Management realtime -> SignalR notifications
+```
+
+Chat is already Razor Pages after PR #42/#43. Remaining legacy MVC product/admin surfaces are code migration debt and must not be described as the final architecture.
+
+Member 1 coordinates the cross-cutting rules for the implementation migration:
+
+- preserve role/subject authorization;
+- avoid duplicate MVC + Razor Page product surfaces;
+- remove controller routing only after parity is verified;
+- keep PageModels behind purpose-specific application boundaries where practical;
+- keep SignalR as realtime fan-out rather than the CRUD API;
+- keep Chat SSE separate from Document SignalR;
+- reconcile canonical docs after implementation merges.
 
 ## Provider/runtime milestones
 
-Representative merged provider/infrastructure work includes:
-
-- PR #21 - provider-neutral Ollama/Gemini/OpenAI runtime;
-- PR #28 - OpenRouter routing and independent chat/embedding provider selection;
-- PR #37 - Gemini output dimensionality + pgvector dimension-safe transition;
-- PR #38 - PostgreSQL Data Protection key persistence + expanded OpenRouter Chat fallback;
-- PR #39 - Render Chat override to Gemini while preserving OpenRouter embeddings.
+Representative provider/infrastructure work includes PR #21, #28, #37, #38 and #39.
 
 Current Render provider split:
 
 ```text
-Chat:      Gemini / gemini-3.6-flash
-Embedding: OpenRouter / nvidia/llama-nemotron-embed-vl-1b-v2:free
+Chat:       Gemini / gemini-3.6-flash
+Embedding:  OpenRouter / nvidia/llama-nemotron-embed-vl-1b-v2:free
 Dimensions: 1024
 ```
 
 ## Data Protection
 
-PR #38 adds `DataProtectionKeyDbContext` and stores ASP.NET Core Data Protection keys in PostgreSQL. This is now part of the runtime durability baseline and should not be reverted to filesystem-only key storage for Render.
+ASP.NET Core Data Protection keys persist in PostgreSQL through `DataProtectionKeyDbContext`. This should not be reverted to filesystem-only storage for Render.
 
 ## Embedding migration rule
 
-Changing embedding provider/model/dimension requires complete corpus re-indexing.
-
-PR #37 allows different-dimension rows to coexist temporarily while a full re-index is in progress because retrieval filters by `vector_dims` before cosine distance. This is migration safety, not semantic compatibility between embedding models.
+Changing embedding provider/model/dimension requires complete corpus re-indexing. PR #37 allows different-dimension rows to coexist temporarily during transition but does not create semantic compatibility between different embedding models.
 
 ## Multi-subject baseline
 
@@ -58,6 +69,7 @@ Subject
   -> Documents
   -> ChatSessions
   -> Reports
+  -> Document realtime group
 ```
 
 Roles:
@@ -76,35 +88,31 @@ ManageSubjects
 ManageDocuments
 ```
 
-Admin manages all subjects. Subject Leaders manage assigned subjects. Public registration creates Students only.
+Document SignalR subscriptions must enforce the same concrete subject boundary as Razor Page management actions.
 
-## Flow 3 integration after PR #40
+## Report integration
 
-PR #40 added a shared Application-facing report contract:
+Reports remain:
 
 ```text
-IReportQueryService
-SubjectReportSnapshot
+Report PageModel
+ -> IReportQueryService
+ -> ReportQueryService
+ -> ApplicationDbContext
 ```
 
-Infrastructure implements it through `ReportQueryService`; the Razor Page no longer reads `ApplicationDbContext` directly. Chat/report totals are subject-scoped.
-
-This is cross-cutting architecture/integration under Member 1's coordination scope; Member 2 retains Flow 3 behavior ownership.
-
-## Actual merged contribution outside nominal ownership
-
-The canonical ledger continues to credit implementation based on merged work rather than nominal ownership. See `member-contributions.md` for PR #9, #23, #30, #34/#35 and later cross-cutting integrations.
+Chat/report totals stay subject-scoped.
 
 ## Cross-workflow boundary
 
 - Member 2: Flow 1 request/business behavior + Flow 3 reporting behavior.
 - Member 3: indexing/ingestion maintenance + cross-app UI baseline.
 - Member 4: Flow 2 RAG backend maintenance.
-- Member 5: completed Flow 2 MVC Chat/history/citation/evaluation product layer.
+- Member 5: Flow 2 product presentation/evaluation behavior.
 - Member 1: shared contracts/schema/security/provider/deployment/docs coordination.
+
+Historical MVC implementation credit remains in `member-contributions.md`; historical credit does not define the future presentation architecture.
 
 ## Documentation responsibility
 
-**Member 1 is the sole documentation editor** for README, AGENTS files and `docs/*` after reconciling merged changes from the whole team.
-
-Members 2-5 report documentation/status impacts to Member 1. Project documentation uses Member numbers only and must not add GitHub usernames.
+Canonical docs must distinguish implemented runtime state from accepted target state. This docs PR does not count as completing the code migration.

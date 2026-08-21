@@ -1,76 +1,97 @@
 # Project status
 
-> Synchronized with `master` after PR #40 on 2026-08-21.
+> Updated on 2026-08-21 after PR #42/#43.
+>
+> This file distinguishes the **implemented runtime** from the **accepted target architecture**. The current docs PR changes documentation only.
 
-## Workflow status
+## Target presentation architecture
 
-| Workflow | Presentation | Status |
-|---|---|---|
-| Flow 1 - Document Management & Indexing | MVC + background worker | Complete |
-| Flow 2 - RAG Q&A + Conversation Management | MVC Chat + Evaluation | Complete |
-| Flow 3 - Report & Statistics | Razor Pages + query service | Complete |
-
-Conversation History is part of Flow 2.
-
-## Milestones since the previous documentation baseline
-
-The previous canonical docs were mostly synchronized after PR #30. The following later merges materially changed the system and are now included in this baseline:
-
-- **PR #32** - Render Blueprint CD.
-- **PR #33** - Render pgvector type reload, runtime dependency fix and optional seed-account behavior.
-- **PR #34** - Flow 2 MVC Chat/session/history/citation UI and 50-question Evaluation Suite.
-- **PR #35** - full-screen Chat redesign, SSE progress/typewriter experience, Markdown/citation reader, stronger grounding and contextual follow-up retrieval; obsolete RagDemo removed.
-- **PR #37** - Gemini embedding dimensionality fix and pgvector dimension-safe re-index transition.
-- **PR #38** - PostgreSQL-persisted ASP.NET Core Data Protection keys and expanded OpenRouter chat fallback chain.
-- **PR #39** - Render Chat switched to Gemini while embeddings remain OpenRouter.
-- **PR #40** - Flow 3 reporting moved behind `IReportQueryService`; chat/report aggregates are subject-scoped.
-
-## Flow 1
-
-Complete MVC request flow plus process-local background indexing:
+All HTTP UI/actions must converge on Razor Pages.
 
 ```text
-Document/Chapter MVC
- -> IDocumentIndexingQueue
- -> DocumentIndexingWorker
- -> parser/chunker
- -> ITextEmbeddingService
- -> DocumentChunks / index state
+Flow 1 Documents/Chapters: Razor Pages + SignalR notifications
+Flow 2 Chat:               Razor Pages + SSE
+Flow 2 Evaluation:         Razor Pages
+Flow 3 Reports:            Razor Pages
+Admin users/subjects:      Razor Pages
+Subject catalogue:         Razor Pages
 ```
 
-Issue #27 remains closed. Deferred quality debt is deeper complex DOCX/PPTX/PDF layout coverage rather than a missing core workflow.
+SignalR is only the realtime fan-out mechanism for Document Management. It does not replace Razor Page handlers or Chat SSE.
+
+## Migration status
+
+| Area | Target | Runtime status at this docs PR |
+|---|---|---|
+| Account/auth | Razor Pages | Complete |
+| Chat/history/citations | Razor Pages + SSE | Complete after PR #42/#43 |
+| Reports | Razor Pages + `IReportQueryService` | Complete |
+| Documents/Chapters | Razor Pages + SignalR | Implementation pending |
+| Evaluation | Razor Pages | Implementation pending |
+| Admin users/subjects | Razor Pages | Implementation pending |
+| Subject catalogue | Razor Pages | Implementation pending |
+| Legacy MVC presentation removal | Removed | Implementation pending |
+
+The migration is **not complete** until the follow-up code PR removes the legacy MVC presentation layer and controller routing after Razor Page parity is verified.
+
+## Relevant merged milestones
+
+- **PR #32** - Render Blueprint CD.
+- **PR #33** - Render pgvector/runtime fixes and optional seed behavior.
+- **PR #34/#35** - original product Chat/Evaluation integration, SSE UX, grounding/follow-up improvements.
+- **PR #37** - Gemini embedding dimensionality fix and pgvector dimension-safe re-index transition.
+- **PR #38** - PostgreSQL-persisted Data Protection keys and OpenRouter chat fallback update.
+- **PR #39** - Render Chat switched to Gemini while embeddings remain OpenRouter.
+- **PR #40** - Reports moved behind `IReportQueryService`; report chat aggregates became subject-scoped.
+- **PR #42** - Chat product presentation migrated to Razor Pages.
+- **PR #43** - Chat PageModel direct DbContext usage replaced by `IChatPageService`.
+
+## Flow 1 target
+
+```text
+Document/Chapter Razor Page handler
+ -> validate + authorize concrete Subject
+ -> persist change through application/infrastructure boundary
+ -> enqueue Document.Id when required
+ -> publish realtime event
+
+Document indexing worker
+ -> parser/chunker
+ -> ITextEmbeddingService
+ -> DocumentChunks/index status
+ -> publish DocumentIndexStatusChanged
+```
+
+Document SignalR events should include:
+
+```text
+DocumentCreated
+DocumentUpdated
+DocumentDeleted
+DocumentIndexStatusChanged
+```
+
+Writes remain Razor Page handlers with antiforgery and server-side authorization. SignalR broadcasts only after successful persistence.
 
 ## Flow 2
 
-Complete product path:
+Chat is now Razor Pages and keeps SSE for progress/result rendering.
 
 ```text
-MVC Chat
- -> subject-aware session
- -> IRagQueryService
- -> embedding
+Chat Razor Page
+ -> IChatPageService for page/session data
+ -> IRagQueryService for RAG
  -> subject + dimension constrained pgvector retrieval
  -> grounded generation
  -> citations/messages persistence
  -> SSE progress/result rendering
 ```
 
-Also complete:
-
-- chat-session history and deletion;
-- subject switching;
-- citation pills/reader;
-- Markdown rendering and code-copy support;
-- contextual follow-up retrieval fallback;
-- 50-question evaluation UI/service integration.
-
-The current chat transport is SSE over a fetch POST. No SignalR hub is part of this flow.
+Evaluation must migrate to Razor Pages in the follow-up presentation PR while preserving `IEvaluationService` behavior and the 50-question dataset.
 
 ## Flow 3
 
-Complete read-only subject-scoped reporting.
-
-PR #40 architecture:
+Reports remain:
 
 ```text
 Pages/Reports/Index.cshtml.cs
@@ -79,7 +100,7 @@ Pages/Reports/Index.cshtml.cs
  -> ApplicationDbContext
 ```
 
-The snapshot contains subject-scoped Chapter/Document/index metrics plus subject-scoped ChatSession/ChatMessage/MessageCitation totals.
+All metrics remain subject-scoped.
 
 ## Provider/runtime status
 
@@ -93,19 +114,7 @@ Embedding: OpenRouter / nvidia/llama-nemotron-embed-vl-1b-v2:free
 Dimension: 1024
 ```
 
-Local Docker can still select Ollama or other configured providers. OpenRouter chat retains its ordered fallback chain when OpenRouter chat is selected outside the Render override.
-
-## Embedding transition behavior
-
-Complete re-index remains required after any embedding provider/model/dimension change.
-
-PR #37 prevents mixed-dimension transition failures by filtering stored vectors to `vector_dims(Embedding) == query dimensions` before cosine distance. Different-dimension old rows are temporarily excluded. Same-dimension vectors from different embedding models are still semantically incompatible and must not be intentionally mixed.
-
-## Authentication/runtime durability
-
-PR #38 adds `DataProtectionKeyDbContext` and persists ASP.NET Core Data Protection keys in PostgreSQL. This removes the former Render warning that every web-container restart necessarily invalidates the key ring.
-
-Uploaded source files on the free Render web service remain ephemeral; PostgreSQL durability does not make `/app/storage/uploads` durable.
+Changing any embedding provider/model/dimension still requires complete corpus re-indexing.
 
 ## CI/CD
 
@@ -115,24 +124,24 @@ pull request / push
  -> build + tests
  -> ApplicationDbContext model/migration validation
  -> Docker Compose validation
- -> real PostgreSQL/pgvector checks
- -> DataProtectionKeys schema check
- -> mixed-dimension pgvector smoke test
+ -> PostgreSQL/pgvector checks
 
 master checks pass
  -> Render checksPass auto deploy
 ```
 
+A documentation-only PR does not validate the planned migration by itself. The implementation PR must add/update tests for Razor Page authorization/handlers and SignalR subject subscription/realtime behavior.
+
 ## Remaining technical debt
 
-Current follow-up items are quality/production-hardening tasks, not missing core workflows:
+Primary follow-up work:
 
-- deeper DOCX/PPTX/complex-PDF ingestion fixtures;
-- durable object/disk storage for uploaded source files on hosted deployments;
-- production-grade Render sizing/database plan if the demo becomes long-lived;
-- optional future refactors that further isolate MVC Chat/Evaluation data reads from direct EF use;
-- optional provider-native token streaming if desired; current SSE is application-level progress/typewriter output.
+- complete all remaining legacy MVC -> Razor Pages migrations;
+- remove MVC presentation registration/routing once no product surface depends on it;
+- add the Document SignalR hub/notifier/client and reconnect behavior;
+- preserve Chat SSE as-is;
+- add Razor Page/SignalR authorization regression tests;
+- deeper DOCX/PPTX/complex-PDF fixtures;
+- durable hosted storage for uploaded source files.
 
-## Documentation ownership
-
-Member 1 coordinates repository documentation synchronization. See `member-contributions.md` for actual merged contribution credit through PR #40.
+Canonical migration specification: `razor-pages-signalr-architecture.md`.

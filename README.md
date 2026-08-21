@@ -1,59 +1,119 @@
 # PRN222 RAG Assistant
 
-ASP.NET Core RAG learning assistant built with .NET 10, MVC + Razor Pages, PostgreSQL/pgvector, ASP.NET Core Identity, background document indexing, and provider-neutral AI services.
+ASP.NET Core RAG learning assistant built with .NET 10, Razor Pages, PostgreSQL/pgvector, ASP.NET Core Identity, background document indexing, provider-neutral AI services, SSE for Chat, and SignalR as the target realtime channel for Document Management.
 
-> Documentation baseline: synchronized with `master` after PR #40 on 2026-08-21.
+> Documentation target updated on 2026-08-21 after PR #42/#43.
+>
+> **Important:** this documentation PR defines the required presentation end state only. It does not migrate the remaining runtime MVC code. A follow-up implementation PR must remove the legacy MVC presentation layer before the codebase can be called Razor-Pages-only.
 
-PRN222 is the seeded demo subject. The runtime application is multi-subject and must not treat PRN222 as a global hard-coded scope.
+PRN222 is the seeded demo subject. Runtime workflows remain multi-subject and must not treat PRN222 as a global hard-coded scope.
 
-## Current status
+## Presentation decision
 
-| Area | Status |
-|---|---|
-| Core/Data/Identity/RBAC | Complete |
-| Multi-subject management + Subject Leader assignment | Complete |
-| AI provider runtime - Ollama/Gemini/OpenAI/OpenRouter | Complete |
-| Flow 1 - Document Management & Indexing | Complete - MVC |
-| Flow 2 - RAG backend | Complete |
-| Flow 2 - Chat/history/citations/evaluation | Complete - MVC |
-| Flow 3 - Report & Statistics | Complete - Razor Pages |
-| Render CI/CD deployment | Complete for demo use |
-| Repository documentation | Synchronized through PR #40 |
-
-The three product workflows are:
-
-1. **Flow 1 - Document Management & Indexing** - MVC Controllers + Views.
-2. **Flow 2 - RAG Question & Answer & Conversation Management** - MVC Chat + Evaluation backed by the RAG service.
-3. **Flow 3 - Report & Statistics** - Razor Pages backed by an application query service.
-
-Conversation History is part of Flow 2, not a separate workflow.
-
-## Presentation architecture
+The required end state is:
 
 ```text
-MVC Controllers + Views
-  - Flow 1: Documents / Chapters
-  - Flow 2: Chat / Evaluation
-  - Admin users / subjects
-
-Razor Pages
-  - authentication / shell pages
-  - Flow 3 Reports
+HTTP UI + HTTP actions: Razor Pages only
+Chat realtime/progress: SSE
+Document Management realtime notifications: SignalR
+Background indexing: hosted worker/services
 ```
 
-The obsolete internal `Pages/RagDemo` surface was removed in PR #35. Product chat is the MVC `ChatController` + `Views/Chat` flow.
+After the implementation migration there must be no duplicate MVC/Razor Page product surfaces and no conventional controller routing for product UI.
 
-## Flow 2 transport
+SignalR is an intentional realtime transport, not an alternative HTTP presentation framework. Document writes remain Razor Page handlers; successful create/update/delete/index-state changes are broadcast to authorized connected browsers.
 
-The Chat UI uses normal ASP.NET Core MVC plus **Server-Sent Events (SSE)** for progress/typewriter updates.
+Canonical migration specification: `docs/razor-pages-signalr-architecture.md`.
+
+## Migration status
+
+| Area | Target presentation | Runtime status at this docs PR |
+|---|---|---|
+| Account/authentication | Razor Pages | Already Razor Pages |
+| Flow 1 - Documents/Chapters | Razor Pages + SignalR notifications | Code migration pending |
+| Flow 2 - Chat/history/citations | Razor Pages + SSE | Razor Pages after PR #42/#43 |
+| Flow 2 - Evaluation | Razor Pages | Code migration pending |
+| Flow 3 - Reports | Razor Pages + query service | Already Razor Pages |
+| Admin users/subjects | Razor Pages | Code migration pending |
+| Subject catalogue | Razor Pages | Code migration pending |
+
+The documentation target does not count as implementation completion.
+
+## Target page map
 
 ```text
-browser fetch(POST /Chat/AskStream)
+Pages/
+  Account/
+  Admin/Users/
+  Admin/Subjects/
+  Subjects/
+  Chapters/
+  Documents/
+  Chat/
+  Evaluation/
+  Reports/
+```
+
+Public URLs may be preserved with Razor Page route templates where compatibility is useful.
+
+## Flow 1 - Document Management & indexing
+
+Target request flow:
+
+```text
+Document/Chapter Razor Page handler
+  -> validate subject/resource/file
+  -> authorize concrete Subject
+  -> application/infrastructure write boundary
+  -> IDocumentIndexingQueue when required
+  -> publish Document realtime event
+```
+
+Background indexing remains:
+
+```text
+IDocumentIndexingQueue
+  -> DocumentIndexingWorker
+  -> IDocumentIndexingService
+  -> PDF/DOCX/PPTX parser
+  -> TextChunker
+  -> ITextEmbeddingService
+  -> DocumentChunk replacement / index status
+  -> publish DocumentIndexStatusChanged
+```
+
+### SignalR contract
+
+Recommended hub route:
+
+```text
+/hubs/documents
+```
+
+Recommended events:
+
+```text
+DocumentCreated
+DocumentUpdated
+DocumentDeleted
+DocumentIndexStatusChanged
+```
+
+Connections must be subject-scoped and server-authorized. SignalR does not perform CRUD; Page Handlers perform antiforgery-protected writes and publish events only after successful persistence.
+
+## Flow 2 - Chat
+
+Chat is already a Razor Page after PR #42. PR #43 moved its page-data/session persistence boundary behind `IChatPageService`.
+
+The Chat UI continues to use **Server-Sent Events (SSE)** for progress/typewriter output:
+
+```text
+browser fetch(POST Razor Page handler)
   -> text/event-stream
-  -> tool_call / citations / delta / done / error events
+  -> tool_call / citations / delta / done / error
 ```
 
-There is **no SignalR hub in the current Chat flow**. The current server calls `IRagQueryService.AskAsync` and then emits SSE progress/result events; provider token streaming is not required by this implementation.
+Do not replace Chat SSE with SignalR as part of the Document Management realtime migration.
 
 ## RAG pipeline
 
@@ -67,24 +127,22 @@ selected Subject
   -> IChatCompletionService
   -> citation marker parsing
   -> ChatMessage + MessageCitation persistence
-  -> MVC Chat UI
+  -> Razor Page Chat UI
 ```
-
-PR #35 strengthened grounding, inline citations, contextual follow-up retrieval, citation reading, Markdown rendering, and the SSE progress experience.
 
 ## Evaluation
 
-Flow 2 includes an authenticated MVC evaluation surface backed by `IEvaluationService` and the 50-question dataset under:
+Evaluation remains backed by `IEvaluationService` and the packaged 50-question dataset under:
 
 ```text
 Infrastructure/Data/evaluation_dataset_50.json
 ```
 
-Single-question and full-suite evaluation resolve an active subject that matches the dataset subject code.
+The target presentation is `Pages/Evaluation/Index.cshtml` with Razor Page handlers for single-question/full-suite actions.
 
 ## Flow 3 reporting
 
-Flow 3 remains read-only Razor Pages, but PR #40 moved its data access behind an application-facing query boundary:
+Reports already follow the desired presentation/application boundary:
 
 ```text
 Reports Razor Page
@@ -93,7 +151,7 @@ Reports Razor Page
   -> ApplicationDbContext
 ```
 
-Document, indexing, chat-session, chat-message, and citation metrics are explicitly scoped to the selected `SubjectId`.
+Document, indexing, chat-session, chat-message, and citation metrics remain scoped to the selected `SubjectId`.
 
 ## AI runtime
 
@@ -102,19 +160,6 @@ Workflow code consumes provider-neutral contracts:
 ```text
 ITextEmbeddingService
 IChatCompletionService
-```
-
-Backward-compatible provider:
-
-```text
-RAG_PROVIDER=Ollama
-```
-
-Optional purpose-specific overrides:
-
-```text
-RAG_CHAT_PROVIDER=OpenRouter
-RAG_EMBEDDING_PROVIDER=Gemini
 ```
 
 Supported providers:
@@ -126,19 +171,7 @@ OpenAI
 OpenRouter
 ```
 
-### Local defaults
-
-```text
-Chat:      qwen3:4b
-Embedding: qwen3-embedding:0.6b
-Dimensions: 1024
-```
-
-### Embedding compatibility
-
-Changing the embedding provider, model, or dimensions still requires a complete corpus re-index. Equal vector dimensions do not imply compatible semantic vector spaces.
-
-PR #37 made re-index transitions safer when **dimensions change**: pgvector retrieval filters candidates with `vector_dims(...)` before cosine distance, so old rows with a different dimension are temporarily excluded instead of crashing retrieval. This does not make two different embedding models with the same dimensions interchangeable.
+Changing embedding provider/model/dimension requires a complete corpus re-index. PR #37 keeps dimension-changing transitions safe by filtering stored vectors by `vector_dims(...)` before cosine distance; it does not make different embedding semantic spaces compatible.
 
 Changing only the chat provider/model/fallback order does not require re-indexing.
 
@@ -146,9 +179,9 @@ Canonical provider notes: `docs/ai-provider-backup.md`.
 
 ## Render deployment
 
-`render.yaml` defines a Docker web service and Render PostgreSQL 17 in Singapore, with deployment from `master` after GitHub checks pass.
+`render.yaml` defines the Docker web service and Render PostgreSQL deployment.
 
-Current Render AI split after PR #39:
+Current Render AI split:
 
 ```text
 Chat provider:      Gemini
@@ -158,16 +191,16 @@ Embedding model:    nvidia/llama-nemotron-embed-vl-1b-v2:free
 Embedding dims:     1024
 ```
 
-Render therefore needs **two server-side AI secrets**:
+Render needs server-side AI secrets:
 
 ```text
 Rag__Gemini__ApiKey
 Rag__OpenRouter__ApiKey
 ```
 
-PR #38 persists ASP.NET Core Data Protection keys in PostgreSQL through `DataProtectionKeyDbContext`, so login/antiforgery key material survives web-container restarts as long as the database persists.
+ASP.NET Core Data Protection keys persist in PostgreSQL. Uploaded source files on the free web service remain ephemeral.
 
-Uploaded source files are still stored under `/app/storage/uploads`; on a free Render web service that filesystem is ephemeral. See `docs/render-deployment.md`.
+Render web services support WebSocket connections, so the target SignalR Document hub fits the current web-service model. Clients must use reconnect behavior because instance replacement during deploy/maintenance can close active connections.
 
 ## Roles and authorization
 
@@ -187,25 +220,7 @@ ManageSubjects  -> Admin
 ManageDocuments -> Admin OR SubjectLeader
 ```
 
-Flow 1/3 subject-specific management additionally checks `ISubjectAccessService`. Flow 2 validates authenticated chat-session ownership and persisted subject consistency.
-
-Public self-registration creates only `Student` accounts.
-
-## Flow 1 indexing
-
-```text
-DocumentsController
-  -> persist Document
-  -> IDocumentIndexingQueue
-  -> DocumentIndexingWorker
-  -> IDocumentIndexingService
-  -> PDF/DOCX/PPTX parser
-  -> TextChunker
-  -> ITextEmbeddingService
-  -> DocumentChunk replacement / index status
-```
-
-PDF uses PdfPig; DOCX/PPTX use OpenXml. Startup recovery re-enqueues persisted `Uploaded`/`Processing` documents.
+Subject-specific operations additionally enforce concrete subject access. SignalR subscriptions must enforce the same subject boundary server-side. UI visibility is never authorization.
 
 ## Commands
 
@@ -241,11 +256,11 @@ Do not run `docker compose down -v` unless deleting local database/model volumes
 Start with:
 
 - `docs/README.md`
+- `docs/razor-pages-signalr-architecture.md`
 - `docs/project-status.md`
 - `docs/infrastructure.md`
+- `docs/role-access-control.md`
+- `docs/multi-subject-management.md`
 - `docs/ai-provider-backup.md`
 - `docs/render-deployment.md`
-- `docs/rag-demo-guide.md`
 - `docs/member-contributions.md`
-
-Project coordination documents use Member numbers only. See `docs/member-contributions.md` for ownership versus merged contribution accounting.
