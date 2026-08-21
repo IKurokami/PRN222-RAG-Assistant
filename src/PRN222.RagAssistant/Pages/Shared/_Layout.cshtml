@@ -57,10 +57,14 @@
                             <li class="nav-item">
                                 <a class="nav-link-humata @(isChatPage ? "is-active" : null)" asp-area="" asp-page="/Chat/Index">Trò chuyện RAG</a>
                             </li>
-                            <li class="nav-item">
-                                <a class="nav-link-humata @(currentPage.StartsWith("/Evaluation", StringComparison.OrdinalIgnoreCase) ? "is-active" : null)" asp-area="" asp-page="/Evaluation/Index">Đánh giá RAG</a>
-                            </li>
-
+                            @* Issue #44: Evaluation is restricted to Admin and SubjectLeader.
+                               Students must not see this entry point. Server-side guard is on the PageModel. *@
+                            @if (isAdmin || isSubjectLeader)
+                            {
+                                <li class="nav-item">
+                                    <a class="nav-link-humata @(currentPage.StartsWith("/Evaluation", StringComparison.OrdinalIgnoreCase) ? "is-active" : null)" asp-area="" asp-page="/Evaluation/Index">Đánh giá RAG</a>
+                                </li>
+                            }
                         }
                         @if (isAdmin)
                         {
