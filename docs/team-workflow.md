@@ -1,18 +1,18 @@
 # Team workflow and ownership
 
-> Synchronized after PR #40 on 2026-08-21. Ownership and merged contribution credit remain separate.
+> Updated on 2026-08-21 for the Razor Pages + SignalR target architecture. Ownership and merged contribution credit remain separate.
 
-## Current milestone
+## Product milestone and presentation migration
 
-All three core product workflows are implemented:
+The core product behaviors exist, but presentation architecture is undergoing a cleanup target:
 
 ```text
-Flow 1 - Document Management & Indexing       COMPLETE
-Flow 2 - RAG Chat/History/Citations/Evaluation COMPLETE
-Flow 3 - Report & Statistics                   COMPLETE
+HTTP product/admin presentation -> Razor Pages only
+Chat progress/realtime          -> SSE
+Document Management realtime    -> SignalR notifications
 ```
 
-Cross-cutting provider, multi-subject/RBAC, UI baseline, Render CD and documentation infrastructure are also implemented for the current demo scope.
+Chat is already Razor Pages after PR #42/#43. Remaining legacy MVC product/admin surfaces must be migrated in a follow-up implementation PR before the presentation cleanup is complete.
 
 ## Member 1 - Core/Data/RBAC/multi-subject/provider/docs
 
@@ -27,7 +27,7 @@ Maintains:
 - embedding compatibility/re-index rules;
 - repository documentation synchronization.
 
-Member 1 is the sole editor of README, AGENTS files and `docs/*`; other members report documentation/status impacts rather than editing canonical coordination docs independently.
+For the presentation migration, Member 1 coordinates architecture/security/documentation consistency, especially subject authorization and removal of stale architecture claims after code lands.
 
 ## Member 2 - Flow 1 request behavior + Flow 3 reporting
 
@@ -38,7 +38,7 @@ Maintains established behavior for:
 - validation/authorization around Flow 1 requests;
 - read-only Report & Statistics behavior.
 
-PR #40 refactored Flow 3 data access behind `IReportQueryService`; this does not transfer report behavior ownership.
+The Flow 1 Razor Pages migration must preserve these semantics. SignalR only adds realtime fan-out after successful changes.
 
 ## Member 3 - indexing maintenance + cross-app UI baseline
 
@@ -47,9 +47,9 @@ Maintains:
 - PDF/DOCX/PPTX parsers;
 - chunking/indexing worker/service;
 - indexing state transitions/startup recovery;
-- cross-application UI/UX baseline from PR #19.
+- cross-application UI/UX baseline.
 
-See `member-contributions.md` for actual credit on PR #9/#23/#30.
+For SignalR, indexing status transitions should publish document status notifications without moving indexing work into the realtime hub.
 
 ## Member 4 - Flow 2 RAG backend maintenance
 
@@ -63,53 +63,56 @@ Maintains:
 
 Concrete providers remain outside the RAG workflow boundary.
 
-## Member 5 - Flow 2 MVC/evaluation - COMPLETE
+## Member 5 - Flow 2 product presentation/evaluation
 
-PR #34/#35 completed the product layer:
+Historical product implementation credit remains tied to PR #34/#35. Chat was subsequently migrated to Razor Pages in PR #42 and its PageModel boundary improved in PR #43.
 
-- MVC Chat/session/history/citations;
-- subject-aware navigation;
-- citation reader/Markdown presentation;
-- SSE progress/typewriter UX;
-- 50-question Evaluation workflow/UI;
-- integrated grounding/follow-up improvements.
+Target presentation:
 
-There is no longer a pending Member 5 core milestone.
+- Chat stays Razor Pages + SSE;
+- Evaluation migrates to Razor Pages;
+- no parallel product MVC surface remains after the migration.
 
-## Flow integration map
+## Presentation migration work map
 
 ```text
-                    provider infrastructure
-                  /                       \
-        ITextEmbeddingService        IChatCompletionService
-                 |                           |
-        +--------+---------+          +------+------+
-        |                  |          |             |
- Flow 1 indexing     Flow 2 retrieval + grounding/generation
-        |                  |                |
-        +------ DocumentChunks --------------+
-                           |
-                    MVC Chat / Evaluation
+Razor Pages migration
+  Admin users/subjects
+  Subject catalogue
+  Documents/Chapters
+  Evaluation
 
-Flow 3 Reports
-  -> IReportQueryService
-  -> subject-scoped read model
+Document realtime
+  Razor Page handler writes
+    -> successful persistence
+    -> realtime notifier / SignalR
+    -> subject-scoped clients
+
+Chat
+  Razor Pages
+    -> existing SSE progress/result contract
 ```
+
+## Migration review rules
+
+A code PR implementing this architecture should be reviewed for:
+
+- functional parity with the replaced product/admin surfaces;
+- no duplicate MVC + Razor Page product implementations left behind;
+- server-side role/subject authorization;
+- antiforgery on state-changing Page Handlers;
+- PageModel/service boundaries instead of provider/pgvector logic in presentation;
+- SignalR subject isolation and reconnect behavior;
+- SignalR fan-out occurring only after successful writes;
+- Chat SSE remaining unchanged;
+- updated navigation/forms using Razor Page routing;
+- build/test/EF/PostgreSQL/Docker checks.
 
 ## Provider change procedure
 
-### Chat-only change
+Chat-only changes do not require corpus re-indexing.
 
-No corpus re-index is required.
-
-### Embedding provider/model/dimension change
-
-1. record the new configuration;
-2. treat existing vectors as stale semantic data;
-3. initiate complete corpus re-index;
-4. if dimensions differ, PR #37 allows old/new dimensions to coexist temporarily because retrieval filters `vector_dims`;
-5. do not interpret that dimension filter as same-model/semantic compatibility;
-6. consider the migration complete only when the intended corpus is re-indexed and retrieval validated.
+Embedding provider/model/dimension changes require a complete corpus re-index. PR #37 allows different dimensions to coexist temporarily during the transition but does not make different embedding semantic spaces compatible.
 
 ## Secrets
 
@@ -117,12 +120,6 @@ Real API keys live only in local/deployment secret environments. Do not put keys
 
 ## Documentation workflow
 
-Members 2-5 report code/status/documentation impacts to Member 1. Member 1 reconciles the canonical docs with actual merged code.
+After the implementation PR lands, reconcile canonical docs against actual source again and remove migration-pending warnings only when legacy MVC presentation/routing is actually gone.
 
-Contribution accounting rules:
-
-- use Member numbers only;
-- do not put GitHub usernames in project documentation;
-- distinguish assigned ownership from actual merged contribution;
-- do not double-credit work to an owner when another member delivered the merged implementation;
-- retain auditable PR numbers in `member-contributions.md`.
+Contribution accounting uses Member numbers and auditable PR numbers; see `member-contributions.md`.

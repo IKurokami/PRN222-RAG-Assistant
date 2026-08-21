@@ -1,19 +1,26 @@
 # Member 2 handoff - Flow 1 Document/Chapter Management + Flow 3 Reporting
 
-> Synchronized after PR #40 on 2026-08-21.
+> Updated on 2026-08-21 for the Razor Pages + SignalR target architecture.
 
-## Status
+## Ownership
 
-Member 2's established product responsibilities are complete:
+Member 2 retains established product/business behavior ownership for:
 
-- Flow 1 Document/Chapter request/business behavior;
+- Flow 1 Document/Chapter request semantics;
 - Flow 3 Report & Statistics behavior.
 
-Representative original merged contribution: PR #5 and PR #12.
+Representative original merged contribution remains PR #5 and PR #12. Presentation migration does not rewrite historical contribution credit.
 
-## Flow 1 behavior
+## Flow 1 target presentation
 
-Member 2 owns established request/business semantics for:
+Flow 1 HTTP UI/actions must migrate to Razor Pages under:
+
+```text
+Pages/Documents/
+Pages/Chapters/
+```
+
+Required behavior to preserve:
 
 - subject-scoped Document list/filter;
 - PDF/DOCX/PPTX upload validation;
@@ -25,34 +32,51 @@ Member 2 owns established request/business semantics for:
 
 Writes require `ManageDocuments` plus concrete Subject authorization through `ISubjectAccessService`.
 
-## Indexing/provider boundary
+## SignalR requirement
 
-Flow 1 request code does not parse/chunk/embed or know which provider is selected.
+Document Management adds realtime browser synchronization without moving writes out of Razor Pages.
 
 ```text
-Controller
+Razor Page handler
+ -> authorize + validate + persist
+ -> successful commit
+ -> publish SignalR notification
+```
+
+Recommended events:
+
+```text
+DocumentCreated
+DocumentUpdated
+DocumentDeleted
+DocumentIndexStatusChanged
+```
+
+Connections are subject-scoped and server-authorized. SignalR is fan-out only; it must not own CRUD business semantics.
+
+## Indexing/provider boundary
+
+```text
+Razor Page handler
  -> IDocumentIndexingQueue
  -> indexing pipeline
  -> ITextEmbeddingService
 ```
 
-Changing the embedding provider/model/dimension triggers corpus re-indexing but does not change Member 2's upload/CRUD/re-index request semantics.
+Changing the embedding provider/model/dimension triggers corpus re-indexing but does not change Member 2's upload/CRUD/re-index semantics.
 
 ## Flow 3 behavior
 
-Member 2 owns the read-only reporting behavior:
+Member 2 retains read-only reporting behavior ownership:
 
 - Chapter/Document totals and grouping;
 - indexing status metrics;
 - DocumentChunk totals;
-- recent indexing failures;
-- recently indexed documents;
-- chat session/message/citation aggregate presentation;
+- recent failures/recently indexed documents;
+- subject-scoped chat session/message/citation aggregate presentation;
 - zero-state behavior.
 
-## PR #40 reporting architecture update
-
-The previous direct EF access in `Pages/Reports/Index.cshtml.cs` has been replaced by:
+Current architecture remains:
 
 ```text
 Report PageModel
@@ -61,14 +85,8 @@ Report PageModel
  -> ApplicationDbContext
 ```
 
-The PageModel still owns authorization and view-state mapping. The query service owns read-only EF aggregation.
+## Migration note
 
-PR #40 also closes the old follow-up about global Chat totals: ChatSession, ChatMessage, and MessageCitation counts are now scoped through the selected subject.
+This documentation update does not count as the Flow 1 implementation migration. The follow-up code PR must preserve the behavior above while removing the legacy MVC presentation once Razor Page parity is verified.
 
-Member 2 retains reporting behavior ownership; the query-boundary refactor is cross-cutting architecture/integration.
-
-## Documentation
-
-Member 2 reports status/doc impacts to the documentation coordinator so canonical docs remain synchronized.
-
-See `member-contributions.md` for contribution accounting. Project documentation uses Member numbers only.
+See `razor-pages-signalr-architecture.md`, `flow-1-razor-pages-signalr.md`, and `member-contributions.md`.

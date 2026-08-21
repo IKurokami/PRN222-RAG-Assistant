@@ -2,107 +2,221 @@
 PRN222 RAG ASSISTANT - TÀI LIỆU KIẾN TRÚC & VẬN HÀNH HỆ THỐNG
 ====================================================================================================
 
-Baseline tài liệu: master sau PR #40 - 2026-08-21
+Cập nhật tài liệu: 2026-08-21 sau PR #42/#43
 Framework: .NET 10 / ASP.NET Core
 Database: PostgreSQL 17 + pgvector
-Kiến trúc Presentation: MVC + Razor Pages
+Presentation đích: Razor Pages only cho HTTP UI/actions
+Realtime Chat: Server-Sent Events (SSE)
+Realtime Document Management: SignalR notifications
 AI Provider hỗ trợ: Ollama, Gemini, OpenAI, OpenRouter
 
-Tài liệu này là bản tham chiếu tổng hợp bằng tiếng Việt. Các giá trị cấu hình runtime chính xác nhất vẫn phải
-được đối chiếu với `.env.example`, `docker-compose.yml` và `render.yaml`.
+LƯU Ý QUAN TRỌNG:
+Đây là kiến trúc ĐÍCH được chốt bằng PR tài liệu. PR tài liệu không tự động chuyển source code còn lại.
+Chỉ được coi migration hoàn thành khi PR code sau đó đã chuyển toàn bộ product/admin HTTP presentation sang
+Razor Pages và xóa legacy MVC presentation/routing sau khi kiểm tra parity.
 
 ====================================================================================================
-1. TỔNG QUAN HỆ THỐNG
+1. QUYẾT ĐỊNH PRESENTATION
 ====================================================================================================
 
-PRN222 RAG Assistant là ứng dụng hỗ trợ học tập theo mô hình Retrieval-Augmented Generation (RAG).
-PRN222 chỉ là môn học demo được seed sẵn; hệ thống thực tế hỗ trợ nhiều Subject và không được hard-code
-PRN222 làm phạm vi toàn cục.
+Toàn bộ HTTP UI và HTTP action của sản phẩm phải dùng Razor Pages.
 
-Ba workflow chính hiện đều đã hoàn thành:
+Page family đích:
 
-1. Flow 1 - Document Management & Indexing
-   - ASP.NET Core MVC Controllers + Views.
-   - Quản lý Chapter/Document theo Subject.
-   - Upload PDF/DOCX/PPTX.
-   - Index nền qua queue/worker.
+Pages/Account/
+Pages/Admin/Users/
+Pages/Admin/Subjects/
+Pages/Subjects/
+Pages/Chapters/
+Pages/Documents/
+Pages/Chat/
+Pages/Evaluation/
+Pages/Reports/
 
-2. Flow 2 - RAG Question & Answer & Conversation Management
-   - ASP.NET Core MVC Chat + Evaluation.
-   - Session/history/citation theo Subject và theo user.
-   - RAG retrieval bằng pgvector.
-   - UI Chat cập nhật tiến trình bằng Server-Sent Events (SSE).
+Không duy trì song song hai presentation cho cùng một workflow sau migration.
+Public URL cũ có thể được giữ bằng Razor Page route template nếu cần tương thích.
 
-3. Flow 3 - Report & Statistics
-   - Razor Pages.
-   - Read-only.
-   - Truy vấn qua IReportQueryService thay vì PageModel truy cập DbContext trực tiếp.
-   - Tất cả document/index/chat metrics đều scope theo Subject.
-
-Conversation History thuộc Flow 2, không phải workflow thứ tư.
+SignalR là ngoại lệ transport realtime, không phải framework HTTP presentation thay cho Razor Pages.
 
 ====================================================================================================
-2. PHÂN BỔ MVC / RAZOR PAGES
+2. TRẠNG THÁI MIGRATION HIỆN TẠI
 ====================================================================================================
 
-MVC Controllers + Views:
-- Flow 1: Documents, Chapters.
-- Flow 2: Chat, Evaluation.
-- Admin Users.
-- Admin Subjects / Subject catalogue.
+Đã phù hợp target:
+- Account/authentication: Razor Pages.
+- Chat: Razor Pages sau PR #42.
+- Chat page/session data boundary: IChatPageService sau PR #43.
+- Reports: Razor Pages + IReportQueryService.
 
-Razor Pages:
-- Authentication / các shell page liên quan.
-- Flow 3 Reports.
-
-Trang nội bộ `Pages/RagDemo` đã bị xóa ở PR #35. Không dùng `/rag-demo` cho demo hiện tại.
-
-====================================================================================================
-3. CÁC TẦNG KIẾN TRÚC CHÍNH
-====================================================================================================
-
-Domain:
-- Entities và Enums cốt lõi.
-- Subject là ranh giới nghiệp vụ quan trọng.
-- Domain giữ quy ước không phụ thuộc Presentation/provider cụ thể.
-
-Application:
-- Các contract/model an toàn cho Presentation, ví dụ:
-  * IDocumentIndexingQueue
-  * IDocumentIndexingService
-  * ITextEmbeddingService
-  * IChatCompletionService
-  * IRagQueryService
-  * IEvaluationService
-  * IReportQueryService
-  * RagAnswer / RagCitation
-  * SubjectReportSnapshot
-
-Infrastructure:
-- ApplicationDbContext / EF Core.
-- DataProtectionKeyDbContext.
-- PostgreSQL + pgvector.
-- Provider adapters cho Ollama/Gemini/OpenAI/OpenRouter.
-- Document parsers/chunker/indexing worker.
-- RAG retrieval/prompt/service implementation.
-- ReportQueryService.
-
-Presentation:
-- MVC Controllers/Views.
-- Razor Pages.
-- JavaScript/CSS UI.
-- Flow 2 Chat dùng fetch + SSE, không dùng SignalR.
+Còn cần PR code migration:
+- Documents/Chapters -> Razor Pages.
+- Evaluation -> Razor Pages.
+- Admin Users/Subjects -> Razor Pages.
+- Subject catalogue -> Razor Pages.
+- Xóa legacy MVC presentation/routing sau khi parity hoàn tất.
+- Thêm SignalR cho Document Management.
 
 ====================================================================================================
-4. MULTI-SUBJECT VÀ PHÂN QUYỀN
+3. FLOW 1 - DOCUMENT MANAGEMENT & INDEXING
 ====================================================================================================
 
-Persisted subject context chính:
+HTTP request đích:
+
+Document/Chapter Razor Page handler
+  -> validate input/resource
+  -> authorize Subject cụ thể
+  -> persist thay đổi
+  -> enqueue Document.Id khi cần indexing/re-index
+  -> publish realtime event sau khi write thành công
+  -> redirect/render giữ Subject context
+
+Background indexing:
+
+IDocumentIndexingQueue
+  -> InMemoryDocumentIndexingQueue
+  -> DocumentIndexingWorker
+  -> IDocumentIndexingService
+  -> PDF/DOCX/PPTX parser
+  -> TextChunker
+  -> ITextEmbeddingService
+  -> replace DocumentChunk rows
+  -> cập nhật IndexStatus
+  -> publish DocumentIndexStatusChanged
+
+Parser:
+- PDF: PdfPig.
+- DOCX/PPTX: DocumentFormat.OpenXml.
+
+PageModel không parse/chunk/embed/query pgvector/call provider trực tiếp.
+
+====================================================================================================
+4. SIGNALR CHO DOCUMENT MANAGEMENT
+====================================================================================================
+
+Hub route đề xuất:
+
+/hubs/documents
+
+Event đề xuất:
+
+DocumentCreated
+DocumentUpdated
+DocumentDeleted
+DocumentIndexStatusChanged
+
+Group đề xuất:
+
+subject:{SubjectId}
+
+Quy tắc bảo mật:
+- connection/subscription phải authenticate;
+- server phải kiểm tra quyền quản lý Subject trước khi join group;
+- không tin SubjectId từ client như bằng chứng authorization;
+- không broadcast event của Subject này sang Subject khác;
+- chỉ broadcast sau khi write/index-state persistence thành công.
+
+SignalR KHÔNG phải CRUD API.
+
+Write path vẫn là:
+
+browser form/fetch
+  -> Razor Page handler
+  -> antiforgery + validation + authorization
+  -> persistence thành công
+  -> realtime notifier / IHubContext
+  -> clients cùng Subject được phép
+
+Client cần automatic reconnect và phải chịu được event duplicate/out-of-order bằng stable ID hoặc re-fetch state.
+PostgreSQL luôn là source of truth; SignalR chỉ đồng bộ UI realtime.
+
+====================================================================================================
+5. FLOW 2 - RAG CHAT
+====================================================================================================
+
+Chat hiện đã là Razor Pages.
+
+Luồng backend:
+
+selected Subject
+  -> ChatSession.SubjectId
+  -> IChatPageService cho page/session data
+  -> IRagQueryService
+  -> ITextEmbeddingService
+  -> PgVectorDocumentChunkRetriever
+  -> filter SubjectId + vector dimensions
+  -> GroundedPromptBuilder + history
+  -> IChatCompletionService
+  -> parse citation markers
+  -> persist ChatMessages + MessageCitations
+  -> Razor Page Chat
+
+Invariant:
+- session thuộc authenticated user;
+- Subject request phải nhất quán với persisted session;
+- không fallback product path sang global corpus;
+- không tạo citation giả khi không có evidence;
+- chỉ citation thực sự được reference mới persist/render.
+
+====================================================================================================
+6. CHAT DÙNG SSE, KHÔNG DÙNG SIGNALR
+====================================================================================================
+
+Chat giữ transport SSE cho progress/typewriter output.
+
+Event điển hình:
+- tool_call
+- citations
+- delta
+- done
+- error
+
+Không chuyển Chat sang SignalR chỉ vì Document Management sử dụng SignalR.
+
+Phân tách bắt buộc:
+
+Chat realtime/progress        = SSE
+Document Management realtime = SignalR
+HTTP UI/actions               = Razor Pages
+
+====================================================================================================
+7. FLOW 2 - EVALUATION
+====================================================================================================
+
+Evaluation backend vẫn dùng IEvaluationService và dataset:
+
+Infrastructure/Data/evaluation_dataset_50.json
+
+Presentation đích:
+
+Pages/Evaluation/Index.cshtml
+Pages/Evaluation/Index.cshtml.cs
+
+Page Handlers phải giữ đủ behavior chạy một câu/full suite và resolve active Subject theo dataset SubjectCode.
+
+====================================================================================================
+8. FLOW 3 - REPORT & STATISTICS
+====================================================================================================
+
+Boundary hiện tại đã đúng target:
+
+Pages/Reports/Index.cshtml.cs
+  -> IReportQueryService
+  -> ReportQueryService
+  -> ApplicationDbContext
+
+PageModel giữ authorization/presentation state, không query EF trực tiếp.
+Document/index/chat metrics đều scope theo Subject.
+
+====================================================================================================
+9. MULTI-SUBJECT VÀ RBAC
+====================================================================================================
+
+Persisted subject context:
 - Chapter.SubjectId
 - Document.SubjectId
 - ChatSession.SubjectId
 
-Vai trò:
+Roles:
 - Admin
 - SubjectLeader
 - Student
@@ -112,165 +226,20 @@ Policies:
 - ManageSubjects  -> Admin
 - ManageDocuments -> Admin hoặc SubjectLeader
 
-Flow 1 và Flow 3 ngoài policy còn kiểm tra Subject cụ thể bằng ISubjectAccessService.
+Admin quản lý mọi Subject tồn tại.
+SubjectLeader chỉ quản lý Subject được assign.
+Student không quản lý academic content.
 
-Admin:
-- quản lý user/role;
-- quản lý Subject;
-- quản lý bất kỳ Subject nào như operational override.
+ISubjectAccessService (hoặc application boundary tương đương) phải được giữ cho authorization Subject cụ thể.
+UI ẩn button/link không bao giờ thay thế server authorization.
 
-SubjectLeader:
-- chỉ quản lý các Subject được assign.
-- assignment lưu bằng ASP.NET Core Identity claim `prn222:managed-subject`.
-
-Student:
-- đăng ký public được;
-- xem Subject active;
-- dùng Chat/Evaluation khi đã authenticate;
-- không quản lý academic content.
-
-Flow 2 còn kiểm tra session thuộc đúng authenticated user và Subject request không xung đột với
-ChatSession.SubjectId.
+SignalR Document group phải dùng cùng subject authorization boundary.
 
 ====================================================================================================
-5. FLOW 1 - DOCUMENT MANAGEMENT & INDEXING
+10. AI PROVIDER VÀ EMBEDDING
 ====================================================================================================
 
-Luồng tổng quát:
-
-MVC upload/re-index
-  -> persist Document
-  -> IDocumentIndexingQueue
-  -> InMemoryDocumentIndexingQueue
-  -> DocumentIndexingWorker
-  -> IDocumentIndexingService
-  -> parser tương ứng
-  -> TextChunker
-  -> ITextEmbeddingService
-  -> replace DocumentChunk rows
-  -> cập nhật IndexStatus
-
-Parser:
-- PDF: PdfPig.
-- DOCX/PPTX: DocumentFormat.OpenXml.
-
-Queue hiện là process-local, không phải Redis/RabbitMQ.
-Startup recovery re-enqueue các Document còn trạng thái Uploaded/Processing.
-
-Issue #27 đã đóng ở PR #30. Các cải tiến đã merge gồm bounded overlap, Unicode/grapheme safety,
-chunking config, PDF two-column ordering và thêm parser regression coverage.
-
-Technical debt còn lại chủ yếu là test/fixture layout phức tạp cho DOCX/PPTX/PDF.
-
-====================================================================================================
-6. FLOW 2 - RAG CHAT
-====================================================================================================
-
-Luồng backend:
-
-selected Subject
-  -> ChatSession.SubjectId
-  -> IRagQueryService
-  -> ITextEmbeddingService
-  -> PgVectorDocumentChunkRetriever
-  -> filter Indexed Document theo SubjectId
-  -> filter vector_dims phù hợp query embedding
-  -> cosine similarity
-  -> GroundedPromptBuilder + conversation history
-  -> IChatCompletionService
-  -> parse citation markers
-  -> persist ChatMessages + MessageCitations
-  -> trả RagAnswer cho MVC
-
-Các invariant quan trọng:
-- session phải thuộc authenticated user;
-- Subject request phải nhất quán với persisted session;
-- không cố tình fallback sang global corpus trong product path;
-- không tạo citation giả khi không có evidence;
-- chỉ citation thật sự được reference trong answer mới được persist/render.
-
-PR #35 tăng cường:
-- grounded prompt chống hallucination ngoài tài liệu;
-- citation marker inline gần factual claim;
-- contextual follow-up retrieval khi câu hỏi ngắn tự đứng một mình không tìm được evidence;
-- citation excerpt dài hơn cho reader UI.
-
-====================================================================================================
-7. SSE TRONG CHAT - KHÔNG PHẢI SIGNALR
-====================================================================================================
-
-Endpoint chính:
-
-POST /Chat/AskStream
-Response Content-Type: text/event-stream
-
-Browser dùng fetch() và đọc `response.body.getReader()`.
-
-Các event hiện có:
-- tool_call
-- citations
-- delta
-- done
-- error
-
-Đây là Server-Sent Events (SSE). Project hiện không có SignalR Hub cho Chat.
-
-Một điểm cần mô tả chính xác:
-- Controller gọi `IRagQueryService.AskAsync(...)` để lấy kết quả RAG.
-- Sau đó controller phát các `delta` theo từ để tạo typewriter experience.
-- Vì vậy đây là application-level SSE/typewriter output, không nên gọi là provider-native token streaming.
-
-====================================================================================================
-8. FLOW 2 - EVALUATION
-====================================================================================================
-
-Evaluation dùng MVC `EvaluationController` + `IEvaluationService`.
-
-Dataset 50 câu được đóng gói tại:
-
-Infrastructure/Data/evaluation_dataset_50.json
-
-Chức năng:
-- chạy một câu;
-- chạy full suite;
-- resolve active Subject phù hợp với SubjectCode của dataset;
-- sử dụng cùng RAG pipeline/provider-neutral contracts.
-
-====================================================================================================
-9. FLOW 3 - REPORT & STATISTICS
-====================================================================================================
-
-PR #40 thay đổi boundary quan trọng:
-
-Pages/Reports/Index.cshtml.cs
-  -> IReportQueryService
-  -> ReportQueryService
-  -> ApplicationDbContext
-
-PageModel:
-- giữ authorization/presentation mapping;
-- không import EF Core/ApplicationDbContext để tự query report.
-
-SubjectReportSnapshot bao gồm:
-- Subject identity;
-- tổng Chapter/Document;
-- unassigned Documents;
-- Documents by Chapter;
-- Uploaded/Processing/Indexed/Failed;
-- tổng DocumentChunks;
-- recent failures;
-- recently indexed Documents và chunk count;
-- tổng ChatSessions của Subject;
-- tổng ChatMessages qua các session đó;
-- tổng MessageCitations qua các message đó.
-
-Warning cũ rằng Chat metrics của Flow 3 là global đã hết hiệu lực sau PR #40.
-
-====================================================================================================
-10. AI PROVIDER VÀ CẤU HÌNH
-====================================================================================================
-
-Contract provider-neutral:
+Provider-neutral contracts:
 - ITextEmbeddingService
 - IChatCompletionService
 
@@ -280,226 +249,82 @@ Provider hỗ trợ:
 - OpenAI
 - OpenRouter
 
-Backward-compatible base:
-- RAG_PROVIDER
+Đổi embedding provider/model/dimension => phải re-index toàn corpus.
+Đổi chỉ Chat provider/model => không cần re-index.
 
-Override độc lập:
-- RAG_CHAT_PROVIDER
-- RAG_EMBEDDING_PROVIDER
-- RAG_EMBEDDING_DIMENSIONS
+PR #37:
+- Gemini batch embedding gửi output dimensionality đúng config;
+- pgvector retrieval lọc vector_dims trước cosine distance.
 
-Local Ollama mặc định trong repo:
-- Chat: qwen3:4b
-- Embedding: qwen3-embedding:0.6b
-
-OpenRouter Chat nếu được chọn có ordered fallback chain cấu hình qua OPENROUTER_CHAT_MODELS.
+Different-dimension rows có thể tạm cùng tồn tại trong quá trình migration, nhưng khác embedding model vẫn không
+được xem là cùng semantic vector space dù dimension giống nhau.
 
 ====================================================================================================
-11. EMBEDDING VECTOR VÀ PR #37
+11. DATA PROTECTION
 ====================================================================================================
 
-Nguyên tắc quan trọng:
-- đổi embedding provider/model/dimension => phải re-index toàn corpus;
-- đổi chỉ Chat provider/model => không cần re-index.
-
-PR #37 thêm compatibility cho quá trình đổi dimension:
-- Gemini batch embeddings gửi outputDimensionality đúng cấu hình;
-- pgvector retrieval lọc `vector_dims(Embedding)` bằng dimension của query trước khi cosine distance.
-
-Hệ quả:
-- khi migrate dimension, row cũ và row mới khác dimension có thể tạm thời cùng tồn tại;
-- row dimension cũ bị loại khỏi retrieval thay vì gây lỗi `different vector dimensions`;
-- từng Document trở lại searchable khi re-index xong với cấu hình mới.
-
-Nhưng:
-- hai embedding model khác nhau vẫn có thể cùng 1024 dimensions mà vector space không tương thích;
-- vector_dims không phát hiện được trường hợp này;
-- do đó không được coi same-dimension different-model embeddings là có thể trộn tùy ý.
+ASP.NET Core Data Protection keys được persist trong PostgreSQL qua DataProtectionKeyDbContext.
+Điều này giữ key ring qua normal web-container restart nếu database vẫn tồn tại.
 
 ====================================================================================================
-12. ASP.NET CORE DATA PROTECTION - PR #38
+12. RENDER DEPLOYMENT + SIGNALR
 ====================================================================================================
 
-Trước PR #38, ephemeral web filesystem trên Render có thể làm mất Data Protection key ring khi container
-restart/redeploy, dẫn tới cookie/antiforgery token cũ không decrypt được.
+Render hiện dùng Docker web service + PostgreSQL.
 
-Baseline hiện tại:
+AI split:
+- Chat: Gemini / gemini-3.6-flash
+- Embedding: OpenRouter / nvidia/llama-nemotron-embed-vl-1b-v2:free
+- Dimension: 1024
 
-AddDataProtection()
-  -> PersistKeysToDbContext<DataProtectionKeyDbContext>()
-  -> SetApplicationName("PRN222-RAG-Assistant")
+SignalR tương thích với Render web service vì Render hỗ trợ WebSocket connections.
+Client vẫn phải reconnect vì deploy/platform maintenance có thể thay instance và đóng connection.
 
-Key được lưu ở bảng PostgreSQL `DataProtectionKeys`.
-CI có kiểm tra bảng này trên PostgreSQL thật.
+Hiện demo single-instance có thể dùng in-process SignalR fan-out.
+Nếu sau này horizontal scale nhiều instance thì phải đánh giá scale-out/shared realtime state riêng.
 
-Vì vậy web container restart bình thường không còn đồng nghĩa với mất key ring nếu database vẫn còn.
-
-====================================================================================================
-13. RENDER DEPLOYMENT
-====================================================================================================
-
-`render.yaml` định nghĩa:
-- Docker web service free, Singapore;
-- PostgreSQL 17 free, Singapore;
-- branch master;
-- autoDeployTrigger: checksPass;
-- /healthz;
-- startup migrations.
-
-Current Render AI split sau PR #39:
-
-Rag__Provider=OpenRouter
-Rag__ChatProvider=Gemini
-Rag__EmbeddingProvider=OpenRouter
-Rag__EmbeddingDimensions=1024
-
-Chat:
-- Gemini
-- gemini-3.6-flash
-
-Embedding:
-- OpenRouter
-- nvidia/llama-nemotron-embed-vl-1b-v2:free
-
-Required manual AI secrets:
-- Rag__Gemini__ApiKey
-- Rag__OpenRouter__ApiKey
-
-Cả hai đều phải là deployment secrets, không commit.
+Source file dưới /app/storage/uploads trên Render free vẫn ephemeral.
 
 ====================================================================================================
-14. STORAGE TRÊN RENDER
+13. CI/CD VÀ ACCEPTANCE CRITERIA CHO PR CODE MIGRATION
 ====================================================================================================
 
-PostgreSQL giữ metadata, chunks, chat, Identity và Data Protection keys.
+PR code triển khai kiến trúc này phải giữ:
+- build/tests xanh;
+- EF model/migration checks;
+- PostgreSQL/pgvector checks;
+- Docker Compose validation;
+- Chat SSE không regression;
+- subject authorization không regression.
 
-Source file upload hiện ở:
+Cần bổ sung test cho:
+- Razor Page handler authorization/route parity;
+- Document SignalR subscription isolation theo Subject;
+- DocumentCreated/Updated/Deleted;
+- DocumentIndexStatusChanged;
+- reconnect/re-subscribe behavior ở mức phù hợp.
 
-/app/storage/uploads
-
-Trên Render free web service, local filesystem này là ephemeral. Redeploy/restart có thể làm source file biến mất
-mặc dù metadata/chunks trong PostgreSQL còn.
-
-Muốn dùng lâu dài:
-- persistent disk trên plan phù hợp; hoặc
-- object storage.
-
-Render PostgreSQL free cũng chỉ phù hợp demo/dev, không nên coi là production persistence/SLA.
-
-====================================================================================================
-15. CI/CD
-====================================================================================================
-
-GitHub Actions hiện kiểm tra:
-- dotnet tool restore;
-- LibMan restore;
-- NuGet restore;
-- Release build;
-- tests;
-- ApplicationDbContext pending-model check;
-- Docker Compose config;
-- PostgreSQL startup;
-- EF migrations;
-- pgvector extension/schema/seed verification;
-- DataProtectionKeys table;
-- mixed-dimension pgvector retrieval smoke test.
-
-Khi master checks pass, Render `checksPass` trigger auto deploy.
+Migration chỉ hoàn thành khi:
+- mọi product HTTP UI/action là Razor Pages;
+- không còn legacy MVC presentation/routing cho product;
+- navigation/forms dùng Razor Page routing;
+- Chat vẫn SSE;
+- Documents realtime bằng SignalR;
+- canonical docs được sync lại theo source đã merge.
 
 ====================================================================================================
-16. DOCKER COMPOSE
+14. TÀI LIỆU CANONICAL
 ====================================================================================================
 
-Local Ollama:
+README.md
+docs/README.md
+docs/razor-pages-signalr-architecture.md
+docs/flow-1-razor-pages-signalr.md
+docs/project-status.md
+docs/infrastructure.md
+docs/role-access-control.md
+docs/multi-subject-management.md
+docs/team-workflow.md
+docs/member-contributions.md
 
-  docker compose --profile local-ai up -d --build
-
-Cloud/hybrid:
-
-  docker compose up -d --build
-
-Stop bình thường:
-
-  docker compose down
-
-Không dùng `docker compose down -v` trừ khi thực sự muốn xóa local PostgreSQL/Ollama volumes.
-
-====================================================================================================
-17. CÔNG NGHỆ/THƯ VIỆN CHÍNH
-====================================================================================================
-
-- .NET 10 / ASP.NET Core
-- ASP.NET Core MVC
-- Razor Pages
-- ASP.NET Core Identity
-- ASP.NET Core Data Protection EF persistence
-- Entity Framework Core 10
-- Npgsql
-- PostgreSQL 17
-- pgvector
-- PdfPig
-- DocumentFormat.OpenXml
-- Bootstrap 5.3.3
-- Bootstrap Icons 1.11.3
-- jQuery / validation libraries theo libman.json
-
-====================================================================================================
-18. PHÂN CÔNG VÀ CONTRIBUTION HIỆN TẠI
-====================================================================================================
-
-Member 1:
-- Core/Data/RBAC/multi-subject/provider/deployment/docs coordination.
-
-Member 2:
-- Flow 1 request/business behavior.
-- Flow 3 report behavior.
-
-Member 3:
-- indexing/ingestion maintenance.
-- cross-app UI/UX baseline.
-
-Member 4:
-- Flow 2 RAG backend maintenance.
-- issue #27 remediation contribution ở PR #30.
-
-Member 5:
-- Flow 2 MVC Chat/history/citations/evaluation đã hoàn thành qua PR #34/#35.
-
-Chi tiết ownership vs actual merged contribution xem `docs/member-contributions.md`.
-
-====================================================================================================
-19. DOCUMENTATION CANONICAL SET
-====================================================================================================
-
-Bắt đầu từ:
-- README.md
-- docs/README.md
-- docs/project-status.md
-- docs/infrastructure.md
-- docs/ai-provider-backup.md
-- docs/render-deployment.md
-- docs/rag-demo-guide.md
-- docs/role-access-control.md
-- docs/multi-subject-management.md
-- docs/member-contributions.md
-- docs/team-workflow.md
-
-Các file handoff/status phải được hiểu theo baseline mới nhất hoặc phải ghi rõ nếu chỉ là historical snapshot.
-
-====================================================================================================
-20. BASELINE PR ĐÃ ĐỒNG BỘ TRONG TÀI LIỆU NÀY
-====================================================================================================
-
-- PR #30: subject-scoped RAG backend + issue #27 remediation.
-- PR #32: Render CD Blueprint.
-- PR #33: Render pgvector runtime/seeding fixes.
-- PR #34: MVC Chat/history/citations + 50-question Evaluation.
-- PR #35: Chat redesign + SSE UX + grounding/follow-up + remove RagDemo.
-- PR #37: embedding dimensions + pgvector re-index compatibility.
-- PR #38: PostgreSQL Data Protection keys + OpenRouter Chat fallback update.
-- PR #39: Render Chat -> Gemini, embeddings remain OpenRouter.
-- PR #40: IReportQueryService + subject-scoped report Chat metrics.
-
-====================================================================================================
-END OF DOCUMENT
-====================================================================================================
+Cấu hình runtime chính xác vẫn phải đối chiếu `.env.example`, `docker-compose.yml` và `render.yaml`.
