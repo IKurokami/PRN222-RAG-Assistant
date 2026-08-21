@@ -1,47 +1,70 @@
 # Flow 3 handoff - Report & Statistics
 
-> Synchronized after PR #30 merged on 2026-08-18.
+> Synchronized after PR #40 on 2026-08-21.
 
 ## Status
 
-Flow 3 is complete and remains a read-only Razor Pages workflow under `Pages/Reports/`.
+Flow 3 is complete, read-only, subject-scoped, and remains a Razor Pages workflow under `Pages/Reports/`.
 
-Member 2 owns report behavior. Member 1 owns cross-cutting subject/RBAC/provider coordination. Member 3 owns the current visual baseline.
+## Architecture after PR #40
 
-## Subject-scoped access
+The PageModel no longer accesses `ApplicationDbContext`/EF Core directly.
 
-Reports require `ManageDocuments` plus `ISubjectAccessService.CanManageSubjectAsync` for the concrete Subject.
+```text
+Pages/Reports/Index.cshtml.cs
+ -> IReportQueryService
+ -> ReportQueryService
+ -> ApplicationDbContext
+```
 
-## Subject-scoped document/index metrics
+Application provides presentation-safe report read models through `SubjectReportSnapshot`.
 
-- total Chapters/Documents;
+`Program.cs` registers the report boundary with `AddReporting()`.
+
+## Authorization
+
+Reports require:
+
+1. coarse `ManageDocuments` policy; and
+2. `ISubjectAccessService.CanManageSubjectAsync` for the concrete subject.
+
+The query service is not the authorization boundary; the Razor Page validates access before requesting the report.
+
+## Subject-scoped metrics
+
+The snapshot contains:
+
+- total Chapters;
+- total Documents;
 - unassigned Documents;
 - Documents by Chapter;
 - Uploaded/Processing/Indexed/Failed counts;
 - total DocumentChunks;
 - recent indexing failures;
-- recently indexed Documents and chunk counts.
+- recently indexed Documents and chunk counts;
+- total ChatSessions for the subject;
+- total ChatMessages belonging to those sessions;
+- total MessageCitations belonging to those messages.
 
-## AI provider boundary
+PR #40 closes the previous follow-up item that chat totals were global/transitional. Chat aggregates are now explicitly constrained through `ChatSession.SubjectId`.
 
-Reports remain provider-independent. They must not call embedding/chat providers, run similarity retrieval or mutate workflow state.
+## Provider boundary
 
-## Chat metrics after PR #30
+Reports remain provider-independent. They do not perform embedding, retrieval, chat completion, or workflow mutation.
 
-`ChatSession.SubjectId` now exists and the Member 4 backend is subject-aware.
+## Tests
 
-Existing Flow 3 chat session/message/citation aggregates were originally implemented before that field existed, so they should be audited when Member 5 completes the final Flow 2 MVC product layer. The target state is explicit subject-scoped chat metrics rather than relying on legacy global totals.
+PR #40 added regression coverage for:
 
-This audit is follow-up integration work; it does not change the completed read-only Flow 3 document/indexing metrics.
+- PageModel depending on `IReportQueryService` rather than `ApplicationDbContext`;
+- unknown Subject returning no snapshot;
+- document/chat statistics not leaking across subjects;
+- compatibility with the EF InMemory test setup used by the report tests.
 
 ## Ownership / contribution
 
-- Member 2: Flow 3 behavior and report implementation.
-- Member 1: subject/RBAC integration and documentation coordination.
-- Member 3: visual baseline.
-- Member 4: subject-scoped Flow 2 backend that now provides the chat subject context consumed by future report updates.
-- Member 5: pending final Flow 2 MVC/evaluation integration.
+- Member 2 retains Flow 3 reporting behavior ownership.
+- Member 1 owns cross-cutting subject/RBAC/shared-contract/documentation coordination.
+- PR #40 is a cross-cutting reporting architecture/integration update and does not transfer Flow 3 behavior ownership.
 
-Canonical contribution accounting: `docs/member-contributions.md`.
-
-Project documentation uses Member numbers only and must not add GitHub usernames.
+Canonical contribution accounting: `member-contributions.md`.

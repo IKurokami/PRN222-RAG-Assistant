@@ -1,165 +1,162 @@
 # Render deployment and CD
 
-> Ownership: Member 1 deployment/infrastructure coordination.
+> Synchronized with `render.yaml` and runtime code after PR #39/#40 on 2026-08-21.
 
 ## Deployment model
 
-The repository uses a Render Blueprint (`render.yaml`) for a reproducible deployment stack:
-
 ```text
 GitHub master
-  -> GitHub Actions CI
-  -> checks pass
-  -> Render auto deploy
-  -> Docker web service
-  -> Render Postgres
+ -> GitHub Actions CI
+ -> checks pass
+ -> Render checksPass auto deploy
+ -> Docker web service
+ -> Render PostgreSQL 17 + pgvector
 ```
 
-Render is configured with `autoDeployTrigger: checksPass`, so a commit on `master` is deployed only after the repository checks pass.
+The Blueprint is `render.yaml`.
 
 ## Resources
 
 The Blueprint provisions:
 
-- `prn222-rag-assistant`: Docker web service;
-- `prn222-rag-db`: managed Render Postgres 17 in the same Singapore region.
+- `prn222-rag-assistant`: free Docker web service in Singapore;
+- `prn222-rag-db`: free managed PostgreSQL 17 in Singapore.
 
-The application receives the database connection through `fromDatabase.connectionString`. Startup normalizes Render's `postgresql://...` URL into an Npgsql connection string before registering EF Core.
+The database connection is supplied through `fromDatabase.connectionString`. Startup normalizes Render `postgresql://...` URLs to the Npgsql form used by the app.
 
-When `Database__ApplyMigrationsOnStartup=true`, startup first runs:
+When startup migrations are enabled, the application enables pgvector before EF migrations and reloads Npgsql type metadata so a fresh database can use the newly created `vector` type reliably.
 
-```sql
-CREATE EXTENSION IF NOT EXISTS vector;
-```
+## Current AI runtime: Gemini chat + OpenRouter embeddings
 
-and then applies EF Core migrations. Because Npgsql caches PostgreSQL type metadata, startup reloads pgvector type metadata immediately after enabling the extension. This is required on a brand-new Render database where the Npgsql datasource can exist before the `vector` type is created.
+PR #39 changed Render from OpenRouter chat to Gemini chat while preserving the existing OpenRouter embedding corpus.
 
-## OpenRouter-only AI runtime
-
-Render uses OpenRouter for both chat and embeddings:
+Current Blueprint values:
 
 ```text
 Rag__Provider=OpenRouter
-Rag__ChatProvider=OpenRouter
+Rag__ChatProvider=Gemini
 Rag__EmbeddingProvider=OpenRouter
 Rag__EmbeddingDimensions=1024
+
+Rag__Gemini__ChatModel=gemini-3.6-flash
+Rag__OpenRouter__EmbeddingModel=nvidia/llama-nemotron-embed-vl-1b-v2:free
 ```
 
-Configured models:
+`Rag__Provider=OpenRouter` remains the backward-compatible base value, but the purpose-specific overrides determine the actual Render chat and embedding providers.
+
+## Required manual AI secrets
+
+The current Render deployment needs **two** AI secrets:
 
 ```text
-Chat:
-  nvidia/nemotron-3.5-lightning:free
-
-Embedding:
-  nvidia/llama-nemotron-embed-vl-1b-v2:free
-```
-
-The embedding model intentionally remains the Llama Nemotron Embed VL 1B V2 free variant because the existing pgvector corpus is 1024-dimensional and this model supports 1024-dimensional output. Changing to an embedding model that only emits a different dimension requires a schema/corpus migration and a complete re-index.
-
-## Environment variable entered manually
-
-Only one AI secret is required for the default Render deployment:
-
-```text
+Rag__Gemini__ApiKey
 Rag__OpenRouter__ApiKey
 ```
 
-`render.yaml` declares it with `sync: false`, so the real key is entered in the Render Dashboard during initial Blueprint setup and is never committed to GitHub.
+Both are declared with `sync: false` and must be entered in the Render Dashboard. Never commit their real values.
 
-### Optional seed users
+The Gemini key is used by Chat; the OpenRouter key is used by embeddings.
 
-The Blueprint leaves seeded users disabled by default:
+## Embedding continuity
+
+Render keeps the 1024-dimensional OpenRouter embedding model so the existing corpus does not need a provider/model migration merely because Chat changed to Gemini.
+
+Changing only Chat provider/model does not require document re-indexing.
+
+Changing the embedding provider/model/dimension still requires a full corpus re-index. PR #37 makes different-dimension transitions safe from pgvector dimension errors, but does not make different embedding semantic spaces interchangeable.
+
+## Data Protection durability
+
+PR #38 fixed the former antiforgery/auth key-ring problem on ephemeral web containers.
+
+Runtime configuration now uses:
+
+```text
+DataProtectionKeyDbContext
+AddDataProtection().PersistKeysToDbContext<DataProtectionKeyDbContext>()
+SetApplicationName("PRN222-RAG-Assistant")
+```
+
+The key ring is stored in PostgreSQL (`DataProtectionKeys`) rather than only on the web-service filesystem. A normal web restart/redeploy therefore does not lose the key ring as long as the database remains available/persistent.
+
+This does not turn the free database into production-grade infrastructure; it only moves the Data Protection state to the durable system of record used by the demo.
+
+## Optional seed users
+
+The Blueprint keeps:
 
 ```text
 Auth__SeedUsers__Enabled=false
 ```
 
-Seed accounts are independent. When seeding is enabled, each account is created only when its Email, Password, and DisplayName are all configured. An entirely missing account section is skipped; a partially configured account fails startup so a secret typo does not silently create an unusable deployment.
+If seeding is enabled, each optional account is created only when its required values are configured. An entirely missing account section is skipped; a partially configured account fails fast.
 
-For a Render demo environment, seeding only the Admin account is enough:
+For a demo, an Admin seed alone is sufficient. Student users can self-register, and Admin can manage roles through the product UI.
 
-```text
-Auth__SeedUsers__Enabled=true
-Auth__SeedUsers__Admin__Email=<enter manually>
-Auth__SeedUsers__Admin__Password=<enter manually>
-Auth__SeedUsers__Admin__DisplayName=Administrator
-```
-
-`SubjectLeader` and `Student` seed settings may remain completely unset. Student users can also use public registration, while Admin can manage/assign the remaining application roles through the product UI.
-
-Do not commit seeded-user credentials.
+Never commit seed passwords.
 
 ## First deployment
 
-1. Merge the Render CD PR into `master`.
-2. Open Render Dashboard -> New -> Blueprint.
-3. Connect this repository and let Render read `render.yaml`.
-4. Enter `Rag__OpenRouter__ApiKey` when prompted.
-5. Review the `prn222-rag-assistant` web service and `prn222-rag-db` database.
-6. Apply the Blueprint.
-7. Confirm `/healthz` returns HTTP 200.
-8. Check logs for successful pgvector enablement, type reload, and EF migration startup.
+1. Create/apply a Render Blueprint from this repository.
+2. Enter `Rag__Gemini__ApiKey`.
+3. Enter `Rag__OpenRouter__ApiKey`.
+4. Review the web service and PostgreSQL resources.
+5. Apply the Blueprint.
+6. Confirm `/healthz` returns HTTP 200.
+7. Review startup logs for pgvector enablement/type reload and EF migrations.
+8. Sign in and verify Flow 2 Chat can generate answers and index/retrieval uses the expected embedding configuration.
 
-After the first Blueprint setup, normal commits to `master` do not require manually triggering a deployment. Render follows the configured `checksPass` CD trigger.
-
-## Storage warning
-
-The application currently stores uploaded source files under:
-
-```text
-/app/storage/uploads
-```
-
-On a free Render web service, this local filesystem is ephemeral and no persistent disk can be attached. A redeploy/restart can therefore remove uploaded source files even though document metadata/chunks remain in Postgres.
-
-For a longer-lived deployment, use one of these follow-ups:
-
-- upgrade the web service and attach a persistent Render disk at `/app/storage/uploads`; or
-- move source documents to object storage and keep only object keys/URLs in the application.
-
-Do not treat the free filesystem as durable document storage.
-
-## Free-tier database warning
-
-The Blueprint uses the Render Postgres Free instance for development/demo convenience. Free Render Postgres should not be treated as production persistence. Upgrade the database before relying on it for long-lived data.
-
-## Port and proxy behavior
-
-Render injects `PORT`. The Docker entrypoint binds Kestrel to:
-
-```text
-0.0.0.0:${PORT}
-```
-
-and falls back to `8080` for local Docker Compose.
-
-`ASPNETCORE_FORWARDEDHEADERS_ENABLED=true` is set in Render so ASP.NET Core can honor the platform proxy headers before HTTPS redirection.
-
-The final Docker image also installs the Linux GSSAPI/Kerberos runtime library expected by Npgsql, avoiding the non-fatal `libgssapi_krb5.so.2` loader error seen on the slim ASP.NET runtime image.
+After Blueprint setup, normal commits to `master` deploy automatically after repository checks pass.
 
 ## Health check
 
-Render checks:
+Render calls:
 
 ```text
 GET /healthz
 ```
 
-The endpoint is intentionally lightweight and anonymous. It verifies the web process is serving HTTP; database migration failures still fail application startup before the service becomes healthy.
+This endpoint confirms the process is serving HTTP. Fatal startup/migration failures prevent the app from reaching a healthy state.
 
-## Runtime warnings
+## Port and proxy behavior
 
-ASP.NET Core Data Protection keys are currently stored on the web-service filesystem. On the free ephemeral filesystem, a redeploy can invalidate existing login cookies. This is acceptable for the current demo deployment but should be moved to durable shared storage or another supported persistent key store before treating the service as production-grade.
+Render injects `PORT`; the container binds Kestrel to the injected port and preserves local port 8080 behavior for Compose.
+
+`ASPNETCORE_FORWARDEDHEADERS_ENABLED=true` is configured for platform proxy headers.
+
+The final runtime image includes the Linux GSSAPI/Kerberos library expected by Npgsql on the slim ASP.NET image.
+
+## Source-file storage warning
+
+Uploaded source documents are stored under:
+
+```text
+/app/storage/uploads
+```
+
+On a free Render web service this filesystem is ephemeral. A restart/redeploy can therefore remove uploaded source files even while database metadata/chunks remain.
+
+For durable hosting:
+
+- use a persistent disk on an eligible Render plan; or
+- move source documents to object storage and persist object keys/URLs.
+
+Do not treat the free web-service filesystem as durable storage.
+
+## Database warning
+
+The Blueprint's free PostgreSQL instance is suitable for demo/development convenience, not production durability/SLA expectations. Upgrade before relying on it for long-lived production data.
+
+## CI relation
+
+GitHub Actions validates the application and PostgreSQL schema before the `checksPass` deployment trigger. CI explicitly checks the `DataProtectionKeys` table and a pgvector mixed-dimension retrieval scenario introduced after PR #37/#38.
 
 ## Secrets policy
 
 Never commit:
 
-- OpenRouter/Gemini/OpenAI API keys;
-- Render database credentials;
-- seeded-user passwords;
-- `.env` production files;
-- deploy tokens or deploy-hook secrets.
-
-The Blueprint's database wiring and `sync: false` variables avoid requiring these values in GitHub source control.
+- Gemini/OpenRouter/OpenAI API keys;
+- database credentials;
+- seed-user passwords;
+- production `.env` files;
+- deploy tokens/hooks.

@@ -1,20 +1,118 @@
 # Infrastructure baseline
 
-> Synchronized after PR #30 merged and issue #27 closed on 2026-08-18.
+> Synchronized with `master` after PR #40 on 2026-08-21.
 
 ## Runtime stack
 
-- ASP.NET Core .NET 10 host with MVC + Razor Pages.
+- ASP.NET Core .NET 10 host.
+- MVC Controllers + Views and Razor Pages in one application.
 - ASP.NET Core Identity.
-- EF Core + PostgreSQL.
-- pgvector for embeddings/retrieval.
-- provider-neutral AI contracts with Ollama/Gemini/OpenAI/OpenRouter adapters.
+- EF Core + PostgreSQL 17.
+- pgvector for semantic retrieval.
+- provider-neutral AI services with Ollama/Gemini/OpenAI/OpenRouter adapters.
+- process-local document indexing queue + hosted worker.
 - runtime source storage under `storage/uploads/`.
-- Bootstrap + Bootstrap Icons plus the shared design system.
+- Bootstrap, Bootstrap Icons and project design styles.
 
-PRN222 is the seeded demo subject; the runtime application is multi-subject.
+PRN222 is seeded demo data; runtime workflows are multi-subject.
 
-## AI provider selection
+## Presentation allocation
+
+```text
+MVC:
+  Flow 1 Documents / Chapters
+  Flow 2 Chat / Evaluation
+  Admin users / subjects
+
+Razor Pages:
+  authentication / shell
+  Flow 3 Reports
+```
+
+`Pages/RagDemo` was removed in PR #35.
+
+## Application boundaries
+
+Important provider/presentation-safe contracts:
+
+```text
+IDocumentIndexingQueue
+IDocumentIndexingService
+ITextEmbeddingService
+IChatCompletionService
+IRagQueryService
+IEvaluationService
+IReportQueryService
+```
+
+Flow 3 architecture after PR #40:
+
+```text
+Report PageModel
+ -> IReportQueryService
+ -> ReportQueryService
+ -> ApplicationDbContext
+```
+
+The Razor Page keeps authorization/presentation responsibility while Infrastructure owns EF reporting queries.
+
+## Flow 1 indexing
+
+```text
+subject-aware MVC request
+ -> persist Document
+ -> IDocumentIndexingQueue
+ -> InMemoryDocumentIndexingQueue
+ -> DocumentIndexingWorker
+ -> IDocumentIndexingService
+ -> PDF/DOCX/PPTX parser
+ -> TextChunker
+ -> ITextEmbeddingService
+ -> replace DocumentChunk rows / persist status
+```
+
+The queue is process-local. Startup recovery re-enqueues persisted `Uploaded`/`Processing` documents.
+
+Parsers:
+
+- PDF: PdfPig.
+- DOCX/PPTX: OpenXml.
+
+## Flow 2 RAG
+
+```text
+subject-aware ChatSession
+ -> IRagQueryService
+ -> ITextEmbeddingService
+ -> PgVectorDocumentChunkRetriever
+ -> GroundedPromptBuilder
+ -> IChatCompletionService
+ -> citation marker parsing
+ -> ChatMessage + MessageCitation persistence
+```
+
+Retrieval filters indexed documents by `SubjectId` and, after PR #37, by `vector_dims(DocumentChunk.Embedding)` matching the query vector before cosine distance.
+
+PR #35 also adds contextual follow-up query expansion when a short standalone follow-up yields no useful retrieval, plus stricter grounding/citation instructions.
+
+## Chat transport
+
+The MVC Chat browser calls:
+
+```text
+POST /Chat/AskStream
+Content-Type response: text/event-stream
+```
+
+SSE event types include `tool_call`, `citations`, `delta`, `done`, and `error`. Client JavaScript consumes the response stream with `fetch` + `ReadableStream`.
+
+This is **SSE, not SignalR**. The current service obtains the completed RAG answer via `IRagQueryService.AskAsync` and then emits application-level word deltas/typewriter output.
+
+## Evaluation
+
+`EvaluationController` consumes `IEvaluationService` and the packaged 50-question dataset. Evaluation is authenticated and resolves the active subject by the dataset subject code before invoking the RAG evaluation path.
+
+## Provider selection
 
 Backward-compatible default:
 
@@ -25,73 +123,86 @@ Rag:Provider = Ollama | Gemini | OpenAI | OpenRouter
 Purpose-specific overrides:
 
 ```text
-Rag:ChatProvider      = Ollama | Gemini | OpenAI | OpenRouter
-Rag:EmbeddingProvider = Ollama | Gemini | OpenAI | OpenRouter
+Rag:ChatProvider
+Rag:EmbeddingProvider
+Rag:EmbeddingDimensions
 ```
 
-Docker/env equivalents:
+Workflow code does not branch on concrete provider names.
+
+### Embedding invariant and PR #37
+
+A searchable corpus conceptually uses one embedding semantic space. Any provider/model/dimension change requires complete re-indexing.
+
+PR #37 changed physical/runtime compatibility in two useful ways:
+
+- Gemini batch embedding requests send configured output dimensionality correctly.
+- pgvector retrieval filters candidate rows by actual vector dimensions before cosine distance.
+
+Therefore different-dimension old/new rows can coexist temporarily during a gradual re-index without causing dimension errors. Rows with the old dimension simply do not participate in current retrieval. This does **not** make same-dimension embeddings from different models compatible.
+
+## PostgreSQL system of record
+
+PostgreSQL persists:
+
+- Subjects/Chapters;
+- Documents/index state;
+- DocumentChunks/embeddings;
+- Identity users/roles/claims;
+- ChatSessions with `SubjectId`;
+- ChatMessages;
+- MessageCitations;
+- ASP.NET Core Data Protection keys.
+
+### Data Protection
+
+PR #38 introduced a dedicated `DataProtectionKeyDbContext` using the PostgreSQL connection and configured:
 
 ```text
-RAG_PROVIDER=Ollama
-RAG_CHAT_PROVIDER=
-RAG_EMBEDDING_PROVIDER=
-RAG_EMBEDDING_DIMENSIONS=1024
+AddDataProtection()
+ -> PersistKeysToDbContext<DataProtectionKeyDbContext>()
+ -> SetApplicationName("PRN222-RAG-Assistant")
 ```
 
-Infrastructure registers one implementation of each contract:
+The `DataProtectionKeys` table is checked in CI. This keeps antiforgery/authentication key material across web-container restarts while the database persists.
 
-```text
-ITextEmbeddingService
-IChatCompletionService
-```
+## Flow 3 reporting
 
-The chat and embedding implementations may come from different providers. Workflow code must not branch on provider names.
+`ReportQueryService` produces `SubjectReportSnapshot` with:
 
-There is no hidden application-level local-to-cloud failover. Cloud selection remains explicit. OpenRouter model/provider fallback is allowed only after OpenRouter is explicitly selected.
+- subject identity;
+- Chapter/Document totals and grouping;
+- indexing status totals;
+- total chunks;
+- recent failures/recently indexed documents;
+- subject-scoped ChatSession, ChatMessage and MessageCitation counts.
 
-## Embedding vector-space invariant
-
-Matching vector dimensions do not make embedding models semantically compatible.
-
-Operational rule:
-
-```text
-change embedding provider/model/dimension
-  -> treat stored embeddings as stale
-  -> re-index the complete searchable corpus
-  -> only then use similarity retrieval
-```
-
-Do not rotate embedding models within one corpus. Chat-only provider/model/fallback changes do not require re-indexing.
+The PageModel retains `ManageDocuments` + `ISubjectAccessService` authorization before requesting the snapshot.
 
 ## Render CD
 
-The repository includes a Render Blueprint in `render.yaml`.
+`render.yaml` defines:
 
-Deployment path:
+- Docker web service, free plan, Singapore;
+- managed PostgreSQL 17, free plan, Singapore;
+- `autoDeployTrigger: checksPass` from `master`;
+- `/healthz` health check;
+- startup migration/pgvector enablement.
 
-```text
-master -> GitHub Actions CI -> checks pass -> Render auto deploy
-```
-
-Render provisions a Docker web service plus managed PostgreSQL 17 in Singapore. The database URL is normalized to an Npgsql connection string at startup, pgvector is enabled before EF migrations, and `/healthz` is used as the Render health check.
-
-The Render runtime intentionally uses OpenRouter for both AI contracts:
+Current Render AI runtime is **hybrid**:
 
 ```text
-Rag__Provider=OpenRouter
-Rag__ChatProvider=OpenRouter
-Rag__EmbeddingProvider=OpenRouter
-Rag__EmbeddingDimensions=1024
-
-Chat model:
-  nvidia/nemotron-3.5-lightning:free
-
-Embedding model:
-  nvidia/llama-nemotron-embed-vl-1b-v2:free
+Chat:      Gemini / gemini-3.6-flash
+Embedding: OpenRouter / nvidia/llama-nemotron-embed-vl-1b-v2:free
+Dimension: 1024
 ```
 
-Only `Rag__OpenRouter__ApiKey` is entered manually in Render for the default deployment. See `docs/render-deployment.md`.
+Manual AI secrets:
+
+```text
+Rag__Gemini__ApiKey
+Rag__OpenRouter__ApiKey
+```
 
 ## Docker modes
 
@@ -107,183 +218,30 @@ Cloud/hybrid:
 docker compose up -d --build
 ```
 
-If either selected contract uses Ollama, enable the `local-ai` profile.
+If a selected contract uses Ollama, enable the `local-ai` profile.
 
-## Secrets and cloud-data boundary
+## Storage boundary
 
-Real provider keys remain server-side environment/deployment secrets only.
+Local Compose bind-mounts `./storage/uploads` into the app. Free Render web-service storage is ephemeral, so hosted source-file durability still requires a persistent disk on an eligible plan or external object storage.
 
-Never commit API keys to `.env.example`, appsettings, source, docs or tests using real credentials. Never render them to browser code or logs.
+## CI validation
 
-Selecting Gemini/OpenAI/OpenRouter sends embedding text and/or chat context to an external provider. Treat provider selection as a privacy/deployment decision as well as a cost/performance choice.
+Current CI performs:
 
-## Authentication/authorization
-
-Roles:
-
-```text
-Admin
-SubjectLeader
-Student
-```
-
-Policies:
-
-```text
-ManageUsers     -> Admin
-ManageSubjects  -> Admin
-ManageDocuments -> Admin OR SubjectLeader
-```
-
-Subject-resource authorization is implemented by `ISubjectAccessService` for Flow 1/3 resource actions.
-
-Flow 2 backend validates chat-session ownership and subject consistency through `IRagQueryService`.
-
-## PostgreSQL system of record
-
-PostgreSQL persists:
-
-- Subjects/Chapters;
-- Documents/index state;
-- DocumentChunks/embeddings;
-- Identity users/roles/claims;
-- ChatSessions including `SubjectId`;
-- ChatMessages;
-- MessageCitations.
-
-PR #30 added the `ChatSession.SubjectId` persistence required for subject-scoped RAG sessions.
-
-## Presentation allocation
-
-```text
-MVC:
-  Flow 1 Documents/Chapters                 [complete]
-  Flow 2 final Chat/history/citation UI     [pending Member 5]
-  Admin Users
-  Subjects/Admin Subjects
-
-Razor Pages:
-  Auth/shell
-  Flow 3 Reports
-  internal RAG demo                         [development aid only]
-```
-
-The internal RAG demo is not the final Flow 2 product presentation.
-
-## Flow 1 indexing pipeline
-
-```text
-subject-aware HTTP request
- -> persist Document with SubjectId
- -> IDocumentIndexingQueue
- -> InMemoryDocumentIndexingQueue
- -> DocumentIndexingWorker
- -> IDocumentIndexingService
- -> parse PDF/DOCX/PPTX
- -> TextChunker
- -> ITextEmbeddingService
- -> replace DocumentChunk rows / persist status
-```
-
-The queue is process-local. Startup recovery re-enqueues persisted Uploaded/Processing documents.
-
-Parsers:
-
-- PDF: PdfPig;
-- DOCX/PPTX: OpenXml.
-
-The indexing pipeline is not duplicated per subject or provider.
-
-### PR #30 / issue #27 hardening
-
-Merged changes include:
-
-- deterministic bounded chunk overlap;
-- Unicode normalization and safer grapheme boundaries;
-- configurable `ChunkingOptions` with startup validation;
-- improved PDF two-column reading order and regression coverage;
-- DOCX blank-paragraph/page-number correction;
-- additional DOCX/PPTX parser/integration coverage.
-
-PDF is the primary real-world ingestion format receiving the most active testing.
-
-Deferred follow-up debt:
-
-- complex DOCX list/table/layout fixtures;
-- PPTX grouped-shape/table/parent-transform fixtures;
-- harder PDF table/side-note/rotated-text layouts.
-
-## Flow 2 backend infrastructure - COMPLETE BASELINE
-
-Merged Member 4 path:
-
-```text
-subject-aware ChatSession
- -> IRagQueryService
- -> ITextEmbeddingService
- -> PgVectorDocumentChunkRetriever
- -> indexed Documents constrained by SubjectId
- -> GroundedPromptBuilder
- -> IChatCompletionService
- -> referenced citation parsing
- -> ChatMessage + MessageCitation persistence
-```
-
-Important properties:
-
-- session lookup includes authenticated user ownership;
-- conflicting caller/session subject IDs are rejected;
-- subject-aware session creation/reuse is provided by the RAG service;
-- conversation history is loaded before persisting the current turn;
-- only citation markers referenced in the answer are persisted;
-- RAG/chunking options are validated at startup;
-- failure-path tests ensure provider failures do not persist incomplete conversation turns before generation succeeds.
-
-Member 4 remains provider-neutral and must not call concrete provider APIs directly.
-
-## Flow 3 infrastructure
-
-Flow 3 remains provider-independent/read-only.
-
-Because `ChatSession.SubjectId` now exists, existing report-side chat aggregates should be audited when Member 5 completes Flow 2 so chat metrics are explicitly subject-scoped.
-
-## Ownership and actual contribution
-
-Ownership:
-
-- Member 1: Core/Data/RBAC/multi-subject/provider infrastructure/docs.
-- Member 2: Flow 1 request behavior + Flow 3 reporting.
-- Member 3: indexing/ingestion maintenance + UI/UX baseline.
-- Member 4: merged Flow 2 RAG backend.
-- Member 5: pending Flow 2 MVC/evaluation product layer.
-
-Actual merged contribution credit is tracked separately in `docs/member-contributions.md`.
-
-In particular, PR #9/#23 implementation credit belongs to Member 1 and PR #30 issue #27 remediation credit belongs to Member 4, while Member 3 retains indexing maintenance ownership.
-
-Project documentation uses Member numbers only; do not add GitHub usernames.
+- local tool/frontend/NuGet restore;
+- Release build and tests;
+- pending-model check for `ApplicationDbContext`;
+- Docker Compose validation;
+- real PostgreSQL startup and EF migrations;
+- pgvector/seed/migration/DataProtectionKeys schema checks;
+- mixed-dimension pgvector compatibility smoke test.
 
 ## Intentionally not added
 
-- hidden application-level local-to-cloud failover;
-- embedding-model rotation;
-- Redis/RabbitMQ/external broker;
-- another vector DB;
-- provider-specific logic in MVC/Razor pages;
+- SignalR for Chat;
+- Redis/RabbitMQ/external job broker;
+- a second vector database;
+- provider-specific logic in workflow controllers/pages;
+- automatic hidden local-to-cloud failover;
 - provider-specific contracts in Application;
-- API keys in repository files.
-
-## Validation
-
-Before merge run the repository's CI-equivalent checks:
-
-```text
-dotnet tool restore
-dotnet libman restore
-dotnet restore
-dotnet build
-dotnet test
-dotnet ef migrations has-pending-model-changes ...
-docker compose config
-PostgreSQL migration/schema/pgvector validation
-```
+- repository-stored production API keys.
