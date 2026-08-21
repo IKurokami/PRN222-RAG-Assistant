@@ -1,23 +1,15 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
-using Microsoft.EntityFrameworkCore;
-using PRN222.RagAssistant.Data;
+using PRN222.RagAssistant.Application.Abstractions;
 using PRN222.RagAssistant.Models.Admin;
 using PRN222.RagAssistant.Security;
 
 namespace PRN222.RagAssistant.Pages.AdminSubjects;
 
 [Authorize(Policy = AppPolicies.ManageSubjects)]
-public class EditModel : PageModel
+public class EditModel(ISubjectCatalogService subjectCatalogService) : PageModel
 {
-    private readonly ApplicationDbContext _dbContext;
-
-    public EditModel(ApplicationDbContext dbContext)
-    {
-        _dbContext = dbContext;
-    }
-
     [BindProperty(SupportsGet = true)]
     public Guid Id { get; set; }
 
@@ -26,7 +18,10 @@ public class EditModel : PageModel
 
     public async Task<IActionResult> OnGetAsync(Guid id, CancellationToken cancellationToken)
     {
-        var subject = await _dbContext.Subjects.AsNoTracking().FirstOrDefaultAsync(candidate => candidate.Id == id, cancellationToken);
+        var subject = await subjectCatalogService.GetSubjectAsync(
+            id,
+            cancellationToken: cancellationToken);
+
         if (subject is null)
         {
             return NotFound();
@@ -51,15 +46,19 @@ public class EditModel : PageModel
             return BadRequest();
         }
 
-        var subject = await _dbContext.Subjects.FirstOrDefaultAsync(candidate => candidate.Id == Id, cancellationToken);
-        if (subject is null)
+        if (await subjectCatalogService.GetSubjectAsync(
+                Id,
+                cancellationToken: cancellationToken) is null)
         {
             return NotFound();
         }
 
         Normalize();
 
-        if (await SubjectCodeExistsAsync(Input.Code, Id, cancellationToken))
+        if (await subjectCatalogService.SubjectCodeExistsAsync(
+                Input.Code,
+                Id,
+                cancellationToken))
         {
             ModelState.AddModelError(nameof(Input.Code), "A subject with this code already exists.");
         }
@@ -69,10 +68,17 @@ public class EditModel : PageModel
             return Page();
         }
 
-        subject.Code = Input.Code;
-        subject.Name = Input.Name;
-        subject.IsActive = Input.IsActive;
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        var subject = await subjectCatalogService.UpdateSubjectAsync(
+            Id,
+            Input.Code,
+            Input.Name,
+            Input.IsActive,
+            cancellationToken);
+
+        if (subject is null)
+        {
+            return NotFound();
+        }
 
         TempData["StatusMessage"] = $"Updated subject {subject.Code} - {subject.Name}.";
         return RedirectToPage("/AdminSubjects/Index");
@@ -82,12 +88,5 @@ public class EditModel : PageModel
     {
         Input.Code = (Input.Code ?? string.Empty).Trim().ToUpperInvariant();
         Input.Name = (Input.Name ?? string.Empty).Trim();
-    }
-
-    private async Task<bool> SubjectCodeExistsAsync(string code, Guid? excludeId, CancellationToken cancellationToken)
-    {
-        return await _dbContext.Subjects.AsNoTracking().AnyAsync(
-            subject => subject.Code == code && (!excludeId.HasValue || subject.Id != excludeId.Value),
-            cancellationToken);
     }
 }

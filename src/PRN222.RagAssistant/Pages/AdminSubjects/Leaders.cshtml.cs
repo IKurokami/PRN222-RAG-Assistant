@@ -3,8 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
-using Microsoft.EntityFrameworkCore;
-using PRN222.RagAssistant.Data;
+using PRN222.RagAssistant.Application.Abstractions;
 using PRN222.RagAssistant.Domain.Entities;
 using PRN222.RagAssistant.Models.Admin;
 using PRN222.RagAssistant.Security;
@@ -12,19 +11,10 @@ using PRN222.RagAssistant.Security;
 namespace PRN222.RagAssistant.Pages.AdminSubjects;
 
 [Authorize(Policy = AppPolicies.ManageSubjects)]
-public class LeadersModel : PageModel
+public class LeadersModel(
+    ISubjectCatalogService subjectCatalogService,
+    UserManager<ApplicationUser> userManager) : PageModel
 {
-    private readonly ApplicationDbContext _dbContext;
-    private readonly UserManager<ApplicationUser> _userManager;
-
-    public LeadersModel(
-        ApplicationDbContext dbContext,
-        UserManager<ApplicationUser> userManager)
-    {
-        _dbContext = dbContext;
-        _userManager = userManager;
-    }
-
     [BindProperty(SupportsGet = true)]
     public Guid Id { get; set; }
 
@@ -45,19 +35,16 @@ public class LeadersModel : PageModel
             return NotFound();
         }
 
-        Id = id;
-        SubjectId = viewModel.SubjectId;
-        SubjectCode = viewModel.SubjectCode;
-        SubjectName = viewModel.SubjectName;
-        SelectedLeaderIds = viewModel.SelectedLeaderIds;
-        Leaders = viewModel.Leaders;
-
+        ApplyViewModel(viewModel);
         return Page();
     }
 
     public async Task<IActionResult> OnPostAsync(CancellationToken cancellationToken)
     {
-        var subject = await _dbContext.Subjects.AsNoTracking().FirstOrDefaultAsync(candidate => candidate.Id == Id, cancellationToken);
+        var subject = await subjectCatalogService.GetSubjectAsync(
+            Id,
+            cancellationToken: cancellationToken);
+
         if (subject is null)
         {
             return NotFound();
@@ -67,13 +54,15 @@ public class LeadersModel : PageModel
         SubjectCode = subject.Code;
         SubjectName = subject.Name;
 
-        var leaders = await _userManager.GetUsersInRoleAsync(AppRoles.SubjectLeader);
+        var leaders = await userManager.GetUsersInRoleAsync(AppRoles.SubjectLeader);
         var validLeaderIds = leaders.Select(leader => leader.Id).ToHashSet();
         var selectedLeaderIds = SelectedLeaderIds.Distinct().ToHashSet();
 
         if (selectedLeaderIds.Any(selectedId => !validLeaderIds.Contains(selectedId)))
         {
-            ModelState.AddModelError(nameof(SelectedLeaderIds), "Only users with the Subject Leader role can be assigned to a subject.");
+            ModelState.AddModelError(
+                nameof(SelectedLeaderIds),
+                "Only users with the Subject Leader role can be assigned to a subject.");
         }
 
         if (!ModelState.IsValid)
@@ -89,15 +78,15 @@ public class LeadersModel : PageModel
             {
                 option.IsSelected = selectedLeaderIds.Contains(option.UserId);
             }
-            Leaders = invalidViewModel.Leaders;
 
+            Leaders = invalidViewModel.Leaders;
             return Page();
         }
 
         var claimValue = Id.ToString("D");
         foreach (var leader in leaders)
         {
-            var claims = await _userManager.GetClaimsAsync(leader);
+            var claims = await userManager.GetClaimsAsync(leader);
             var existingClaims = claims
                 .Where(claim => claim.Type == AppClaimTypes.ManagedSubject && claim.Value == claimValue)
                 .ToList();
@@ -106,7 +95,9 @@ public class LeadersModel : PageModel
             {
                 if (existingClaims.Count == 0)
                 {
-                    var result = await _userManager.AddClaimAsync(leader, new Claim(AppClaimTypes.ManagedSubject, claimValue));
+                    var result = await userManager.AddClaimAsync(
+                        leader,
+                        new Claim(AppClaimTypes.ManagedSubject, claimValue));
                     if (!result.Succeeded)
                     {
                         AddIdentityErrors(result);
@@ -115,7 +106,7 @@ public class LeadersModel : PageModel
             }
             else if (existingClaims.Count > 0)
             {
-                var result = await _userManager.RemoveClaimsAsync(leader, existingClaims);
+                var result = await userManager.RemoveClaimsAsync(leader, existingClaims);
                 if (!result.Succeeded)
                 {
                     AddIdentityErrors(result);
@@ -130,6 +121,7 @@ public class LeadersModel : PageModel
             {
                 return NotFound();
             }
+
             Leaders = failedViewModel.Leaders;
             return Page();
         }
@@ -142,21 +134,26 @@ public class LeadersModel : PageModel
         Guid subjectId,
         CancellationToken cancellationToken)
     {
-        var subject = await _dbContext.Subjects.AsNoTracking().FirstOrDefaultAsync(candidate => candidate.Id == subjectId, cancellationToken);
+        var subject = await subjectCatalogService.GetSubjectAsync(
+            subjectId,
+            cancellationToken: cancellationToken);
+
         if (subject is null)
         {
             return null;
         }
 
-        var leaders = await _userManager.GetUsersInRoleAsync(AppRoles.SubjectLeader);
+        var leaders = await userManager.GetUsersInRoleAsync(AppRoles.SubjectLeader);
         var options = new List<AdminSubjectLeaderOptionViewModel>(leaders.Count);
         var selectedIds = new List<Guid>();
         var claimValue = subjectId.ToString("D");
 
         foreach (var leader in leaders.OrderBy(leader => leader.DisplayName).ThenBy(leader => leader.Email))
         {
-            var claims = await _userManager.GetClaimsAsync(leader);
-            var selected = claims.Any(claim => claim.Type == AppClaimTypes.ManagedSubject && claim.Value == claimValue);
+            var claims = await userManager.GetClaimsAsync(leader);
+            var selected = claims.Any(
+                claim => claim.Type == AppClaimTypes.ManagedSubject && claim.Value == claimValue);
+
             if (selected)
             {
                 selectedIds.Add(leader.Id);
@@ -179,6 +176,16 @@ public class LeadersModel : PageModel
             SelectedLeaderIds = selectedIds,
             Leaders = options
         };
+    }
+
+    private void ApplyViewModel(AdminSubjectLeadersViewModel viewModel)
+    {
+        Id = viewModel.SubjectId;
+        SubjectId = viewModel.SubjectId;
+        SubjectCode = viewModel.SubjectCode;
+        SubjectName = viewModel.SubjectName;
+        SelectedLeaderIds = viewModel.SelectedLeaderIds;
+        Leaders = viewModel.Leaders;
     }
 
     private void AddIdentityErrors(IdentityResult result)

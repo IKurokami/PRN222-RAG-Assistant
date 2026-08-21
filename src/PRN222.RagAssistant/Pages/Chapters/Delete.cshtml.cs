@@ -1,27 +1,17 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
-using Microsoft.EntityFrameworkCore;
-using PRN222.RagAssistant.Data;
-using PRN222.RagAssistant.Models.Chapters;
+using PRN222.RagAssistant.Application.Abstractions;
 using PRN222.RagAssistant.Security;
 
 namespace PRN222.RagAssistant.Pages.Chapters;
 
 [Authorize(Policy = AppPolicies.ManageDocuments)]
-public class DeleteModel : PageModel
+public class DeleteModel(
+    ISubjectCatalogService subjectCatalogService,
+    IChapterManagementService chapterManagementService,
+    ISubjectAccessService subjectAccessService) : PageModel
 {
-    private readonly ApplicationDbContext _dbContext;
-    private readonly ISubjectAccessService _subjectAccessService;
-
-    public DeleteModel(
-        ApplicationDbContext dbContext,
-        ISubjectAccessService subjectAccessService)
-    {
-        _dbContext = dbContext;
-        _subjectAccessService = subjectAccessService;
-    }
-
     [BindProperty(SupportsGet = true)]
     public Guid Id { get; set; }
 
@@ -34,29 +24,25 @@ public class DeleteModel : PageModel
 
     public async Task<IActionResult> OnGetAsync(Guid id, CancellationToken cancellationToken)
     {
-        var chapter = await _dbContext.Chapters
-            .AsNoTracking()
-            .FirstOrDefaultAsync(candidate => candidate.Id == id, cancellationToken);
-
+        var chapter = await chapterManagementService.GetChapterAsync(id, cancellationToken);
         if (chapter is null)
         {
             return NotFound();
         }
 
-        if (!await _subjectAccessService.CanManageSubjectAsync(User, chapter.SubjectId, cancellationToken))
+        if (!await subjectAccessService.CanManageSubjectAsync(User, chapter.SubjectId, cancellationToken))
         {
             return Forbid();
         }
 
-        var subject = await _dbContext.Subjects.AsNoTracking().FirstOrDefaultAsync(candidate => candidate.Id == chapter.SubjectId, cancellationToken);
+        var subject = await subjectCatalogService.GetSubjectAsync(
+            chapter.SubjectId,
+            cancellationToken: cancellationToken);
+
         if (subject is null)
         {
             return NotFound();
         }
-
-        var affectedDocumentCount = await _dbContext.Documents
-            .AsNoTracking()
-            .CountAsync(document => document.SubjectId == chapter.SubjectId && document.ChapterId == id, cancellationToken);
 
         Id = chapter.Id;
         SubjectId = subject.Id;
@@ -64,44 +50,37 @@ public class DeleteModel : PageModel
         SubjectName = subject.Name;
         ChapterNumber = chapter.Number;
         ChapterTitle = chapter.Title;
-        AffectedDocumentCount = affectedDocumentCount;
+        AffectedDocumentCount = await chapterManagementService.GetDocumentCountAsync(
+            chapter.SubjectId,
+            chapter.Id,
+            cancellationToken);
 
         return Page();
     }
 
     public async Task<IActionResult> OnPostAsync(CancellationToken cancellationToken)
     {
-        var chapter = await _dbContext.Chapters.FirstOrDefaultAsync(candidate => candidate.Id == Id, cancellationToken);
+        var chapter = await chapterManagementService.GetChapterAsync(Id, cancellationToken);
         if (chapter is null)
         {
             return NotFound();
         }
 
-        if (!await _subjectAccessService.CanManageSubjectAsync(User, chapter.SubjectId, cancellationToken))
+        if (!await subjectAccessService.CanManageSubjectAsync(User, chapter.SubjectId, cancellationToken))
         {
             return Forbid();
         }
 
-        var subjectId = chapter.SubjectId;
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
-
-        var affectedDocuments = await _dbContext.Documents
-            .Where(document => document.SubjectId == subjectId && document.ChapterId == Id)
-            .ToListAsync(cancellationToken);
-
-        foreach (var document in affectedDocuments)
+        var result = await chapterManagementService.DeleteChapterAsync(Id, cancellationToken);
+        if (result is null)
         {
-            document.ChapterId = null;
+            return NotFound();
         }
 
-        _dbContext.Chapters.Remove(chapter);
-        await _dbContext.SaveChangesAsync(cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
+        TempData["StatusMessage"] = result.AffectedDocumentCount > 0
+            ? $"Đã xóa chương {result.Chapter.Number}: {result.Chapter.Title}. {result.AffectedDocumentCount} tài liệu liên quan đã được bỏ gán chương (tài liệu vẫn còn trong hệ thống)."
+            : $"Đã xóa chương {result.Chapter.Number}: {result.Chapter.Title} thành công.";
 
-        TempData["StatusMessage"] = affectedDocuments.Count > 0
-            ? $"Đã xóa chương {chapter.Number}: {chapter.Title}. {affectedDocuments.Count} tài liệu liên quan đã được bỏ gán chương (tài liệu vẫn còn trong hệ thống)."
-            : $"Đã xóa chương {chapter.Number}: {chapter.Title} thành công.";
-
-        return RedirectToPage("/Chapters/Index", new { subjectId });
+        return RedirectToPage("/Chapters/Index", new { subjectId = result.Chapter.SubjectId });
     }
 }

@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.DataProtection;
+using PRN222.RagAssistant.Application.Abstractions;
 using PRN222.RagAssistant.Data;
 using PRN222.RagAssistant.Infrastructure;
+using PRN222.RagAssistant.Infrastructure.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -12,6 +14,10 @@ builder.Configuration["ConnectionStrings:Postgres"] =
 // Full Razor Pages architecture (controller-based pages migrated to Razor Pages)
 builder.Services.AddRazorPages();
 builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddScoped<ISubjectCatalogService, SubjectCatalogService>();
+builder.Services.AddScoped<IChapterManagementService, ChapterManagementService>();
+builder.Services.AddScoped<IDocumentManagementService, DocumentManagementService>();
+builder.Services.AddScoped<IHomePageService, HomePageService>();
 builder.Services.AddChatPageServices();
 builder.Services.AddReporting();
 builder.Services

@@ -1,28 +1,18 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
-using Microsoft.EntityFrameworkCore;
-using PRN222.RagAssistant.Data;
-using PRN222.RagAssistant.Domain.Entities;
+using PRN222.RagAssistant.Application.Abstractions;
 using PRN222.RagAssistant.Models.Chapters;
 using PRN222.RagAssistant.Security;
 
 namespace PRN222.RagAssistant.Pages.Chapters;
 
 [Authorize(Policy = AppPolicies.ManageDocuments)]
-public class CreateModel : PageModel
+public class CreateModel(
+    ISubjectCatalogService subjectCatalogService,
+    IChapterManagementService chapterManagementService,
+    ISubjectAccessService subjectAccessService) : PageModel
 {
-    private readonly ApplicationDbContext _dbContext;
-    private readonly ISubjectAccessService _subjectAccessService;
-
-    public CreateModel(
-        ApplicationDbContext dbContext,
-        ISubjectAccessService subjectAccessService)
-    {
-        _dbContext = dbContext;
-        _subjectAccessService = subjectAccessService;
-    }
-
     [BindProperty(SupportsGet = true)]
     public Guid SubjectId { get; set; }
 
@@ -34,69 +24,72 @@ public class CreateModel : PageModel
 
     public async Task<IActionResult> OnGetAsync(Guid subjectId, CancellationToken cancellationToken)
     {
-        if (!await _subjectAccessService.CanManageSubjectAsync(User, subjectId, cancellationToken))
+        if (!await subjectAccessService.CanManageSubjectAsync(User, subjectId, cancellationToken))
         {
             return Forbid();
         }
 
         SubjectId = subjectId;
-
-        var subject = await _dbContext.Subjects.AsNoTracking().FirstOrDefaultAsync(candidate => candidate.Id == subjectId, cancellationToken);
-        if (subject is null)
+        if (!await PopulateSubjectMetadataAsync(cancellationToken))
         {
             return NotFound();
         }
-
-        SubjectCode = subject.Code;
-        SubjectName = subject.Name;
 
         return Page();
     }
 
     public async Task<IActionResult> OnPostAsync(CancellationToken cancellationToken)
     {
-        if (!await _subjectAccessService.CanManageSubjectAsync(User, SubjectId, cancellationToken))
+        if (!await subjectAccessService.CanManageSubjectAsync(User, SubjectId, cancellationToken))
         {
             return Forbid();
         }
 
-        var subject = await _dbContext.Subjects.AsNoTracking().FirstOrDefaultAsync(candidate => candidate.Id == SubjectId, cancellationToken);
-        if (subject is null)
+        if (!await PopulateSubjectMetadataAsync(cancellationToken))
         {
             return NotFound();
         }
-
-        SubjectCode = subject.Code;
-        SubjectName = subject.Name;
 
         if (!ModelState.IsValid)
         {
             return Page();
         }
 
-        var duplicateExists = await _dbContext.Chapters.AnyAsync(
-            chapter => chapter.SubjectId == SubjectId
-                       && chapter.Number == Input.Number!.Value,
-            cancellationToken);
-
-        if (duplicateExists)
+        var chapterNumber = Input.Number!.Value;
+        if (await chapterManagementService.ChapterNumberExistsAsync(
+                SubjectId,
+                chapterNumber,
+                cancellationToken: cancellationToken))
         {
-            ModelState.AddModelError("Input.Number", $"Chương số {Input.Number} đã tồn tại trong môn {SubjectCode}.");
+            ModelState.AddModelError(
+                "Input.Number",
+                $"Chương số {Input.Number} đã tồn tại trong môn {SubjectCode}.");
             return Page();
         }
 
-        var chapter = new Chapter
-        {
-            Id = Guid.NewGuid(),
-            SubjectId = SubjectId,
-            Number = Input.Number!.Value,
-            Title = Input.Title.Trim()
-        };
-
-        _dbContext.Chapters.Add(chapter);
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        var chapter = await chapterManagementService.CreateChapterAsync(
+            SubjectId,
+            chapterNumber,
+            Input.Title.Trim(),
+            cancellationToken);
 
         TempData["StatusMessage"] = $"Đã tạo chương {chapter.Number}: {chapter.Title} thành công.";
         return RedirectToPage("/Chapters/Index", new { subjectId = chapter.SubjectId });
+    }
+
+    private async Task<bool> PopulateSubjectMetadataAsync(CancellationToken cancellationToken)
+    {
+        var subject = await subjectCatalogService.GetSubjectAsync(
+            SubjectId,
+            cancellationToken: cancellationToken);
+
+        if (subject is null)
+        {
+            return false;
+        }
+
+        SubjectCode = subject.Code;
+        SubjectName = subject.Name;
+        return true;
     }
 }

@@ -1,12 +1,8 @@
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.Mvc.Rendering;
-using Microsoft.EntityFrameworkCore;
 using PRN222.RagAssistant.Application.Abstractions;
-using PRN222.RagAssistant.Data;
-using PRN222.RagAssistant.Domain.Entities;
 using PRN222.RagAssistant.Domain.Enums;
 using PRN222.RagAssistant.Models.Documents;
 using PRN222.RagAssistant.Security;
@@ -14,33 +10,12 @@ using PRN222.RagAssistant.Security;
 namespace PRN222.RagAssistant.Pages.Documents;
 
 [Authorize]
-public class IndexModel : PageModel
+public class IndexModel(
+    ISubjectCatalogService subjectCatalogService,
+    IChapterManagementService chapterManagementService,
+    IDocumentManagementService documentManagementService,
+    ISubjectAccessService subjectAccessService) : PageModel
 {
-    private const int ChunkPreviewPageSize = 12;
-
-    private readonly ApplicationDbContext _dbContext;
-    private readonly IDocumentIndexingQueue _indexingQueue;
-    private readonly ISubjectAccessService _subjectAccessService;
-    private readonly IConfiguration _configuration;
-    private readonly UserManager<ApplicationUser> _userManager;
-    private readonly ILogger<IndexModel> _logger;
-
-    public IndexModel(
-        ApplicationDbContext dbContext,
-        IDocumentIndexingQueue indexingQueue,
-        ISubjectAccessService subjectAccessService,
-        IConfiguration configuration,
-        UserManager<ApplicationUser> userManager,
-        ILogger<IndexModel> logger)
-    {
-        _dbContext = dbContext;
-        _indexingQueue = indexingQueue;
-        _subjectAccessService = subjectAccessService;
-        _configuration = configuration;
-        _userManager = userManager;
-        _logger = logger;
-    }
-
     public Guid SubjectId { get; set; }
     public string SubjectCode { get; set; } = string.Empty;
     public string SubjectName { get; set; } = string.Empty;
@@ -65,60 +40,36 @@ public class IndexModel : PageModel
             return RedirectToPage("/Subjects/Index");
         }
 
-        if (!await _subjectAccessService.CanViewSubjectAsync(User, subjectId, cancellationToken))
+        if (!await subjectAccessService.CanViewSubjectAsync(User, subjectId, cancellationToken))
         {
             return Forbid();
         }
 
-        var subject = await _dbContext.Subjects
-            .AsNoTracking()
-            .FirstOrDefaultAsync(candidate => candidate.Id == subjectId, cancellationToken);
+        var subject = await subjectCatalogService.GetSubjectAsync(
+            subjectId,
+            cancellationToken: cancellationToken);
 
         if (subject is null)
         {
             return NotFound();
         }
 
-        var chapters = await _dbContext.Chapters
-            .AsNoTracking()
-            .Where(chapter => chapter.SubjectId == subjectId)
-            .OrderBy(chapter => chapter.Number)
-            .ToListAsync(cancellationToken);
-
+        var chapters = await chapterManagementService.GetChaptersAsync(subjectId, cancellationToken);
         if (selectedChapterId.HasValue && chapters.All(chapter => chapter.Id != selectedChapterId.Value))
         {
             return BadRequest("The selected chapter does not belong to this subject.");
         }
 
-        var query = _dbContext.Documents
-            .AsNoTracking()
-            .Where(document => document.SubjectId == subjectId);
-
-        var totalDocumentCount = await query.CountAsync(cancellationToken);
-
-        if (selectedChapterId.HasValue)
-        {
-            query = query.Where(document => document.ChapterId == selectedChapterId.Value);
-        }
-
         var normalizedSearchTerm = searchTerm?.Trim();
-        if (!string.IsNullOrEmpty(normalizedSearchTerm))
-        {
-            var normalizedSearch = normalizedSearchTerm.ToLowerInvariant();
-            query = query.Where(document =>
-                document.Title.ToLower().Contains(normalizedSearch)
-                || document.OriginalFileName.ToLower().Contains(normalizedSearch));
-        }
-
-        if (selectedStatus.HasValue)
-        {
-            query = query.Where(document => document.IndexStatus == selectedStatus.Value);
-        }
-
-        var documentEntities = await query
-            .OrderByDescending(document => document.UploadedAtUtc)
-            .ToListAsync(cancellationToken);
-
+        var documents = await documentManagementService.GetDocumentsAsync(
+            subjectId,
+            selectedChapterId,
+            normalizedSearchTerm,
+            selectedStatus,
+            cancellationToken);
+        var totalDocumentCount = await documentManagementService.GetDocumentCountAsync(
+            subjectId,
+            cancellationToken);
         var chapterMap = chapters.ToDictionary(chapter => chapter.Id);
 
         SubjectId = subject.Id;
@@ -128,7 +79,10 @@ public class IndexModel : PageModel
         SearchTerm = normalizedSearchTerm ?? string.Empty;
         SelectedStatus = selectedStatus;
         TotalDocumentCount = totalDocumentCount;
-        CanManageDocuments = await _subjectAccessService.CanManageSubjectAsync(User, subjectId, cancellationToken);
+        CanManageDocuments = await subjectAccessService.CanManageSubjectAsync(
+            User,
+            subjectId,
+            cancellationToken);
         StatusMessage = TempData["StatusMessage"] as string;
         ChapterOptions = chapters
             .Select(chapter => new SelectListItem
@@ -138,7 +92,8 @@ public class IndexModel : PageModel
                 Selected = chapter.Id == selectedChapterId
             })
             .ToList();
-        Documents = documentEntities.Select(document =>
+
+        Documents = documents.Select(document =>
         {
             chapterMap.TryGetValue(document.ChapterId ?? Guid.Empty, out var chapter);
             return new DocumentItemViewModel
@@ -166,26 +121,31 @@ public class IndexModel : PageModel
         DocumentIndexStatus? selectedStatus,
         CancellationToken cancellationToken)
     {
-        var document = await _dbContext.Documents.FindAsync([id], cancellationToken);
+        var document = await documentManagementService.GetDocumentAsync(id, cancellationToken);
         if (document is null)
         {
             return NotFound();
         }
 
-        if (!await _subjectAccessService.CanManageSubjectAsync(User, document.SubjectId, cancellationToken))
+        if (!await subjectAccessService.CanManageSubjectAsync(User, document.SubjectId, cancellationToken))
         {
             return Forbid();
         }
 
-        document.IndexStatus = DocumentIndexStatus.Uploaded;
-        document.IndexError = null;
-        document.IndexedAtUtc = null;
+        var updated = await documentManagementService.RequeueForIndexAsync(id, cancellationToken);
+        if (updated is null)
+        {
+            return NotFound();
+        }
 
-        await _dbContext.SaveChangesAsync(cancellationToken);
-        await _indexingQueue.EnqueueAsync(document.Id, cancellationToken);
-
-        TempData["StatusMessage"] = $"Đã đưa tài liệu '{document.Title}' vào hàng chờ index lại.";
-        return RedirectToPage(new { subjectId = document.SubjectId, selectedChapterId, searchTerm, selectedStatus });
+        TempData["StatusMessage"] = $"Đã đưa tài liệu '{updated.Title}' vào hàng chờ index lại.";
+        return RedirectToPage(new
+        {
+            subjectId = updated.SubjectId,
+            selectedChapterId,
+            searchTerm,
+            selectedStatus
+        });
     }
 
     public async Task<IActionResult> OnPostDeleteAsync(
@@ -195,40 +155,30 @@ public class IndexModel : PageModel
         DocumentIndexStatus? selectedStatus,
         CancellationToken cancellationToken)
     {
-        var document = await _dbContext.Documents.FindAsync([id], cancellationToken);
+        var document = await documentManagementService.GetDocumentAsync(id, cancellationToken);
         if (document is null)
         {
             return NotFound();
         }
 
-        if (!await _subjectAccessService.CanManageSubjectAsync(User, document.SubjectId, cancellationToken))
+        if (!await subjectAccessService.CanManageSubjectAsync(User, document.SubjectId, cancellationToken))
         {
             return Forbid();
         }
 
-        var subjectId = document.SubjectId;
-        var storagePathToDelete = document.StoragePath;
-
-        _dbContext.Documents.Remove(document);
-        await _dbContext.SaveChangesAsync(cancellationToken);
-
-        if (System.IO.File.Exists(storagePathToDelete))
+        var deleted = await documentManagementService.DeleteDocumentAsync(id, cancellationToken);
+        if (deleted is null)
         {
-            try
-            {
-                System.IO.File.Delete(storagePathToDelete);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(
-                    ex,
-                    "Document record {DocumentId} deleted from DB but failed to remove physical file at {StoragePath}.",
-                    id,
-                    storagePathToDelete);
-            }
+            return NotFound();
         }
 
-        TempData["StatusMessage"] = $"Đã xóa tài liệu '{document.Title}' thành công.";
-        return RedirectToPage(new { subjectId, selectedChapterId, searchTerm, selectedStatus });
+        TempData["StatusMessage"] = $"Đã xóa tài liệu '{deleted.Title}' thành công.";
+        return RedirectToPage(new
+        {
+            subjectId = deleted.SubjectId,
+            selectedChapterId,
+            searchTerm,
+            selectedStatus
+        });
     }
 }

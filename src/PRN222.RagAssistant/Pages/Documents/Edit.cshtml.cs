@@ -2,27 +2,19 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.Mvc.Rendering;
-using Microsoft.EntityFrameworkCore;
-using PRN222.RagAssistant.Data;
+using PRN222.RagAssistant.Application.Abstractions;
 using PRN222.RagAssistant.Models.Documents;
 using PRN222.RagAssistant.Security;
 
 namespace PRN222.RagAssistant.Pages.Documents;
 
 [Authorize(Policy = AppPolicies.ManageDocuments)]
-public class EditModel : PageModel
+public class EditModel(
+    ISubjectCatalogService subjectCatalogService,
+    IChapterManagementService chapterManagementService,
+    IDocumentManagementService documentManagementService,
+    ISubjectAccessService subjectAccessService) : PageModel
 {
-    private readonly ApplicationDbContext _dbContext;
-    private readonly ISubjectAccessService _subjectAccessService;
-
-    public EditModel(
-        ApplicationDbContext dbContext,
-        ISubjectAccessService subjectAccessService)
-    {
-        _dbContext = dbContext;
-        _subjectAccessService = subjectAccessService;
-    }
-
     [BindProperty(SupportsGet = true)]
     public Guid Id { get; set; }
 
@@ -39,23 +31,18 @@ public class EditModel : PageModel
 
     public async Task<IActionResult> OnGetAsync(Guid id, CancellationToken cancellationToken)
     {
-        var document = await _dbContext.Documents
-            .AsNoTracking()
-            .FirstOrDefaultAsync(candidate => candidate.Id == id, cancellationToken);
-
+        var document = await documentManagementService.GetDocumentAsync(id, cancellationToken);
         if (document is null)
         {
             return NotFound();
         }
 
-        if (!await _subjectAccessService.CanManageSubjectAsync(User, document.SubjectId, cancellationToken))
+        if (!await subjectAccessService.CanManageSubjectAsync(User, document.SubjectId, cancellationToken))
         {
             return Forbid();
         }
 
-        Id = document.Id;
-        SubjectId = document.SubjectId;
-        DocumentTitle = document.Title;
+        ApplyDocument(document);
         Input = new DocumentEditInputModel
         {
             Title = document.Title,
@@ -72,20 +59,18 @@ public class EditModel : PageModel
 
     public async Task<IActionResult> OnPostAsync(CancellationToken cancellationToken)
     {
-        var document = await _dbContext.Documents.FirstOrDefaultAsync(candidate => candidate.Id == Id, cancellationToken);
+        var document = await documentManagementService.GetDocumentAsync(Id, cancellationToken);
         if (document is null)
         {
             return NotFound();
         }
 
-        if (!await _subjectAccessService.CanManageSubjectAsync(User, document.SubjectId, cancellationToken))
+        if (!await subjectAccessService.CanManageSubjectAsync(User, document.SubjectId, cancellationToken))
         {
             return Forbid();
         }
 
-        SubjectId = document.SubjectId;
-        DocumentTitle = document.Title;
-
+        ApplyDocument(document);
         if (!await PopulateMetadataAsync(cancellationToken))
         {
             return NotFound();
@@ -96,33 +81,53 @@ public class EditModel : PageModel
             return Page();
         }
 
-        if (Input.ChapterId.HasValue)
+        if (Input.ChapterId.HasValue
+            && ChapterOptions.All(option => option.Value != Input.ChapterId.Value.ToString()))
         {
-            var chapterValid = await _dbContext.Chapters.AnyAsync(
-                chapter => chapter.Id == Input.ChapterId.Value
-                           && chapter.SubjectId == document.SubjectId,
-                cancellationToken);
-
-            if (!chapterValid)
-            {
-                ModelState.AddModelError("Input.ChapterId", "Chương được chọn không hợp lệ hoặc không thuộc môn học này.");
-                return Page();
-            }
+            ModelState.AddModelError(
+                "Input.ChapterId",
+                "Chương được chọn không hợp lệ hoặc không thuộc môn học này.");
+            return Page();
         }
 
-        document.Title = Input.Title.Trim();
-        document.ChapterId = Input.ChapterId;
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        PRN222.RagAssistant.Domain.Entities.Document? updated;
+        try
+        {
+            updated = await documentManagementService.UpdateDocumentAsync(
+                Id,
+                Input.Title.Trim(),
+                Input.ChapterId,
+                cancellationToken);
+        }
+        catch (InvalidOperationException)
+        {
+            ModelState.AddModelError(
+                "Input.ChapterId",
+                "Chương được chọn không hợp lệ hoặc không thuộc môn học này.");
+            return Page();
+        }
 
-        TempData["StatusMessage"] = $"Đã cập nhật thông tin tài liệu '{document.Title}' thành công.";
+        if (updated is null)
+        {
+            return NotFound();
+        }
+
+        TempData["StatusMessage"] = $"Đã cập nhật thông tin tài liệu '{updated.Title}' thành công.";
         return RedirectToPage("/Documents/Details", new { id = Id });
+    }
+
+    private void ApplyDocument(PRN222.RagAssistant.Domain.Entities.Document document)
+    {
+        Id = document.Id;
+        SubjectId = document.SubjectId;
+        DocumentTitle = document.Title;
     }
 
     private async Task<bool> PopulateMetadataAsync(CancellationToken cancellationToken)
     {
-        var subject = await _dbContext.Subjects
-            .AsNoTracking()
-            .FirstOrDefaultAsync(candidate => candidate.Id == SubjectId, cancellationToken);
+        var subject = await subjectCatalogService.GetSubjectAsync(
+            SubjectId,
+            cancellationToken: cancellationToken);
 
         if (subject is null)
         {
@@ -132,12 +137,7 @@ public class EditModel : PageModel
         SubjectCode = subject.Code;
         SubjectName = subject.Name;
 
-        var chapters = await _dbContext.Chapters
-            .AsNoTracking()
-            .Where(chapter => chapter.SubjectId == SubjectId)
-            .OrderBy(chapter => chapter.Number)
-            .ToListAsync(cancellationToken);
-
+        var chapters = await chapterManagementService.GetChaptersAsync(SubjectId, cancellationToken);
         ChapterOptions = chapters.Select(chapter => new SelectListItem
         {
             Value = chapter.Id.ToString(),
