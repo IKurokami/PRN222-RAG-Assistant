@@ -1,6 +1,9 @@
+using System.Net;
+using System.Net.Sockets;
 using Google.GenAI;
 using Google.GenAI.Types;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Logging.Abstractions;
 using PRN222.RagAssistant.Application.Abstractions;
 using PRN222.RagAssistant.Infrastructure.Rag;
 
@@ -10,6 +13,8 @@ namespace PRN222.RagAssistant.Infrastructure.Services;
 /// Gemini chat provider backed by Google's official Google.GenAI SDK and the
 /// Microsoft.Extensions.AI abstraction. The SDK owns HTTP/SSE parsing, while
 /// Microsoft.Extensions.AI owns function schema generation and invocation loops.
+/// Multiple configured Gemini models are tried in priority order when a model is
+/// rate-limited, quota-exhausted, unavailable or otherwise fails transiently.
 /// </summary>
 public sealed class GeminiChatCompletionService :
     IChatCompletionService,
@@ -18,14 +23,25 @@ public sealed class GeminiChatCompletionService :
     IDisposable
 {
     private readonly Client _genAiClient;
-    private readonly IChatClient _chatClient;
-    private readonly IChatClient _agentClient;
-    private readonly string _model;
+    private readonly IReadOnlyList<ModelClients> _modelClients;
+    private readonly ILogger<GeminiChatCompletionService> _logger;
 
     public GeminiChatCompletionService(
         IHttpClientFactory httpClientFactory,
+        IConfiguration configuration,
+        ILogger<GeminiChatCompletionService> logger)
+        : this(configuration, () => httpClientFactory.CreateClient("Gemini"), logger)
+    {
+    }
+
+    // Kept for lightweight direct construction in tests and utilities.
+    public GeminiChatCompletionService(
+        IHttpClientFactory httpClientFactory,
         IConfiguration configuration)
-        : this(configuration, () => httpClientFactory.CreateClient("Gemini"))
+        : this(
+            configuration,
+            () => httpClientFactory.CreateClient("Gemini"),
+            NullLogger<GeminiChatCompletionService>.Instance)
     {
     }
 
@@ -33,16 +49,25 @@ public sealed class GeminiChatCompletionService :
     // IHttpClientFactory overload above so SDK traffic participates in configured
     // handlers, timeouts and test doubles.
     public GeminiChatCompletionService(IConfiguration configuration)
-        : this(configuration, httpClientFactory: null)
+        : this(
+            configuration,
+            httpClientFactory: null,
+            NullLogger<GeminiChatCompletionService>.Instance)
     {
     }
 
     private GeminiChatCompletionService(
         IConfiguration configuration,
-        Func<HttpClient>? httpClientFactory)
+        Func<HttpClient>? httpClientFactory,
+        ILogger<GeminiChatCompletionService> logger)
     {
-        _model = configuration["Rag:Gemini:ChatModel"]
-            ?? throw new InvalidOperationException("Rag:Gemini:ChatModel must be configured.");
+        _logger = logger;
+        var models = ResolveChatModels(configuration);
+        if (models.Count == 0)
+        {
+            throw new InvalidOperationException(
+                "Rag:Gemini:ChatModels or Rag:Gemini:ChatModel must be configured.");
+        }
 
         // AddInfrastructure already validates the key for production. A placeholder is
         // allowed only when a custom HttpClient factory is supplied so isolated unit
@@ -73,17 +98,24 @@ public sealed class GeminiChatCompletionService :
                     HttpClientFactory = httpClientFactory
                 });
 
-        _chatClient = _genAiClient.AsIChatClient(_model);
-        _agentClient = _chatClient
-            .AsBuilder()
-            .UseFunctionInvocation(configure: invoker =>
+        _modelClients = models
+            .Select(model =>
             {
-                // DbContext-backed RAG tools share the request scope, so keep tool
-                // execution sequential even if a model emits parallel tool calls.
-                invoker.AllowConcurrentInvocation = false;
-                invoker.MaximumIterationsPerRequest = 8;
+                var chatClient = _genAiClient.AsIChatClient(model);
+                var agentClient = chatClient
+                    .AsBuilder()
+                    .UseFunctionInvocation(configure: invoker =>
+                    {
+                        // DbContext-backed RAG tools share the request scope, so keep tool
+                        // execution sequential even if a model emits parallel tool calls.
+                        invoker.AllowConcurrentInvocation = false;
+                        invoker.MaximumIterationsPerRequest = 8;
+                    })
+                    .Build();
+
+                return new ModelClients(model, chatClient, agentClient);
             })
-            .Build();
+            .ToList();
     }
 
     public async Task<string> CompleteAsync(
@@ -92,15 +124,32 @@ public sealed class GeminiChatCompletionService :
         CancellationToken cancellationToken = default)
     {
         ValidateUserPrompt(userPrompt);
+        var messages = CreateMessages(systemPrompt, userPrompt);
 
-        var response = await _chatClient.GetResponseAsync(
-            CreateMessages(systemPrompt, userPrompt),
-            cancellationToken: cancellationToken);
+        for (var index = 0; index < _modelClients.Count; index++)
+        {
+            var current = _modelClients[index];
+            try
+            {
+                var response = await current.ChatClient.GetResponseAsync(
+                    messages,
+                    cancellationToken: cancellationToken);
 
-        var content = response.Text.Trim();
-        return !string.IsNullOrWhiteSpace(content)
-            ? content
-            : throw new InvalidOperationException("Gemini returned an empty chat completion.");
+                var content = response.Text.Trim();
+                return !string.IsNullOrWhiteSpace(content)
+                    ? content
+                    : throw new InvalidOperationException(
+                        $"Gemini model '{current.Model}' returned an empty chat completion.");
+            }
+            catch (Exception exception) when (
+                index < _modelClients.Count - 1
+                && ShouldFallback(exception, cancellationToken))
+            {
+                LogFallback(current.Model, _modelClients[index + 1].Model, exception);
+            }
+        }
+
+        throw new InvalidOperationException("Gemini model fallback chain ended unexpectedly.");
     }
 
     public async IAsyncEnumerable<string> StreamAsync(
@@ -110,15 +159,15 @@ public sealed class GeminiChatCompletionService :
         CancellationToken cancellationToken = default)
     {
         ValidateUserPrompt(userPrompt);
+        var messages = CreateMessages(systemPrompt, userPrompt);
 
-        await foreach (var update in _chatClient.GetStreamingResponseAsync(
-                           CreateMessages(systemPrompt, userPrompt),
-                           cancellationToken: cancellationToken))
+        await foreach (var delta in StreamWithFallbackAsync(
+                           model => model.ChatClient.GetStreamingResponseAsync(
+                               messages,
+                               cancellationToken: cancellationToken),
+                           cancellationToken))
         {
-            if (!string.IsNullOrEmpty(update.Text))
-            {
-                yield return update.Text;
-            }
+            yield return delta;
         }
     }
 
@@ -140,17 +189,189 @@ public sealed class GeminiChatCompletionService :
                     tool.Description))
                 .ToList()
         };
+        var messages = CreateMessages(systemPrompt, userPrompt);
 
-        await foreach (var update in _agentClient.GetStreamingResponseAsync(
-                           CreateMessages(systemPrompt, userPrompt),
-                           options,
+        await foreach (var delta in StreamWithFallbackAsync(
+                           model => model.AgentClient.GetStreamingResponseAsync(
+                               messages,
+                               options,
+                               cancellationToken),
                            cancellationToken))
         {
-            // FunctionInvokingChatClient resolves intermediate function calls and
-            // yields the model's final textual response incrementally.
-            if (!string.IsNullOrEmpty(update.Text))
+            yield return delta;
+        }
+    }
+
+    private async IAsyncEnumerable<string> StreamWithFallbackAsync(
+        Func<ModelClients, IAsyncEnumerable<ChatResponseUpdate>> streamFactory,
+        [System.Runtime.CompilerServices.EnumeratorCancellation]
+        CancellationToken cancellationToken)
+    {
+        for (var index = 0; index < _modelClients.Count; index++)
+        {
+            var current = _modelClients[index];
+            Exception? fallbackException = null;
+            var emittedText = false;
+
+            await using var enumerator = streamFactory(current)
+                .GetAsyncEnumerator(cancellationToken);
+
+            while (true)
             {
-                yield return update.Text;
+                ChatResponseUpdate update;
+                try
+                {
+                    if (!await enumerator.MoveNextAsync())
+                    {
+                        yield break;
+                    }
+
+                    update = enumerator.Current;
+                }
+                catch (Exception exception) when (
+                    !emittedText
+                    && index < _modelClients.Count - 1
+                    && ShouldFallback(exception, cancellationToken))
+                {
+                    fallbackException = exception;
+                    break;
+                }
+
+                if (!string.IsNullOrEmpty(update.Text))
+                {
+                    emittedText = true;
+                    yield return update.Text;
+                }
+            }
+
+            if (fallbackException is null)
+            {
+                yield break;
+            }
+
+            LogFallback(current.Model, _modelClients[index + 1].Model, fallbackException);
+        }
+    }
+
+    private void LogFallback(string failedModel, string nextModel, Exception exception)
+    {
+        _logger.LogWarning(
+            exception,
+            "Gemini model {FailedModel} failed with a transient/quota error. Falling back to {NextModel}.",
+            failedModel,
+            nextModel);
+    }
+
+    private static bool ShouldFallback(
+        Exception exception,
+        CancellationToken cancellationToken)
+    {
+        if (cancellationToken.IsCancellationRequested)
+        {
+            return false;
+        }
+
+        if (exception is HttpRequestException httpException)
+        {
+            if (httpException.StatusCode.HasValue)
+            {
+                return httpException.StatusCode.Value is
+                    HttpStatusCode.NotFound
+                    or HttpStatusCode.RequestTimeout
+                    or HttpStatusCode.TooManyRequests
+                    or HttpStatusCode.InternalServerError
+                    or HttpStatusCode.BadGateway
+                    or HttpStatusCode.ServiceUnavailable
+                    or HttpStatusCode.GatewayTimeout;
+            }
+
+            if (IsFallbackMessage(httpException.Message))
+            {
+                return true;
+            }
+
+            return httpException.InnerException is SocketException
+                || (httpException.InnerException is not null
+                    && ShouldFallback(httpException.InnerException, cancellationToken));
+        }
+
+        if (exception is SocketException
+            || exception is TimeoutException
+            || exception is TaskCanceledException)
+        {
+            return true;
+        }
+
+        if (IsFallbackMessage(exception.Message))
+        {
+            return true;
+        }
+
+        return exception.InnerException is not null
+            && ShouldFallback(exception.InnerException, cancellationToken);
+    }
+
+    private static bool IsFallbackMessage(string message)
+    {
+        if (string.IsNullOrWhiteSpace(message))
+        {
+            return false;
+        }
+
+        string[] markers =
+        [
+            "RESOURCE_EXHAUSTED",
+            "quota exceeded",
+            "rate limit",
+            "too many requests",
+            "429",
+            "UNAVAILABLE",
+            "temporarily unavailable",
+            "deadline exceeded",
+            "timed out",
+            "timeout",
+            "NOT_FOUND"
+        ];
+
+        return markers.Any(marker =>
+            message.Contains(marker, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static IReadOnlyList<string> ResolveChatModels(IConfiguration configuration)
+    {
+        var models = new List<string>();
+        var modelsSection = configuration.GetSection("Rag:Gemini:ChatModels");
+
+        AddModels(models, modelsSection.Value);
+        foreach (var child in modelsSection.GetChildren())
+        {
+            AddModels(models, child.Value);
+        }
+
+        if (models.Count == 0)
+        {
+            AddModels(models, configuration["Rag:Gemini:ChatModel"]);
+        }
+
+        return models
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private static void AddModels(ICollection<string> models, string? rawModels)
+    {
+        if (string.IsNullOrWhiteSpace(rawModels))
+        {
+            return;
+        }
+
+        foreach (var model in rawModels.Split(
+                     [',', ';', '\n', '\r'],
+                     StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            if (!string.IsNullOrWhiteSpace(model))
+            {
+                models.Add(model);
             }
         }
     }
@@ -171,7 +392,16 @@ public sealed class GeminiChatCompletionService :
 
     public void Dispose()
     {
-        _agentClient.Dispose();
+        foreach (var model in _modelClients)
+        {
+            model.AgentClient.Dispose();
+        }
+
         _genAiClient.Dispose();
     }
+
+    private sealed record ModelClients(
+        string Model,
+        IChatClient ChatClient,
+        IChatClient AgentClient);
 }

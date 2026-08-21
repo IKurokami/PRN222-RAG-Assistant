@@ -1,6 +1,6 @@
 # Render deployment and CD
 
-> Synchronized with `render.yaml` and runtime code after PR #39/#40 on 2026-08-21.
+> Synchronized with `render.yaml` and runtime code on 2026-08-21.
 
 ## Deployment model
 
@@ -28,7 +28,7 @@ When startup migrations are enabled, the application enables pgvector before EF 
 
 ## Current AI runtime: Gemini chat + OpenRouter embeddings
 
-PR #39 changed Render from OpenRouter chat to Gemini chat while preserving the existing OpenRouter embedding corpus.
+Render uses Gemini for Chat while preserving the existing OpenRouter embedding corpus.
 
 Current Blueprint values:
 
@@ -38,11 +38,13 @@ Rag__ChatProvider=Gemini
 Rag__EmbeddingProvider=OpenRouter
 Rag__EmbeddingDimensions=1024
 
-Rag__Gemini__ChatModel=gemini-3.6-flash
+Rag__Gemini__ChatModels=gemini-3.5-flash-lite,gemini-3.1-flash-lite,gemini-2.5-flash,gemini-2.5-flash-lite
 Rag__OpenRouter__EmbeddingModel=nvidia/llama-nemotron-embed-vl-1b-v2:free
 ```
 
 `Rag__Provider=OpenRouter` remains the backward-compatible base value, but the purpose-specific overrides determine the actual Render chat and embedding providers.
+
+Gemini Chat models are tried in the configured order. The service advances to the next model for quota/rate-limit, timeout, model-unavailable/not-found, or transient `5xx` failures before response text has been emitted. It does not fallback for invalid requests or authentication/authorization failures, and it never mixes two models after streaming output has begun.
 
 ## Required manual AI secrets
 
@@ -61,7 +63,7 @@ The Gemini key is used by Chat; the OpenRouter key is used by embeddings.
 
 Render keeps the 1024-dimensional OpenRouter embedding model so the existing corpus does not need a provider/model migration merely because Chat changed to Gemini.
 
-Changing only Chat provider/model does not require document re-indexing.
+Changing only Chat provider/model/fallback order does not require document re-indexing.
 
 Changing the embedding provider/model/dimension still requires a full corpus re-index. PR #37 makes different-dimension transitions safe from pgvector dimension errors, but does not make different embedding semantic spaces interchangeable.
 
