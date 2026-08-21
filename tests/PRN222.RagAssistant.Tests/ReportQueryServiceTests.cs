@@ -51,6 +51,7 @@ public sealed class ReportQueryServiceTests
         var targetChunkId = Guid.NewGuid();
         var targetSecondChunkId = Guid.NewGuid();
         var targetUncitedChunkId = Guid.NewGuid();
+        var targetFailedChunkId = Guid.NewGuid();
         var otherChunkId = Guid.NewGuid();
         var targetSessionId = Guid.NewGuid();
         var otherSessionId = Guid.NewGuid();
@@ -145,6 +146,13 @@ public sealed class ReportQueryServiceTests
             },
             new DocumentChunk
             {
+                Id = targetFailedChunkId,
+                DocumentId = targetFailedDocumentId,
+                ChunkIndex = 0,
+                Content = "stale chunk from a failed re-index"
+            },
+            new DocumentChunk
+            {
                 Id = otherChunkId,
                 DocumentId = otherDocumentId,
                 ChunkIndex = 0,
@@ -197,7 +205,7 @@ public sealed class ReportQueryServiceTests
         Assert.Equal(1, result.TotalChapters);
         Assert.Equal(3, result.TotalDocuments);
         Assert.Equal(1, result.UnassignedDocuments);
-        Assert.Equal(3, result.TotalChunks);
+        Assert.Equal(4, result.TotalChunks);
         Assert.Equal(0, result.UploadedCount);
         Assert.Equal(0, result.ProcessingCount);
         Assert.Equal(2, result.IndexedCount);
