@@ -57,9 +57,12 @@
                             <li class="nav-item">
                                 <a class="nav-link-humata @(isChatPage ? "is-active" : null)" asp-area="" asp-page="/Chat/Index">Trò chuyện RAG</a>
                             </li>
+                            @if (isAdmin || isSubjectLeader)
+                            {
                             <li class="nav-item">
                                 <a class="nav-link-humata @(currentPage.StartsWith("/Evaluation", StringComparison.OrdinalIgnoreCase) ? "is-active" : null)" asp-area="" asp-page="/Evaluation/Index">Đánh giá RAG</a>
                             </li>
+                            }
 
                         }
                         @if (isAdmin)
