@@ -66,6 +66,19 @@ public sealed class VnPayBillingService : IBillingService
         return order is null ? null : Map(order);
     }
 
+    public async Task<IReadOnlyList<BillingOrderStatus>> GetUserOrdersAsync(
+        Guid userId,
+        CancellationToken cancellationToken)
+    {
+        var orders = await _dbContext.PaymentOrders
+            .AsNoTracking()
+            .Where(o => o.UserId == userId)
+            .OrderByDescending(o => o.CreatedUtc)
+            .ToListAsync(cancellationToken);
+
+        return orders.Select(Map).ToList();
+    }
+
     public async Task<BillingOrderStatus> ProcessReturnAsync(
         ProcessReturnRequest request,
         CancellationToken cancellationToken)

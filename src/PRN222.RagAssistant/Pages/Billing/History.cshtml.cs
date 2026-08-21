@@ -2,8 +2,8 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
-using Microsoft.EntityFrameworkCore;
-using PRN222.RagAssistant.Data;
+using PRN222.RagAssistant.Application.Abstractions;
+using PRN222.RagAssistant.Application.Models;
 using PRN222.RagAssistant.Domain.Entities;
 
 namespace PRN222.RagAssistant.Pages.Billing;
@@ -11,16 +11,16 @@ namespace PRN222.RagAssistant.Pages.Billing;
 [Authorize]
 public sealed class HistoryModel : PageModel
 {
-    private readonly ApplicationDbContext _dbContext;
+    private readonly IBillingService _billingService;
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly ILogger<HistoryModel> _logger;
 
     public HistoryModel(
-        ApplicationDbContext dbContext,
+        IBillingService billingService,
         UserManager<ApplicationUser> userManager,
         ILogger<HistoryModel> logger)
     {
-        _dbContext = dbContext;
+        _billingService = billingService;
         _userManager = userManager;
         _logger = logger;
     }
@@ -35,11 +35,7 @@ public sealed class HistoryModel : PageModel
             return Challenge();
         }
 
-        var orders = await _dbContext.PaymentOrders
-            .AsNoTracking()
-            .Where(o => o.UserId == user.Id)
-            .OrderByDescending(o => o.CreatedUtc)
-            .ToListAsync(cancellationToken);
+        var orders = await _billingService.GetUserOrdersAsync(user.Id, cancellationToken);
 
         Orders.Clear();
         foreach (var order in orders)
@@ -52,9 +48,9 @@ public sealed class HistoryModel : PageModel
 
     public sealed class OrderViewModel
     {
-        public OrderViewModel(PaymentOrder order)
+        public OrderViewModel(BillingOrderStatus order)
         {
-            Id = order.Id;
+            Id = order.OrderId;
             CreatedUtc = order.CreatedUtc;
             SubjectId = order.SubjectId;
             Amount = order.Amount;

@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using PRN222.RagAssistant.Application.Models;
@@ -21,6 +22,7 @@ public sealed class VnPayBillingServiceTests
     {
         var options = new DbContextOptionsBuilder<ApplicationDbContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .ReplaceService<IModelCustomizer, TestModelCustomizer>()
             .Options;
 
         var dbContext = new ApplicationDbContext(options);
@@ -164,7 +166,6 @@ public sealed class VnPayBillingServiceTests
 
         Assert.True(webhookResult.Success);
         Assert.Equal("Already processed", webhookResult.Message); // Idempotent because return already marked it Paid
-
         // 4. Verify persisted state in Database
         var finalOrder = await dbContext.PaymentOrders.FindAsync(createResult.OrderId);
         Assert.NotNull(finalOrder);
@@ -314,5 +315,43 @@ public sealed class VnPayBillingServiceTests
         var orderInDb = await dbContext.PaymentOrders.FindAsync(createResult.OrderId);
         Assert.NotNull(orderInDb);
         Assert.Equal("Pending", orderInDb.Status); // Should remain Pending
+    }
+
+    [Fact]
+    public async Task GetUserOrdersAsync_ReturnsOrdersSortedByCreatedUtc()
+    {
+        // Arrange
+        var (dbContext, service) = CreateService();
+        var userId = Guid.NewGuid();
+
+        await service.CreateOrderAsync(
+            new CreateBillingOrderRequest(userId, null, 50_000, "VND", "Order 1", new Uri("https://localhost:7001/Billing/Return"), "127.0.0.1"),
+            CancellationToken.None);
+
+        await service.CreateOrderAsync(
+            new CreateBillingOrderRequest(userId, null, 100_000, "VND", "Order 2", new Uri("https://localhost:7001/Billing/Return"), "127.0.0.1"),
+            CancellationToken.None);
+
+        // Act
+        var userOrders = await service.GetUserOrdersAsync(userId, CancellationToken.None);
+
+        // Assert
+        Assert.Equal(2, userOrders.Count);
+        Assert.Equal(100_000, userOrders[0].Amount); // Newest first
+        Assert.Equal(50_000, userOrders[1].Amount);
+    }
+
+    private sealed class TestModelCustomizer : ModelCustomizer
+    {
+        public TestModelCustomizer(ModelCustomizerDependencies dependencies)
+            : base(dependencies)
+        {
+        }
+
+        public override void Customize(ModelBuilder modelBuilder, DbContext context)
+        {
+            base.Customize(modelBuilder, context);
+            modelBuilder.Entity<DocumentChunk>().Ignore(chunk => chunk.Embedding);
+        }
     }
 }

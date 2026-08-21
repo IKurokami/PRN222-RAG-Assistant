@@ -6,6 +6,7 @@ public interface IBillingService
 {
     Task<BillingOrderResult> CreateOrderAsync(CreateBillingOrderRequest request, CancellationToken cancellationToken);
     Task<BillingOrderStatus?> GetOrderAsync(Guid orderId, CancellationToken cancellationToken);
+    Task<IReadOnlyList<BillingOrderStatus>> GetUserOrdersAsync(Guid userId, CancellationToken cancellationToken);
     Task<BillingOrderStatus> ProcessReturnAsync(ProcessReturnRequest request, CancellationToken cancellationToken);
     Task<BillingWebhookResult> ProcessWebhookAsync(ProcessWebhookRequest request, CancellationToken cancellationToken);
 }
