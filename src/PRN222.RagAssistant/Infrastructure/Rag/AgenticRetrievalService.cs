@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using PRN222.RagAssistant.Application.Abstractions;
 using PRN222.RagAssistant.Data;
 using PRN222.RagAssistant.Domain.Enums;
@@ -46,20 +47,21 @@ public sealed record AgentDocumentInfo(
 /// </summary>
 public sealed class AgenticRetrievalService : IAgenticRetrievalService
 {
-    private const double RrfK = 60.0;
-
     private readonly ApplicationDbContext _dbContext;
     private readonly ITextEmbeddingService _embeddingService;
     private readonly IDocumentChunkRetriever _vectorRetriever;
+    private readonly RagOptions _options;
 
     public AgenticRetrievalService(
         ApplicationDbContext dbContext,
         ITextEmbeddingService embeddingService,
-        IDocumentChunkRetriever vectorRetriever)
+        IDocumentChunkRetriever vectorRetriever,
+        IOptions<RagOptions> options)
     {
         _dbContext = dbContext;
         _embeddingService = embeddingService;
         _vectorRetriever = vectorRetriever;
+        _options = options.Value;
     }
 
     public async Task<IReadOnlyList<RetrievedChunk>> HybridSearchAsync(
@@ -75,15 +77,11 @@ public sealed class AgenticRetrievalService : IAgenticRetrievalService
         var semantic = await _vectorRetriever.SearchAsync(embedding, subjectId, cancellationToken);
         var keyword = await KeywordSearchAsync(query, subjectId, Math.Max(topK, 8), cancellationToken);
 
-        var fused = new Dictionary<Guid, (RetrievedChunk Chunk, double Score)>();
-        AddRrfScores(fused, semantic, topK * 2);
-        AddRrfScores(fused, keyword, topK * 2);
-
-        return fused.Values
-            .OrderByDescending(item => item.Score)
-            .Take(topK)
-            .Select(item => item.Chunk with { SimilarityScore = item.Score })
-            .ToList();
+        return AgenticRetrievalRanker.Fuse(
+            semantic,
+            keyword,
+            _options.Retrieval.MinimumSimilarityScore,
+            topK);
     }
 
     public async Task<IReadOnlyList<RetrievedChunk>> KeywordSearchAsync(
@@ -221,27 +219,6 @@ public sealed class AgenticRetrievalService : IAgenticRetrievalService
                 document.OriginalFileName,
                 document.IndexedAtUtc))
             .ToListAsync(cancellationToken);
-    }
-
-    private static void AddRrfScores(
-        IDictionary<Guid, (RetrievedChunk Chunk, double Score)> fused,
-        IReadOnlyList<RetrievedChunk> chunks,
-        int maxItems)
-    {
-        for (var index = 0; index < Math.Min(chunks.Count, maxItems); index++)
-        {
-            var chunk = chunks[index];
-            var contribution = 1.0 / (RrfK + index + 1);
-
-            if (fused.TryGetValue(chunk.DocumentChunkId, out var existing))
-            {
-                fused[chunk.DocumentChunkId] = (existing.Chunk, existing.Score + contribution);
-            }
-            else
-            {
-                fused[chunk.DocumentChunkId] = (chunk, contribution);
-            }
-        }
     }
 
     private static void ValidateQuery(string query)
