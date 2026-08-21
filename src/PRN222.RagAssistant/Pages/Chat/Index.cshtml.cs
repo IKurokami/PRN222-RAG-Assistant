@@ -134,15 +134,22 @@ public sealed class IndexModel : PageModel
     {
         Response.ContentType = "text/event-stream";
         Response.Headers.CacheControl = "no-cache";
-        Response.Headers.Connection = "keep-alive";
+        Response.Headers["X-Accel-Buffering"] = "no";
         Response.HttpContext.Features
             .Get<Microsoft.AspNetCore.Http.Features.IHttpResponseBodyFeature>()?
             .DisableBuffering();
+        await Response.StartAsync(cancellationToken);
 
         async Task SendEventAsync(string eventName, object data)
         {
             var json = System.Text.Json.JsonSerializer.Serialize(data);
             await Response.WriteAsync($"event: {eventName}\ndata: {json}\n\n", cancellationToken);
+            await Response.Body.FlushAsync(cancellationToken);
+        }
+
+        async Task SendHeartbeatAsync()
+        {
+            await Response.WriteAsync(": keep-alive\n\n", cancellationToken);
             await Response.Body.FlushAsync(cancellationToken);
         }
 
@@ -179,12 +186,28 @@ public sealed class IndexModel : PageModel
                 detail = "So khớp Cosine Distance trên các DocumentChunks thuộc môn học"
             });
 
-            var answer = await _ragQueryService.AskAsync(
+            var answerTask = _ragQueryService.AskAsync(
                 user.Id,
                 dto.SessionId,
                 dto.Question,
                 dto.SubjectId,
                 cancellationToken);
+
+            while (!answerTask.IsCompleted)
+            {
+                var completedTask = await Task.WhenAny(
+                    answerTask,
+                    Task.Delay(TimeSpan.FromSeconds(10), cancellationToken));
+
+                if (completedTask == answerTask)
+                {
+                    break;
+                }
+
+                await SendHeartbeatAsync();
+            }
+
+            var answer = await answerTask;
 
             var citations = answer.Citations.Select(c => new
             {
@@ -222,17 +245,10 @@ public sealed class IndexModel : PageModel
 
             await SendEventAsync("citations", new { citations });
 
-            var tokens = System.Text.RegularExpressions.Regex.Matches(answer.Answer, @"\S+\s*");
-            foreach (System.Text.RegularExpressions.Match match in tokens)
-            {
-                if (cancellationToken.IsCancellationRequested)
-                {
-                    break;
-                }
-
-                await SendEventAsync("delta", new { content = match.Value });
-                await Task.Delay(18, cancellationToken);
-            }
+            // AskAsync already waits for the provider and persists the complete answer.
+            // Send the completed answer immediately instead of artificially stretching
+            // the SSE connection with per-token delays, which can be reset by proxies.
+            await SendEventAsync("delta", new { content = answer.Answer });
 
             await SendEventAsync("done", new
             {
@@ -247,7 +263,18 @@ public sealed class IndexModel : PageModel
         catch (Exception ex)
         {
             _logger.LogError(ex, "Chat stream request failed for User {UserId}", user.Id);
-            await SendEventAsync("error", new { message = "Đã xảy ra lỗi: " + ex.Message });
+
+            try
+            {
+                await SendEventAsync("error", new { message = "Đã xảy ra lỗi: " + ex.Message });
+            }
+            catch (Exception sendError)
+            {
+                _logger.LogDebug(
+                    sendError,
+                    "Unable to send chat stream error event because the client connection is no longer available for User {UserId}",
+                    user.Id);
+            }
         }
 
         return new EmptyResult();
