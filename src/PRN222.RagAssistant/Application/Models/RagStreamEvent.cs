@@ -20,3 +20,15 @@ public sealed record RagCitationsEvent(
     IReadOnlyList<RagCitation> Citations) : RagStreamEvent;
 
 public sealed record RagCompletedEvent(RagAnswer Answer) : RagStreamEvent;
+
+/// <summary>
+/// Emitted when the RAG pipeline encounters a recoverable, named error
+/// (e.g. provider rate-limit) that the frontend should surface distinctly
+/// from a normal "no documents found" result.
+/// </summary>
+/// <param name="ErrorCode">
+/// Machine-readable code — e.g. <c>AI_PROVIDER_RATE_LIMITED</c> or <c>STREAM_ERROR</c>.
+/// </param>
+/// <param name="Message">Localised, user-facing message (no stack trace).</param>
+public sealed record RagErrorEvent(string ErrorCode, string Message) : RagStreamEvent;
+

@@ -533,7 +533,13 @@ else
                             accumulatedText = data.answer || accumulatedText;
                             receivedCitations = data.citations || receivedCitations;
                         } else if (currentEvent === 'error') {
-                            throw new Error(data.message || 'Lỗi xử lý câu hỏi');
+                            // Issue #36: map machine-readable errorCode to a user-friendly message.
+                            // AI_PROVIDER_RATE_LIMITED must never show as "no documents found".
+                            const errorCode = data.errorCode || '';
+                            const friendlyMessage = errorCode === 'AI_PROVIDER_RATE_LIMITED'
+                                ? '⏳ Dịch vụ AI hiện đang quá tải hoặc đã đạt giới hạn yêu cầu. Vui lòng thử lại sau một lúc.'
+                                : (data.message || 'Đã xảy ra lỗi khi xử lý yêu cầu. Vui lòng thử lại.');
+                            throw new Error(friendlyMessage);
                         }
                     }
                 }

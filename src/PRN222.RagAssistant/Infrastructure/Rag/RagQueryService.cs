@@ -250,27 +250,80 @@ public sealed class RagQueryService : IRagQueryService
                     "completed",
                     $"Đã tìm thấy {chunkCount} đoạn tài liệu phù hợp");
 
+                // Preserve true SSE streaming. C# async iterators cannot yield from inside
+                // a try/catch (CS1626), so only MoveNextAsync/CompleteAsync is wrapped and
+                // each successful token is yielded after leaving the catch boundary.
                 var answerBuilder = new StringBuilder();
+                AiProviderRateLimitException? rateLimitException = null;
 
                 if (_chatService is IStreamingChatCompletionService streamingChat)
                 {
-                    await foreach (var delta in streamingChat.StreamAsync(
-                                       prepared.SystemPrompt!,
-                                       prepared.UserPrompt!,
-                                       cancellationToken))
+                    await using var enumerator = streamingChat.StreamAsync(
+                            prepared.SystemPrompt!,
+                            prepared.UserPrompt!,
+                            cancellationToken)
+                        .GetAsyncEnumerator(cancellationToken);
+
+                    while (true)
                     {
+                        bool hasNext;
+                        string delta;
+
+                        try
+                        {
+                            hasNext = await enumerator.MoveNextAsync();
+                            delta = hasNext ? enumerator.Current : string.Empty;
+                        }
+                        catch (AiProviderRateLimitException ex)
+                        {
+                            rateLimitException = ex;
+                            break;
+                        }
+
+                        if (!hasNext)
+                        {
+                            break;
+                        }
+
                         answerBuilder.Append(delta);
                         yield return new RagDeltaEvent(delta);
                     }
                 }
                 else
                 {
-                    var completed = await _chatService.CompleteAsync(
-                        prepared.SystemPrompt!,
-                        prepared.UserPrompt!,
-                        cancellationToken);
-                    answerBuilder.Append(completed);
-                    yield return new RagDeltaEvent(completed);
+                    string? completed = null;
+
+                    try
+                    {
+                        completed = await _chatService.CompleteAsync(
+                            prepared.SystemPrompt!,
+                            prepared.UserPrompt!,
+                            cancellationToken);
+                    }
+                    catch (AiProviderRateLimitException ex)
+                    {
+                        rateLimitException = ex;
+                    }
+
+                    if (rateLimitException is null && completed is not null)
+                    {
+                        answerBuilder.Append(completed);
+                        yield return new RagDeltaEvent(completed);
+                    }
+                }
+
+                if (rateLimitException is not null)
+                {
+                    _logger.LogWarning(
+                        rateLimitException,
+                        "AI provider rate-limited during chat generation. Provider={Provider}, SessionId={SessionId}, UserId={UserId}",
+                        rateLimitException.ProviderName,
+                        session.Id,
+                        userId);
+                    yield return new RagErrorEvent(
+                        "AI_PROVIDER_RATE_LIMITED",
+                        "Dịch vụ AI hiện đang quá tải hoặc đã đạt giới hạn yêu cầu. Vui lòng thử lại sau một lúc.");
+                    yield break;
                 }
 
                 answerText = answerBuilder.ToString().Trim();

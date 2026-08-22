@@ -1,6 +1,8 @@
+using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json.Serialization;
 using PRN222.RagAssistant.Application.Abstractions;
+using PRN222.RagAssistant.Infrastructure.Rag.Exceptions;
 
 namespace PRN222.RagAssistant.Infrastructure.Services;
 
@@ -58,6 +60,14 @@ public sealed class OpenRouterChatCompletionService : IChatCompletionService
             "chat/completions",
             request,
             cancellationToken);
+
+        // Issue #36: detect rate-limit explicitly so callers can surface a
+        // user-friendly message instead of the generic "no documents" fallback.
+        if (response.StatusCode == HttpStatusCode.TooManyRequests)
+        {
+            throw AiProviderRateLimitException.FromResponse("OpenRouter", response);
+        }
+
         response.EnsureSuccessStatusCode();
 
         var payload = await response.Content.ReadFromJsonAsync<OpenRouterChatResponse>(
