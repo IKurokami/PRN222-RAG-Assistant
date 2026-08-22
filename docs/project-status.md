@@ -1,111 +1,90 @@
 # Project status
 
-> Updated on 2026-08-22 after PR #53 introduced VNPay billing/account quota and the reporting follow-up added Admin-only billing analytics.
->
-> This file still distinguishes the **merged `master` state** from the **PR #46 branch state**. PR #46 is **not merged**; branch implementation notes are not merged contribution claims.
+> Verified against `master` on 2026-08-22 after PR #46, #53, #54, #55 and #56.
 
-## Target presentation architecture
+## Current runtime status
 
-All HTTP UI/actions must converge on Razor Pages.
-
-```text
-Flow 1 Documents/Chapters: Razor Pages + authorized ManagementHub
-Flow 2 Chat:               Razor Pages + SSE
-Flow 2 Evaluation:         Razor Pages
-Flow 3 Reports:            Razor Pages
-Admin users/subjects:      Razor Pages
-Subject catalogue:         Razor Pages
-Billing/quota:             Razor Pages
-```
-
-SignalR is the authorized management fan-out mechanism for Documents, Chapters, Subjects, Subject Leader assignments, and Users/roles. It does not replace Razor Page handlers or Chat SSE.
-
-## Migration status
-
-| Area | Target | Runtime status |
+| Area | Current implementation | Status |
 |---|---|---|
-| Account/auth | Razor Pages | Complete |
-| Chat/history/citations | Razor Pages + SSE | Complete after PR #42/#43 |
+| Account/auth | Razor Pages + ASP.NET Core Identity | Complete |
+| Documents/Chapters | Razor Pages + subject-authorized ManagementHub notifications | Complete after PR #46 |
+| Admin users/subjects | Razor Pages + ManagementHub | Complete after PR #46 |
+| Subject catalogue | Razor Pages + ManagementHub | Complete after PR #46 |
+| Chat/history/citations | Razor Pages + SSE + `IChatPageService` | Complete |
+| Evaluation | Razor Pages + `IEvaluationService` | Complete after PR #46 |
 | Academic Reports | Razor Pages + `IReportQueryService` | Complete |
-| Billing/quota checkout | Razor Pages + `IBillingService` | Complete after PR #53 |
-| Billing analytics | Razor Pages + `IBillingReportQueryService` | Reporting follow-up branch |
-| Documents/Chapters | Razor Pages + ManagementHub | PR #46 branch implementation; not merged |
-| Evaluation | Razor Pages | Implementation pending |
-| Admin users/subjects | Razor Pages + ManagementHub | PR #46 branch implementation; not merged |
-| Subject catalogue | Razor Pages + ManagementHub | PR #46 branch implementation; not merged |
-| Legacy MVC presentation removal | Removed | Verify on PR #46 branch; merge pending |
+| VNPay billing/quota | Razor Pages + `IBillingService` / account-level quota | Complete after PR #53 |
+| Billing analytics | Admin-only Razor Pages + `IBillingReportQueryService` | Complete after PR #55 |
+| Legacy MVC product presentation | Removed | Complete after PR #46 |
 
-The presentation migration is **not complete on `master`** until the follow-up code PR merges and any remaining legacy MVC presentation/controller routing is verified after Razor Page parity.
-
-## Relevant merged milestones
-
-- **PR #32** - Render Blueprint CD.
-- **PR #33** - Render pgvector/runtime fixes and optional seed behavior.
-- **PR #34/#35** - original product Chat/Evaluation integration, SSE UX, grounding/follow-up improvements.
-- **PR #37** - Gemini embedding dimensionality fix and pgvector dimension-safe re-index transition.
-- **PR #38** - PostgreSQL-persisted Data Protection keys and OpenRouter chat fallback update.
-- **PR #39** - Render Chat switched to Gemini while embeddings remain OpenRouter.
-- **PR #40** - Reports moved behind `IReportQueryService`; report chat aggregates became subject-scoped.
-- **PR #42** - Chat product presentation migrated to Razor Pages.
-- **PR #43** - Chat PageModel direct DbContext usage replaced by `IChatPageService`.
-- **PR #53** - VNPay billing and concurrency-safe account-level RAG quota management.
-
-## PR #46 implementation state (branch only)
-
-The branch retains the completed PageModel/DbContext cleanup and implements issue #47 authorized management realtime for:
+## Presentation architecture
 
 ```text
-Documents
-Chapters
-Subjects
-Subject Leader assignments
-Users/roles
+HTTP UI/actions     -> Razor Pages
+Chat updates        -> SSE
+Management updates  -> authorized SignalR ManagementHub
+Indexing            -> hosted background worker/services
 ```
 
-The implementation uses Razor Page handlers for writes, server-side policy and concrete-subject authorization, post-commit `IManagementRealtimeNotifier` broadcasts, scoped ManagementHub groups, automatic reconnect, and reload fallback. This is implementation state only; PR #46 is not merged.
+PR #46 completed the Razor-Pages-only product/admin migration and added authorized management realtime for Documents, Chapters, Subjects, Subject Leader assignments, and Users/roles. Writes remain Razor Page handlers/application services and broadcasts occur only after successful persistence.
 
-## Flow 1 target and branch behavior
+## Important merged milestones
+
+- **PR #32** — Render Blueprint CD.
+- **PR #33** — Render pgvector/runtime fixes and optional seed behavior.
+- **PR #34/#35** — Chat/Evaluation product integration, SSE UX, grounding/follow-up improvements.
+- **PR #37** — embedding dimensionality transition safety for pgvector retrieval.
+- **PR #38** — PostgreSQL-persisted Data Protection keys and OpenRouter chat fallback update.
+- **PR #39** — Render Chat switched to Gemini while embeddings remain OpenRouter.
+- **PR #40** — Reports moved behind `IReportQueryService`; chat aggregates became subject-scoped.
+- **PR #42** — Chat presentation migrated to Razor Pages.
+- **PR #43** — Chat page/session data moved behind `IChatPageService`.
+- **PR #46** — remaining MVC Controllers/Views migrated to Razor Pages; PageModel/DbContext cleanup; authorized ManagementHub added; release build verified with 196 passing tests.
+- **PR #53** — VNPay billing and concurrency-safe account-level RAG quota management.
+- **PR #54** — Chat 429/rate-limit errors handled separately from no-document/no-evidence cases.
+- **PR #55** — Admin billing report analytics added and linked from academic reporting.
+- **PR #56** — verified successful VNPay return can finalize payment when IPN is missing.
+
+## Flow 1 - Documents, Chapters and management realtime
 
 ```text
-management Razor Page handler
+Razor Page handler
  -> validate + authorize policy/concrete Subject
+ -> purpose-specific application service
  -> persist change
  -> enqueue Document.Id when required
- -> commit succeeds
- -> publish ManagementChanged through ManagementHub
+ -> publish ManagementChanged after commit
 ```
 
-Document indexing remains separate:
+Background indexing remains separate:
 
 ```text
-Document indexing worker
+IDocumentIndexingQueue
+ -> DocumentIndexingWorker
+ -> IDocumentIndexingService
  -> parser/chunker
  -> ITextEmbeddingService
- -> DocumentChunks/index status
- -> publish (Document, IndexStatusChanged, Status)
+ -> DocumentChunks/index state
+ -> ManagementChanged(Document, IndexStatusChanged, Status)
 ```
 
-The common management event envelope carries `Resource`, `Change`, `EntityId`, optional `SubjectId`, and optional `Status`. Resources are Document, Chapter, Subject, SubjectLeaderAssignments, and User; changes are Created, Updated, Deleted, IndexStatusChanged, AssignmentsChanged, and RoleChanged.
+ManagementHub uses scoped server-authorized subscriptions. SignalR is fan-out only and is never a CRUD API.
 
-Writes remain Razor Page handlers with antiforgery and server-side authorization. ManagementHub broadcasts only after successful persistence.
-
-## Flow 2
-
-Chat is now Razor Pages and keeps SSE for progress/result rendering.
+## Flow 2 - Chat, RAG and Evaluation
 
 ```text
 Chat Razor Page
- -> IChatPageService for page/session data
- -> IRagQueryService for RAG
+ -> IChatPageService
+ -> IRagQueryService
  -> subject + dimension constrained pgvector retrieval
  -> grounded generation
- -> citations/messages persistence
+ -> messages/citations persistence
  -> SSE progress/result rendering
 ```
 
-Evaluation must migrate to Razor Pages in the follow-up presentation PR while preserving `IEvaluationService` behavior and the 50-question dataset.
+Chat preserves typed error behavior so provider/rate-limit failures are not misreported as missing documents. Evaluation remains backed by `IEvaluationService` and the packaged 50-question dataset.
 
-## Flow 3
+## Flow 3 - Academic and billing reporting
 
 Academic reports remain subject-scoped:
 
@@ -116,7 +95,7 @@ Pages/Reports/Index.cshtml.cs
  -> ApplicationDbContext
 ```
 
-The billing reporting follow-up adds a separate system-wide Admin-only read model:
+Billing analytics is a separate system-wide Admin-only read model:
 
 ```text
 Pages/Reports/Billing.cshtml.cs
@@ -125,15 +104,21 @@ Pages/Reports/Billing.cshtml.cs
  -> ApplicationDbContext
 ```
 
-The split is intentional. Academic corpus/chat/citation metrics remain subject-scoped. Current VNPay checkout grants account-level quota and creates orders without a Subject assignment, so confirmed revenue, payment-channel and quota-sale metrics are not attributed to the Subject currently being viewed.
+The split is intentional. Academic corpus/chat/citation metrics remain subject-scoped. Current VNPay checkout grants account-level quota, so revenue/quota metrics must not be attributed to whichever Subject is being viewed unless a future product change persists explicit subject attribution.
 
-Billing analytics treats persisted `Paid` orders as confirmed revenue, reports Paid/Pending/Failed and stale Pending checkout health, quota/package mix, payment channel mix, short-term revenue activity and non-PII recent-order data. It does not mutate payment or quota state.
+Persisted `Paid` orders are confirmed revenue. Billing reporting also surfaces Pending/Failed health, stale Pending orders, quota/package mix, payment-channel mix, short-term revenue activity and non-PII recent-order data.
+
+## Billing/quota behavior
+
+PR #53 added concurrency-safe quota reservation/activation and VNPay payment handling. Credentials are environment-only secrets.
+
+PR #56 adds a verified-return fallback: if VNPay's successful return is cryptographically valid and the IPN callback is absent, the application can finalize persisted payment/quota state. Reporting continues to read persisted state rather than trusting transient request parameters.
 
 ## Provider/runtime status
 
-Supported providers remain Ollama, Gemini, OpenAI and OpenRouter with independent chat/embedding selection.
+Supported AI providers remain Ollama, Gemini, OpenAI and OpenRouter with independent chat/embedding selection.
 
-Current Render split:
+Current Render configuration documented by the repository:
 
 ```text
 Chat:      Gemini / gemini-3.6-flash
@@ -141,7 +126,7 @@ Embedding: OpenRouter / nvidia/llama-nemotron-embed-vl-1b-v2:free
 Dimension: 1024
 ```
 
-Changing any embedding provider/model/dimension still requires complete corpus re-indexing.
+Changing embedding provider/model/dimension requires complete corpus re-indexing. Chat-only provider/model changes do not.
 
 ## CI/CD
 
@@ -149,7 +134,7 @@ Changing any embedding provider/model/dimension still requires complete corpus r
 pull request / push
  -> GitHub Actions CI
  -> build + tests
- -> ApplicationDbContext model/migration validation
+ -> EF model/migration validation
  -> Docker Compose validation
  -> PostgreSQL/pgvector checks
 
@@ -157,22 +142,13 @@ master checks pass
  -> Render checksPass auto deploy
 ```
 
-Billing analytics regression coverage verifies the Admin-only boundary, query-service/PageModel separation, Paid-only revenue/quota semantics, stale-Pending-aware completion, metadata-integrity handling and seven-day aggregation.
-
-The PR #46 branch includes the management realtime implementation and must add/update regression coverage for Razor Page authorization/handlers and ManagementHub subscription/realtime behavior before merge. This branch status does not claim PR #46 is merged.
-
 ## Remaining technical debt
 
-Primary follow-up work:
+- durable hosted storage for uploaded source files instead of free-instance ephemeral storage;
+- deeper DOCX/PPTX/complex-PDF ingestion fixtures and RAG quality validation;
+- preserve strict subject isolation and ManagementHub group authorization as management features evolve;
+- preserve Chat SSE and typed provider/rate-limit error semantics;
+- only add subject-level revenue reporting if checkout later persists meaningful subject attribution;
+- keep canonical documentation synchronized whenever provider, billing, reporting, deployment or architecture semantics change.
 
-- merge/review the reporting follow-up and keep payment analytics semantics aligned with the actual quota product model;
-- only add subject-level revenue if checkout later records an explicit, meaningful Subject attribution;
-- merge PR #46 after review and validation, then reconcile canonical docs against the merged source;
-- complete/remove any remaining legacy MVC presentation registration/routing after parity;
-- preserve authorized ManagementHub group isolation and post-commit fan-out;
-- preserve Chat SSE as-is and prohibit a SignalR Chat migration;
-- add/retain Razor Page and management realtime authorization regression tests;
-- deeper DOCX/PPTX/complex-PDF fixtures;
-- durable hosted storage for uploaded source files.
-
-Canonical migration specification: `razor-pages-signalr-architecture.md`.
+Canonical architecture: `razor-pages-signalr-architecture.md`.
