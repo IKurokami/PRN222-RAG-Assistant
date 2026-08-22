@@ -13,8 +13,8 @@ namespace PRN222.RagAssistant.Tests;
 
 public sealed class VnPayBillingServiceTests
 {
-    private const string TestHashSecret = "EUKFJAYATVRRJBDQHUWZTJRCTCSSOYVY";
-    private const string TestTmnCode = "8OTYXKKM";
+    private const string TestHashSecret = "test-vnpay-hash-secret-for-unit-tests-only";
+    private const string TestTmnCode = "TESTTMN001";
     private const string TestBaseUrl = "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html";
 
     private static (ApplicationDbContext DbContext, VnPayBillingService Service) CreateService(
@@ -52,7 +52,6 @@ public sealed class VnPayBillingServiceTests
     [Fact]
     public async Task CreateOrderAsync_PersistsOrderInPendingStatus_AndReturnsCheckoutUrl()
     {
-        // Arrange
         var (dbContext, service) = CreateService();
         var userId = Guid.NewGuid();
         var request = new CreateBillingOrderRequest(
@@ -64,10 +63,8 @@ public sealed class VnPayBillingServiceTests
             new Uri("https://localhost:7001/Billing/Return"),
             "127.0.0.1");
 
-        // Act
         var result = await service.CreateOrderAsync(request, CancellationToken.None);
 
-        // Assert
         Assert.NotEqual(Guid.Empty, result.OrderId);
         Assert.StartsWith("PRN222-", result.ExternalOrderId);
         Assert.NotNull(result.CheckoutUrl);
@@ -80,24 +77,21 @@ public sealed class VnPayBillingServiceTests
         Assert.Equal("VND", persisted.Currency);
         Assert.Equal("VNPay", persisted.Provider);
 
-        // Check query parameters in generated URL
         var uri = result.CheckoutUrl;
         var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
         Assert.Equal(TestTmnCode, query["vnp_TmnCode"]);
-        Assert.Equal("5000000", query["vnp_Amount"]); // 50,000 * 100
+        Assert.Equal("5000000", query["vnp_Amount"]);
         Assert.Equal("VND", query["vnp_CurrCode"]);
         Assert.Equal(result.ExternalOrderId, query["vnp_TxnRef"]);
         Assert.False(string.IsNullOrWhiteSpace(query["vnp_SecureHash"]));
     }
 
     [Fact]
-    public async Task EndToEnd_LiveSandboxCredentials_Checkout_Return_And_Webhook_Flow()
+    public async Task EndToEnd_SimulatedSandbox_Checkout_Return_And_Webhook_Flow()
     {
-        // Arrange - using the user's live sandbox credentials
         var (dbContext, service) = CreateService(TestTmnCode, TestHashSecret);
         var userId = Guid.NewGuid();
 
-        // 1. User initiates payment for 100,000 VND (100 RAG queries)
         var createRequest = new CreateBillingOrderRequest(
             userId,
             null,
@@ -113,8 +107,6 @@ public sealed class VnPayBillingServiceTests
         Assert.NotNull(createResult.CheckoutUrl);
         Assert.Contains($"vnp_TmnCode={TestTmnCode}", createResult.CheckoutUrl.ToString());
 
-        // 2. Simulate user completing payment on VNPay sandbox (NCB Test Card)
-        // VNPay redirects browser back to ReturnUrl with valid HMAC-SHA512
         var returnParams = new Dictionary<string, string?>
         {
             ["vnp_Amount"] = "10000000",
@@ -130,11 +122,9 @@ public sealed class VnPayBillingServiceTests
             ["vnp_TxnRef"] = createResult.ExternalOrderId
         };
 
-        // Compute valid signature using the secret key
         var returnHash = VnPayHashHelper.CreateSecureHash(returnParams, TestHashSecret);
         returnParams["vnp_SecureHash"] = returnHash;
 
-        // Process Return
         var returnStatus = await service.ProcessReturnAsync(
             new ProcessReturnRequest(createResult.OrderId, returnParams),
             CancellationToken.None);
@@ -145,7 +135,6 @@ public sealed class VnPayBillingServiceTests
         Assert.Equal("ATM", returnStatus.CardType);
         Assert.NotNull(returnStatus.PaidUtc);
 
-        // 3. Simulate asynchronous IPN Webhook call from VNPay server
         var webhookParams = new Dictionary<string, string?>
         {
             ["vnp_Amount"] = "10000000",
@@ -168,8 +157,8 @@ public sealed class VnPayBillingServiceTests
             CancellationToken.None);
 
         Assert.True(webhookResult.Success);
-        Assert.Equal("Already processed", webhookResult.Message); // Idempotent because return already marked it Paid
-        // 4. Verify persisted state in Database
+        Assert.Equal("Already processed", webhookResult.Message);
+
         var finalOrder = await dbContext.PaymentOrders.FindAsync(createResult.OrderId);
         Assert.NotNull(finalOrder);
         Assert.Equal("Paid", finalOrder.Status);
@@ -181,7 +170,6 @@ public sealed class VnPayBillingServiceTests
     [Fact]
     public async Task ProcessReturnAsync_InvalidHash_ThrowsInvalidOperationException()
     {
-        // Arrange
         var (dbContext, service) = CreateService();
         var createResult = await service.CreateOrderAsync(
             new CreateBillingOrderRequest(
@@ -197,7 +185,6 @@ public sealed class VnPayBillingServiceTests
             ["vnp_SecureHash"] = "INVALID_HASH_VALUE_12345"
         };
 
-        // Act & Assert
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             service.ProcessReturnAsync(
                 new ProcessReturnRequest(createResult.OrderId, callbackParams),
@@ -207,7 +194,6 @@ public sealed class VnPayBillingServiceTests
     [Fact]
     public async Task ProcessWebhookAsync_ValidSuccessfulPayment_MarksOrderPaid_AndReturnsConfirmSuccess()
     {
-        // Arrange
         var (dbContext, service) = CreateService();
         var createResult = await service.CreateOrderAsync(
             new CreateBillingOrderRequest(
@@ -229,12 +215,10 @@ public sealed class VnPayBillingServiceTests
         var hash = VnPayHashHelper.CreateSecureHash(webhookParams, TestHashSecret);
         webhookParams["vnp_SecureHash"] = hash;
 
-        // Act
         var webhookResult = await service.ProcessWebhookAsync(
             new ProcessWebhookRequest("VNPay", webhookParams),
             CancellationToken.None);
 
-        // Assert
         Assert.True(webhookResult.Success);
         Assert.Equal("Confirm Success", webhookResult.Message);
 
@@ -248,7 +232,6 @@ public sealed class VnPayBillingServiceTests
     [Fact]
     public async Task ProcessWebhookAsync_RepeatedCall_IsIdempotent()
     {
-        // Arrange
         var (dbContext, service) = CreateService();
         var createResult = await service.CreateOrderAsync(
             new CreateBillingOrderRequest(
@@ -267,18 +250,15 @@ public sealed class VnPayBillingServiceTests
         var hash = VnPayHashHelper.CreateSecureHash(webhookParams, TestHashSecret);
         webhookParams["vnp_SecureHash"] = hash;
 
-        // First call
         var firstResult = await service.ProcessWebhookAsync(
             new ProcessWebhookRequest("VNPay", webhookParams),
             CancellationToken.None);
         Assert.True(firstResult.Success);
 
-        // Second duplicate call from VNPay retry
         var secondResult = await service.ProcessWebhookAsync(
             new ProcessWebhookRequest("VNPay", webhookParams),
             CancellationToken.None);
 
-        // Assert
         Assert.True(secondResult.Success);
         Assert.Equal("Already processed", secondResult.Message);
     }
@@ -286,7 +266,6 @@ public sealed class VnPayBillingServiceTests
     [Fact]
     public async Task ProcessWebhookAsync_AmountMismatch_RejectsWebhook()
     {
-        // Arrange
         var (dbContext, service) = CreateService();
         var createResult = await service.CreateOrderAsync(
             new CreateBillingOrderRequest(
@@ -294,7 +273,6 @@ public sealed class VnPayBillingServiceTests
                 new Uri("https://localhost:7001/Billing/Return"), "127.0.0.1"),
             CancellationToken.None);
 
-        // Webhook sends wrong amount (e.g. 10,000 * 100 instead of 50,000 * 100)
         var webhookParams = new Dictionary<string, string?>
         {
             ["vnp_Amount"] = "1000000",
@@ -306,24 +284,21 @@ public sealed class VnPayBillingServiceTests
         var hash = VnPayHashHelper.CreateSecureHash(webhookParams, TestHashSecret);
         webhookParams["vnp_SecureHash"] = hash;
 
-        // Act
         var result = await service.ProcessWebhookAsync(
             new ProcessWebhookRequest("VNPay", webhookParams),
             CancellationToken.None);
 
-        // Assert
         Assert.False(result.Success);
         Assert.Equal("Amount mismatch", result.Message);
 
         var orderInDb = await dbContext.PaymentOrders.FindAsync(createResult.OrderId);
         Assert.NotNull(orderInDb);
-        Assert.Equal("Pending", orderInDb.Status); // Should remain Pending
+        Assert.Equal("Pending", orderInDb.Status);
     }
 
     [Fact]
     public async Task GetUserOrdersAsync_ReturnsOrdersSortedByCreatedUtc()
     {
-        // Arrange
         var (dbContext, service) = CreateService();
         var userId = Guid.NewGuid();
 
@@ -335,19 +310,16 @@ public sealed class VnPayBillingServiceTests
             new CreateBillingOrderRequest(userId, null, 100_000, "VND", "Order 2", new Uri("https://localhost:7001/Billing/Return"), "127.0.0.1"),
             CancellationToken.None);
 
-        // Act
         var userOrders = await service.GetUserOrdersAsync(userId, CancellationToken.None);
 
-        // Assert
         Assert.Equal(2, userOrders.Count);
-        Assert.Equal(100_000, userOrders[0].Amount); // Newest first
+        Assert.Equal(100_000, userOrders[0].Amount);
         Assert.Equal(50_000, userOrders[1].Amount);
     }
 
     [Fact]
     public async Task ProcessWebhookAsync_GrantsQuotaToUser_WhenPaymentSuccessful()
     {
-        // Arrange
         var (dbContext, service) = CreateService();
         var userId = Guid.NewGuid();
         var user = new ApplicationUser
@@ -391,13 +363,11 @@ public sealed class VnPayBillingServiceTests
 
         var request = new ProcessWebhookRequest("VNPay", callbackParams);
 
-        // Act
         var result = await service.ProcessWebhookAsync(request, CancellationToken.None);
 
-        // Assert
         Assert.True(result.Success);
         var updatedUser = await dbContext.Users.FirstAsync(u => u.Id == userId);
-        Assert.Equal(60, updatedUser.QuotaRemaining); // 10 + (50,000 / 1000) = 60
+        Assert.Equal(60, updatedUser.QuotaRemaining);
     }
 
     private sealed class TestModelCustomizer : ModelCustomizer
