@@ -57,3 +57,21 @@ services:
         value: nvidia/llama-nemotron-embed-vl-1b-v2:free
       - key: Rag__OpenRouter__AppTitle
         value: PRN222 RAG Assistant
+      - key: Billing__Enabled
+        value: "true"
+      - key: Billing__BaseUrl
+        value: https://prn222-rag-assistant.onrender.com
+      - key: Billing__VnPay__TmnCode
+        value: 8OTYXKKM
+      - key: Billing__VnPay__HashSecret
+        sync: false
+      - key: Billing__VnPay__BaseUrl
+        value: https://sandbox.vnpayment.vn/paymentv2/vpcpay.html
+      - key: Billing__VnPay__Version
+        value: 2.1.0
+      - key: Billing__VnPay__Command
+        value: pay
+      - key: Billing__VnPay__Locale
+        value: vn
+      - key: Billing__VnPay__OrderType
+        value: other

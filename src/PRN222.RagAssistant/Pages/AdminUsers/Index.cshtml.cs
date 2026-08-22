@@ -43,10 +43,10 @@ public class IndexModel : PageModel
                 Email = user.Email ?? user.UserName ?? string.Empty,
                 CreatedAtUtc = user.CreatedAtUtc,
                 Roles = roles.OrderBy(role => role).ToList(),
-                IsCurrentUser = currentUser?.Id == user.Id
+                IsCurrentUser = currentUser?.Id == user.Id,
+                QuotaRemaining = user.QuotaRemaining
             });
         }
-
         Users = items;
         StatusMessage = TempData["StatusMessage"] as string;
 

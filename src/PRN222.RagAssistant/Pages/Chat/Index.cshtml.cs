@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 using PRN222.RagAssistant.Application.Abstractions;
 using PRN222.RagAssistant.Application.Models;
 using PRN222.RagAssistant.Domain.Entities;
+using PRN222.RagAssistant.Infrastructure.Rag.Exceptions;
 
 namespace PRN222.RagAssistant.Pages.Chat;
 
@@ -118,6 +119,14 @@ public sealed class IndexModel : PageModel
                 })
             });
         }
+        catch (InsufficientQuotaException ex)
+        {
+            _logger.LogWarning("Chat request blocked due to insufficient quota for User {UserId}", user.Id);
+            return new JsonResult(new { action = "insufficient_quota", message = ex.Message })
+            {
+                StatusCode = StatusCodes.Status403Forbidden
+            };
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Chat request failed for User {UserId}", user.Id);
@@ -168,8 +177,6 @@ public sealed class IndexModel : PageModel
 
         try
         {
-            // The RAG service now owns retrieval/tool/model streaming. This handler only
-            // translates typed application events to SSE and never fabricates token deltas.
             await using var stream = _ragQueryService.AskStreamAsync(
                     user.Id,
                     dto.SessionId,
@@ -182,8 +189,6 @@ public sealed class IndexModel : PageModel
             {
                 var moveNextTask = stream.MoveNextAsync().AsTask();
 
-                // Retrieval tools and model first-token latency can exceed proxy idle
-                // windows, so keep the SSE socket alive without inventing progress data.
                 while (!moveNextTask.IsCompleted)
                 {
                     var completedTask = await Task.WhenAny(
@@ -217,7 +222,6 @@ public sealed class IndexModel : PageModel
                         break;
 
                     case RagDeltaEvent delta:
-                        // Each delta is a real provider/model streaming update.
                         await SendEventAsync("delta", new { content = delta.Content });
                         break;
 
@@ -255,8 +259,6 @@ public sealed class IndexModel : PageModel
                         break;
 
                     case RagErrorEvent ragError:
-                        // Issue #36: typed pipeline errors (e.g. rate-limit) carry a
-                        // machine-readable errorCode the frontend maps to a friendly message.
                         await SendEventAsync("error", new
                         {
                             errorCode = ragError.ErrorCode,
@@ -270,13 +272,31 @@ public sealed class IndexModel : PageModel
         {
             _logger.LogDebug("Chat stream cancelled for User {UserId}", user.Id);
         }
+        catch (InsufficientQuotaException ex)
+        {
+            _logger.LogWarning("Chat stream blocked due to insufficient quota for User {UserId}", user.Id);
+            try
+            {
+                await SendEventAsync("error", new
+                {
+                    action = "insufficient_quota",
+                    message = ex.Message
+                });
+            }
+            catch (Exception sendError)
+            {
+                _logger.LogDebug(
+                    sendError,
+                    "Unable to send quota error event for User {UserId}",
+                    user.Id);
+            }
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Chat stream request failed for User {UserId}", user.Id);
 
             try
             {
-                // Issue #36: do not expose raw exception messages or stack traces to users.
                 await SendEventAsync("error", new
                 {
                     errorCode = "STREAM_ERROR",

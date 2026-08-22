@@ -5,6 +5,7 @@ using PRN222.RagAssistant.Domain.Entities;
 using PRN222.RagAssistant.Domain.Enums;
 using PRN222.RagAssistant.Infrastructure.Rag;
 using PRN222.RagAssistant.Infrastructure.Rag.Exceptions;
+using PRN222.RagAssistant.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -298,7 +299,8 @@ public sealed class RagQueryServiceTests
             new GroundedPromptBuilder(options),
             options,
             NullLogger<RagQueryService>.Instance,
-            TimeProvider.System);
+            TimeProvider.System,
+            new UserQuotaService(dbContext));
 
         var userId = Guid.NewGuid();
         var sessionId = Guid.NewGuid();
@@ -388,7 +390,15 @@ public sealed class RagQueryServiceTests
         var (service, dbContext, mockRetriever) = CreateServiceWithMocksAndRetriever();
         var userId = Guid.NewGuid();
         var sessionId = Guid.NewGuid();
-
+        dbContext.Users.Add(new ApplicationUser
+        {
+            Id = userId,
+            UserName = "user@test.com",
+            Email = "user@test.com",
+            DisplayName = "Test User",
+            CreatedAtUtc = DateTime.UtcNow,
+            QuotaRemaining = 10
+        });
         dbContext.ChatSessions.Add(new ChatSession
         {
             Id = sessionId,
@@ -437,7 +447,15 @@ public sealed class RagQueryServiceTests
         var (service, dbContext) = CreateServiceWithMocks();
         var userId = Guid.NewGuid();
         var sessionId = Guid.NewGuid();
-
+        dbContext.Users.Add(new ApplicationUser
+        {
+            Id = userId,
+            UserName = "user@test.com",
+            Email = "user@test.com",
+            DisplayName = "Test User",
+            CreatedAtUtc = DateTime.UtcNow,
+            QuotaRemaining = 10
+        });
         dbContext.ChatSessions.Add(new ChatSession
         {
             Id = sessionId,
@@ -497,7 +515,8 @@ public sealed class RagQueryServiceTests
             new GroundedPromptBuilder(options),
             options,
             NullLogger<RagQueryService>.Instance,
-            TimeProvider.System);
+            TimeProvider.System,
+            new UserQuotaService(dbContext));
 
         var userId = Guid.NewGuid();
         var sessionId = Guid.NewGuid();
@@ -544,7 +563,8 @@ public sealed class RagQueryServiceTests
             new GroundedPromptBuilder(options),
             options,
             NullLogger<RagQueryService>.Instance,
-            TimeProvider.System);
+            TimeProvider.System,
+            new UserQuotaService(dbContext));
 
         var userId = Guid.NewGuid();
         var sessionId = Guid.NewGuid();
@@ -608,6 +628,73 @@ public sealed class RagQueryServiceTests
 
         // Assert
         Assert.Equal(existingSessionId, sessionId);
+    }
+
+    [Fact]
+    public async Task AskAsync_ThrowsInsufficientQuotaException_WhenUserHasNoQuota()
+    {
+        // Arrange
+        var (service, dbContext) = CreateServiceWithMocks();
+        var userId = Guid.NewGuid();
+        var sessionId = Guid.NewGuid();
+
+        var user = new ApplicationUser
+        {
+            Id = userId,
+            UserName = "zero-quota@test.com",
+            Email = "zero-quota@test.com",
+            DisplayName = "Zero Quota User",
+            CreatedAtUtc = DateTime.UtcNow,
+            QuotaRemaining = 0
+        };
+        dbContext.Users.Add(user);
+        dbContext.ChatSessions.Add(new ChatSession
+        {
+            Id = sessionId,
+            UserId = userId,
+            Title = "Existing session"
+        });
+        await dbContext.SaveChangesAsync();
+
+        // Act & Assert
+        var ex = await Assert.ThrowsAsync<InsufficientQuotaException>(() =>
+            service.AskAsync(userId, sessionId, "What is OOP?"));
+        Assert.Equal(userId, ex.UserId);
+    }
+
+    [Fact]
+    public async Task AskAsync_DecrementsUserQuota_AfterSuccessfulAnswer()
+    {
+        // Arrange
+        var (service, dbContext) = CreateServiceWithMocks();
+        var userId = Guid.NewGuid();
+        var sessionId = Guid.NewGuid();
+
+        var user = new ApplicationUser
+        {
+            Id = userId,
+            UserName = "active-quota@test.com",
+            Email = "active-quota@test.com",
+            DisplayName = "Active Quota User",
+            CreatedAtUtc = DateTime.UtcNow,
+            QuotaRemaining = 5
+        };
+        dbContext.Users.Add(user);
+        dbContext.ChatSessions.Add(new ChatSession
+        {
+            Id = sessionId,
+            UserId = userId,
+            Title = "Existing session"
+        });
+        await dbContext.SaveChangesAsync();
+
+        // Act
+        var answer = await service.AskAsync(userId, sessionId, "What is OOP?");
+
+        // Assert
+        Assert.NotNull(answer);
+        var updatedUser = await dbContext.Users.FirstAsync(u => u.Id == userId);
+        Assert.Equal(4, updatedUser.QuotaRemaining);
     }
 
     #endregion
@@ -690,7 +777,8 @@ public sealed class RagQueryServiceTests
             new GroundedPromptBuilder(options),
             options,
             NullLogger<RagQueryService>.Instance,
-            TimeProvider.System);
+            TimeProvider.System,
+            new UserQuotaService(dbContext));
 
         return (service, dbContext, mockRetriever);
     }
@@ -716,6 +804,19 @@ public sealed class RagQueryServiceTests
 
     private static async Task SetupSessionAsync(ApplicationDbContext dbContext, Guid userId, Guid sessionId)
     {
+        if (!await dbContext.Users.AnyAsync(u => u.Id == userId))
+        {
+            dbContext.Users.Add(new ApplicationUser
+            {
+                Id = userId,
+                UserName = $"user-{userId:N}@test.com",
+                Email = $"user-{userId:N}@test.com",
+                DisplayName = "Test User",
+                CreatedAtUtc = DateTime.UtcNow,
+                QuotaRemaining = 10
+            });
+        }
+
         dbContext.ChatSessions.Add(new ChatSession
         {
             Id = sessionId,

@@ -23,6 +23,8 @@ public sealed class AdminUserListItemViewModel
     public List<string> Roles { get; set; } = [];
 
     public bool IsCurrentUser { get; set; }
+
+    public int QuotaRemaining { get; set; }
 }
 
 public sealed class AdminUserCreateViewModel

@@ -22,6 +22,7 @@ public sealed class RagQueryService : IRagQueryService
     private readonly ILogger<RagQueryService> _logger;
     private readonly TimeProvider _clock;
     private readonly IAgenticRetrievalService? _agenticRetrievalService;
+    private readonly IUserQuotaService _userQuotaService;
 
     public RagQueryService(
         ApplicationDbContext dbContext,
@@ -32,6 +33,7 @@ public sealed class RagQueryService : IRagQueryService
         IOptions<RagOptions> options,
         ILogger<RagQueryService> logger,
         TimeProvider clock,
+        IUserQuotaService userQuotaService,
         IAgenticRetrievalService? agenticRetrievalService = null)
     {
         _dbContext = dbContext;
@@ -42,6 +44,7 @@ public sealed class RagQueryService : IRagQueryService
         _options = options.Value;
         _logger = logger;
         _clock = clock;
+        _userQuotaService = userQuotaService;
         _agenticRetrievalService = agenticRetrievalService;
     }
 
@@ -93,6 +96,11 @@ public sealed class RagQueryService : IRagQueryService
                 nameof(subjectId));
         }
 
+        if (!await _userQuotaService.HasQuotaAsync(userId, cancellationToken))
+        {
+            throw new InsufficientQuotaException(userId);
+        }
+
         var effectiveSubjectId = session.SubjectId ?? subjectId;
         var history = await LoadRecentHistoryAsync(session.Id, cancellationToken);
 
@@ -141,8 +149,6 @@ public sealed class RagQueryService : IRagQueryService
                     yield return toolEvent;
                 }
 
-                // Never expose a direct answer before a successful retrieval tool has
-                // produced either chunk evidence or trusted document metadata evidence.
                 if (!evidence.HasEvidence)
                 {
                     continue;
@@ -179,9 +185,6 @@ public sealed class RagQueryService : IRagQueryService
                 {
                     citations = ParseCitationsFromAnswer(answerText, evidence.Chunks);
 
-                    // Metadata-only answers from list_documents cannot point at a chunk,
-                    // but any answer synthesized from retrieved chunks must reference at
-                    // least one valid marker before it can be persisted as grounded output.
                     if (evidence.RequiresCitations
                         && citations.Count == 0
                         && !string.Equals(
@@ -250,9 +253,6 @@ public sealed class RagQueryService : IRagQueryService
                     "completed",
                     $"Đã tìm thấy {chunkCount} đoạn tài liệu phù hợp");
 
-                // Preserve true SSE streaming. C# async iterators cannot yield from inside
-                // a try/catch (CS1626), so only MoveNextAsync/CompleteAsync is wrapped and
-                // each successful token is yielded after leaving the catch boundary.
                 var answerBuilder = new StringBuilder();
                 AiProviderRateLimitException? rateLimitException = null;
 
@@ -331,8 +331,6 @@ public sealed class RagQueryService : IRagQueryService
             }
         }
 
-        // Persist only after model/retrieval processing has completed successfully.
-        // A cancelled/broken stream therefore does not leave a partial assistant message.
         var userMessage = await PersistUserMessageAsync(session.Id, question, cancellationToken);
         var assistantMessage = await PersistAssistantMessageAsync(
             session.Id,
@@ -341,6 +339,7 @@ public sealed class RagQueryService : IRagQueryService
             cancellationToken);
 
         await EnsureSessionTitleAsync(session, question, cancellationToken);
+        await _userQuotaService.ConsumeQuotaAsync(userId, cancellationToken);
 
         var answer = new RagAnswer(
             session.Id,
@@ -368,8 +367,6 @@ public sealed class RagQueryService : IRagQueryService
     {
         ValidateQuestion(question);
 
-        // Evaluation intentionally keeps the deterministic retrieval pipeline so it can
-        // serve as a stable baseline against the interactive agentic chat experience.
         var queryResult = await GenerateAnswerAsync(
             question,
             subjectId,
@@ -425,7 +422,6 @@ public sealed class RagQueryService : IRagQueryService
             .Take(_options.Retrieval.TopK)
             .ToList();
 
-        // Classic fallback retains the previous contextual expansion behavior.
         if (topChunks.Count == 0 && history.Count > 0)
         {
             var recentUserQuestion = history

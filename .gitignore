@@ -24,6 +24,7 @@ coverage*.xml
 # VS Code (no shared workspace configuration yet)
 .vscode/
 
+.serena/
 # Operating system files
 .DS_Store
 Thumbs.db
