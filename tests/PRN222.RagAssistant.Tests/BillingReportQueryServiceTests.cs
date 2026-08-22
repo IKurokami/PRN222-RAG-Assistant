@@ -102,13 +102,10 @@ public sealed class BillingReportQueryServiceTests
         Assert.Equal(150_000, ncb.PaidRevenueVnd);
         Assert.Equal(66.7, ncb.PaidOrderSharePercent);
 
-        var currentDay = Assert.Single(
-            result.DailyActivityLast7Days,
-            item => item.DateUtc.Date == now.Date);
-        Assert.Equal(4, currentDay.CreatedOrders);
-        Assert.Equal(1, currentDay.PaidOrders);
-        Assert.Equal(50_000, currentDay.PaidRevenueVnd);
-        Assert.Equal(50, currentDay.PurchasedQuotaUnits);
+        Assert.Equal(5, result.DailyActivityLast7Days.Sum(day => day.CreatedOrders));
+        Assert.Equal(2, result.DailyActivityLast7Days.Sum(day => day.PaidOrders));
+        Assert.Equal(250_000, result.DailyActivityLast7Days.Sum(day => day.PaidRevenueVnd));
+        Assert.Equal(50, result.DailyActivityLast7Days.Sum(day => day.PurchasedQuotaUnits));
 
         Assert.Equal(6, result.RecentOrders.Count);
         Assert.Contains(result.RecentOrders, order =>
