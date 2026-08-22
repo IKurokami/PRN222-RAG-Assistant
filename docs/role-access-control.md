@@ -1,6 +1,6 @@
 # Role-based access control
 
-> Updated on 2026-08-21 for the PR #46/issue #47 management realtime implementation branch. PR #46 is not merged; merged contribution identity remains separate.
+> Verified against merged `master` on 2026-08-22. PR #46's Razor Pages and ManagementHub authorization model is now the runtime baseline.
 
 ## Roles
 
@@ -18,7 +18,7 @@ ManageSubjects  -> Admin
 ManageDocuments -> Admin OR SubjectLeader
 ```
 
-Roles/policies are coarse gates. Subject-specific management additionally checks the concrete resource/subject boundary.
+Roles/policies are coarse gates. Subject-specific management additionally checks the concrete persisted Subject/resource boundary.
 
 ## Capability matrix
 
@@ -31,17 +31,15 @@ Roles/policies are coarse gates. Subject-specific management additionally checks
 | Manage users/roles | Yes | No | No |
 | Manage Chapters/Documents | Any Subject | Assigned Subjects | No |
 | Re-index Documents | Any Subject | Assigned Subjects | No |
-| Receive authorized management realtime updates | Authorized managed Subjects and admin feeds | Assigned Subject management feed | No management feed |
-| View Flow 3 Reports | Any Subject | Assigned Subjects | No |
-| Use own authenticated Flow 2 Chat | Yes | Yes | Yes |
-| Use Evaluation | Yes | Yes | Yes |
+| Receive management realtime | Authorized admin/subject feeds | Assigned Subject feed | No management feed |
+| View academic Reports | Any Subject | Assigned Subjects | No |
+| View Admin billing analytics | Yes | No | No |
+| Use own authenticated Chat/Evaluation | Yes | Yes | Yes |
 | Manage another user's Chat session | No special bypass | No | No |
 
-## Razor Pages target
+## Razor Pages authorization
 
-All HTTP product/admin surfaces must converge on Razor Pages.
-
-Target families:
+All product/admin HTTP surfaces use Razor Pages:
 
 ```text
 Pages/Account
@@ -55,31 +53,27 @@ Pages/Evaluation
 Pages/Reports
 ```
 
-Authorization must be applied server-side in PageModels/handlers or the application services they invoke. Hidden navigation/buttons remain UX only.
+Authorization is enforced server-side in PageModels/handlers and purpose-specific application services. Hidden navigation/buttons are UX only.
 
-## Public registration
+## Public registration and Subject Leader assignments
 
 Public registration creates a Student account only. Elevated roles are Admin-managed.
 
-## Subject Leader assignment persistence
-
-Assignments continue to use Identity claims:
+Subject Leader assignments use Identity claims:
 
 ```text
 prn222:managed-subject -> Subject Guid
 ```
 
-When an account is changed away from SubjectLeader, managed-subject claims are removed so stale assignments cannot later reactivate.
+When an account leaves the SubjectLeader role, managed-subject claims are removed so stale assignments cannot reactivate.
 
-## Flow 1/3 subject authorization
+## Concrete subject authorization
 
-`ManageDocuments` alone does not authorize a Subject Leader for every Subject.
+`ManageDocuments` does not authorize a Subject Leader for every Subject. Documents/Chapters/Reports and other subject-scoped operations evaluate persisted subject ownership through `ISubjectAccessService` or an equivalent authorized boundary.
 
-Documents/Chapters Razor Page handlers and Reports PageModels must evaluate the concrete subject/resource with `ISubjectAccessService` or an equivalent authorized application boundary.
+## ManagementHub authorization
 
-## Management SignalR authorization
-
-SignalR does not weaken the role, policy, or subject boundary. The `/hubs/management` `ManagementHub` emits `ManagementChanged` only to authorized groups:
+`/hubs/management` emits `ManagementChanged` only to authorized groups:
 
 ```text
 subject:{guid:D}
@@ -88,7 +82,7 @@ admin:subjects
 subjects:catalog
 ```
 
-Subscription methods are:
+Subscription methods:
 
 ```text
 SubscribeToSubject(Guid subjectId)
@@ -97,65 +91,38 @@ SubscribeToAdminSubjects()
 SubscribeToSubjectCatalog()
 ```
 
-The server must apply the same authorization used by the corresponding management page:
-
-- `SubscribeToSubject` checks authenticated management permission and concrete access to the requested Subject;
-- `SubscribeToAdminUsers` requires the `ManageUsers` policy;
-- `SubscribeToAdminSubjects` requires the `ManageSubjects` policy;
-- `SubscribeToSubjectCatalog` checks the server-side authorization for the active subject catalogue.
-
-The client cannot gain access to another subject by supplying a different ID. Subject-scoped events are sent only to the affected group; user/role and subject/assignment events stay in their authorized admin/catalog groups.
-
-Management notifications use `ManagementRealtimeEvent` with resources `Document`, `Chapter`, `Subject`, `SubjectLeaderAssignments`, and `User`, and changes `Created`, `Updated`, `Deleted`, `IndexStatusChanged`, `AssignmentsChanged`, and `RoleChanged`. Document index-status events retain their `Status` value.
+The server applies the same policy and concrete-subject checks as the corresponding Razor Pages. Client-supplied IDs never grant access.
 
 SignalR is fan-out only:
 
 ```text
 Razor Page handler
- -> policy + subject authorization, antiforgery and validation
+ -> policy + subject authorization + antiforgery + validation
  -> write commits
  -> notifier publishes ManagementChanged
- -> authorized connected clients
+ -> authorized clients
 ```
 
-Do not broadcast one subject's management events globally, include sensitive data when a stable ID/status is sufficient, or expose a hub write operation. Broadcast only after the underlying write succeeds.
+Do not broadcast subject data globally, expose hub write operations, or include sensitive data when stable IDs/status values are sufficient.
 
 ## Flow 2 session security
 
-Chat/Evaluation require authentication.
+Chat/Evaluation require authentication. RAG validates session ownership, persisted `ChatSession.SubjectId`, retrieval scope, and message/citation attachment to the validated session.
 
-RAG session behavior continues to validate:
+Chat remains Razor Pages + SSE. Management SignalR is not a Chat transport.
 
-- session ID belongs to the authenticated user;
-- persisted `ChatSession.SubjectId` is consistent with the requested subject;
-- retrieval uses the validated subject;
-- messages/citations remain attached to the validated session.
+PR #54 also preserves the distinction between provider/rate-limit failures and no-document/no-evidence responses; authorization/error handling must not leak other users' or subjects' data.
 
-Chat remains Razor Pages + SSE. Management SignalR must not become a cross-user Chat channel or replace the Chat SSE contract.
+## Billing/report security
 
-## UI is not authorization
+VNPay checkout applies to the authenticated account. Payment credentials are server-only secrets.
 
-Every state-changing, subject-specific, or realtime-subscription path enforces authorization server-side.
-
-## Target routes/surfaces
-
-Public URL compatibility may be preserved through Razor Page route templates, but the target HTTP implementation is Razor Pages only.
-
-```text
-Account/authentication -> Razor Pages
-Admin users/subjects    -> Razor Pages
-Subjects catalogue      -> Razor Pages
-Documents/Chapters      -> Razor Pages
-Chat                    -> Razor Pages + SSE
-Evaluation              -> Razor Pages
-Reports                 -> Razor Pages
-Management realtime       -> authorized SignalR `ManagementHub`
-```
+Academic reports remain subject-scoped. Billing analytics is system-wide and Admin-only through its own report/query boundary. Subject Leaders must not receive system-wide payment/order aggregates merely because they can view academic reports for assigned Subjects.
 
 ## Data Protection
 
-ASP.NET Core Data Protection keys remain persisted in PostgreSQL, preserving authentication/antiforgery continuity across normal web-container restarts while the database persists.
+ASP.NET Core Data Protection keys persist in PostgreSQL, preserving authentication/antiforgery continuity across normal web-container restarts while the database persists.
 
-## Migration acceptance
+## Regression invariants
 
-The PR #46 branch must retain authorization regression coverage for Razor Page handlers and ManagementHub subscriptions before merge. Its branch implementation is not a claim that PR #46 has merged; remove remaining legacy MVC presentation only after parity is verified.
+Maintain tests that reject direct PageModel DbContext access, protect Razor Page handlers, enforce concrete subject access, isolate ManagementHub groups/subscriptions, restrict billing analytics to Admin, preserve Chat session ownership, and keep server-side authorization authoritative over UI visibility.
