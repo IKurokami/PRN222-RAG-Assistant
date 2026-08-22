@@ -24,38 +24,35 @@ public static class VnPayHashHelper
 
     public static string CreateSecureHash(
         IReadOnlyDictionary<string, string?> parameters,
-        string hashSecret)
-    {
-        var signData = BuildSignData(parameters);
-        return HmacSha512(hashSecret, signData);
-    }
+        string hashSecret) =>
+        HmacSha512(hashSecret, BuildSignData(parameters));
 
     public static string BuildSignData(IReadOnlyDictionary<string, string?> parameters)
     {
         var sorted = parameters
-            .Where(kv => !string.IsNullOrEmpty(kv.Value))
+            .Where(kv => kv.Key.StartsWith("vnp_", StringComparison.Ordinal)
+                         && !string.IsNullOrEmpty(kv.Value))
             .OrderBy(kv => kv.Key, Sorter);
 
-        var sb = new StringBuilder();
+        var builder = new StringBuilder();
         foreach (var (key, value) in sorted)
         {
-            if (string.Equals(key, "vnp_SecureHash", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(key, "vnp_SecureHashType", StringComparison.OrdinalIgnoreCase))
+            if (IsHashField(key))
             {
                 continue;
             }
 
-            if (sb.Length > 0)
+            if (builder.Length > 0)
             {
-                sb.Append('&');
+                builder.Append('&');
             }
 
-            sb.Append(WebUtility.UrlEncode(key));
-            sb.Append('=');
-            sb.Append(WebUtility.UrlEncode(value));
+            builder.Append(WebUtility.UrlEncode(key));
+            builder.Append('=');
+            builder.Append(WebUtility.UrlEncode(value));
         }
 
-        return sb.ToString();
+        return builder.ToString();
     }
 
     public static string BuildFullUrl(
@@ -64,7 +61,8 @@ public static class VnPayHashHelper
         string hashSecret)
     {
         var sorted = parameters
-            .Where(kv => !string.IsNullOrEmpty(kv.Value))
+            .Where(kv => kv.Key.StartsWith("vnp_", StringComparison.Ordinal)
+                         && !string.IsNullOrEmpty(kv.Value))
             .OrderBy(kv => kv.Key, Sorter);
 
         var query = new StringBuilder();
@@ -72,8 +70,7 @@ public static class VnPayHashHelper
 
         foreach (var (key, value) in sorted)
         {
-            if (string.Equals(key, "vnp_SecureHash", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(key, "vnp_SecureHashType", StringComparison.OrdinalIgnoreCase))
+            if (IsHashField(key))
             {
                 continue;
             }
@@ -87,13 +84,8 @@ public static class VnPayHashHelper
                 signData.Append('&');
             }
 
-            query.Append(encodedKey);
-            query.Append('=');
-            query.Append(encodedValue);
-
-            signData.Append(encodedKey);
-            signData.Append('=');
-            signData.Append(encodedValue);
+            query.Append(encodedKey).Append('=').Append(encodedValue);
+            signData.Append(encodedKey).Append('=').Append(encodedValue);
         }
 
         var secureHash = HmacSha512(hashSecret, signData.ToString());
@@ -105,7 +97,8 @@ public static class VnPayHashHelper
         IReadOnlyDictionary<string, string?> parameters,
         string hashSecret)
     {
-        if (!parameters.TryGetValue("vnp_SecureHash", out var providedHash) || string.IsNullOrWhiteSpace(providedHash))
+        if (!parameters.TryGetValue("vnp_SecureHash", out var providedHash)
+            || string.IsNullOrWhiteSpace(providedHash))
         {
             return false;
         }
@@ -123,9 +116,8 @@ public static class VnPayHashHelper
             return false;
         }
 
-        var signData = BuildSignData(parameters);
-        var expectedHash = HmacSha512(hashSecret, signData);
-        return string.Equals(expectedHash, providedHash.Trim(), StringComparison.OrdinalIgnoreCase);
+        var expectedHash = HmacSha512(hashSecret, BuildSignData(parameters));
+        return FixedTimeHexEquals(expectedHash, providedHash.Trim());
     }
 
     public static string HmacSha512(string key, string inputData)
@@ -134,4 +126,27 @@ public static class VnPayHashHelper
         var hashValue = hmac.ComputeHash(Encoding.UTF8.GetBytes(inputData));
         return Convert.ToHexString(hashValue).ToLowerInvariant();
     }
+
+    private static bool FixedTimeHexEquals(string expected, string provided)
+    {
+        if (expected.Length != provided.Length)
+        {
+            return false;
+        }
+
+        try
+        {
+            var expectedBytes = Convert.FromHexString(expected);
+            var providedBytes = Convert.FromHexString(provided);
+            return CryptographicOperations.FixedTimeEquals(expectedBytes, providedBytes);
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
+    }
+
+    private static bool IsHashField(string key) =>
+        string.Equals(key, "vnp_SecureHash", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(key, "vnp_SecureHashType", StringComparison.OrdinalIgnoreCase);
 }

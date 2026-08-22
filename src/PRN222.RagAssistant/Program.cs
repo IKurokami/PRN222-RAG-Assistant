@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.HttpOverrides;
 using PRN222.RagAssistant.Application.Abstractions;
 using PRN222.RagAssistant.Data;
 using PRN222.RagAssistant.Infrastructure;
@@ -7,12 +8,9 @@ using PRN222.RagAssistant.Realtime;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Normalize either the existing ASP.NET Core connection string or a Render-style
-// postgresql:// URL before Infrastructure builds Npgsql/EF Core services.
 builder.Configuration["ConnectionStrings:Postgres"] =
     PostgresConnectionStringResolver.Resolve(builder.Configuration);
 
-// Full Razor Pages architecture (controller-based pages migrated to Razor Pages)
 builder.Services.AddRazorPages();
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddSignalR();
@@ -32,17 +30,17 @@ var app = builder.Build();
 
 await app.InitializeDatabaseAsync();
 
-// Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error");
     app.UseHsts();
 }
 
+// Render terminates TLS and supplies X-Forwarded-For / X-Forwarded-Proto.
+// ASPNETCORE_FORWARDEDHEADERS_ENABLED=true configures the trusted proxy behavior on Render.
+app.UseForwardedHeaders();
 app.UseHttpsRedirection();
-
 app.UseRouting();
-
 app.UseAuthentication();
 app.UseAuthorization();
 

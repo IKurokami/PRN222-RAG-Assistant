@@ -34,8 +34,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton(dataSourceBuilder.Build());
 
         services.AddDbContext<ApplicationDbContext>(options =>
-            options.UseNpgsql(connectionString, npgsql => npgsql.UseVector())
-                   .ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning)));
+            options.UseNpgsql(connectionString, npgsql => npgsql.UseVector()));
         services.AddDbContext<DataProtectionKeyDbContext>(options =>
             options.UseNpgsql(connectionString));
 
@@ -75,7 +74,6 @@ public static class ServiceCollectionExtensions
 
         AddAiProviders(services, configuration);
 
-        // Member 3: Document Indexing & Ingestion Services.
         services.AddSingleton<IDocumentIndexingQueue, InMemoryDocumentIndexingQueue>();
         services.AddSingleton<DocumentParserFactory>();
         services.AddOptions<ChunkingOptions>()
@@ -89,12 +87,11 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IDocumentIndexingService, DocumentIndexingService>();
         services.AddHostedService<DocumentIndexingWorker>();
 
-        // Member 4: RAG Query Pipeline.
         services.AddOptions<Infrastructure.Rag.RagOptions>()
             .Bind(configuration.GetSection(Infrastructure.Rag.RagOptions.SectionName))
             .Validate(o => o.Retrieval.TopK > 0, "Rag:Retrieval:TopK must be greater than 0.")
             .Validate(o => o.Retrieval.MinimumSimilarityScore >= 0.0 && o.Retrieval.MinimumSimilarityScore <= 1.0, "Rag:Retrieval:MinimumSimilarityScore must be between 0.0 and 1.0.")
-            .Validate(o => o.Retrieval.HistoryTurns >= 0, "Rag:Retrieval.HistoryTurns must be non-negative.")
+            .Validate(o => o.Retrieval.HistoryTurns >= 0, "Rag:Retrieval:HistoryTurns must be non-negative.")
             .Validate(o => o.Retrieval.ExcerptChars > 0, "Rag:Retrieval:ExcerptChars must be greater than 0.")
             .Validate(o => o.Agentic.ToolTopK > 0 && o.Agentic.ToolTopK <= 12, "Rag:Agentic:ToolTopK must be between 1 and 12.")
             .Validate(o => o.Agentic.MaxToolResultChars >= 1000, "Rag:Agentic:MaxToolResultChars must be at least 1000.")
@@ -102,25 +99,31 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<Infrastructure.Rag.GroundedPromptBuilder>();
         services.AddScoped<Infrastructure.Rag.IDocumentChunkRetriever, Infrastructure.Rag.PgVectorDocumentChunkRetriever>();
         services.AddScoped<Infrastructure.Rag.IAgenticRetrievalService, Infrastructure.Rag.AgenticRetrievalService>();
-        services.AddScoped<IRagQueryService, Infrastructure.Rag.RagQueryService>();
-        services.AddScoped<IEvaluationService, Infrastructure.Services.EvaluationService>();
         services.AddScoped<IUserQuotaService, UserQuotaService>();
+        services.AddScoped<Infrastructure.Rag.RagQueryService>();
+        services.AddScoped<IRagQueryService, Infrastructure.Rag.QuotaAwareRagQueryService>();
+        services.AddScoped<IEvaluationService, Infrastructure.Services.EvaluationService>();
 
-        // Payment / billing integration (VNPay sandbox demo)
+        var billingEnabled = configuration.GetValue<bool>($"{BillingOptions.SectionName}:Enabled");
+        services.AddOptions<BillingOptions>()
+            .Bind(configuration.GetSection(BillingOptions.SectionName))
+            .Validate(
+                o => !o.Enabled || Uri.TryCreate(o.BaseUrl, UriKind.Absolute, out _),
+                "Billing:BaseUrl must be an absolute URL when billing is enabled.")
+            .ValidateOnStart();
+
         services.AddOptions<VnPayBillingOptions>()
             .Bind(configuration.GetSection(VnPayBillingOptions.SectionName))
-            .Validate(o => !string.IsNullOrWhiteSpace(o.TmnCode), "Billing:VnPay:TmnCode must be configured.")
-            .Validate(o => !string.IsNullOrWhiteSpace(o.HashSecret), "Billing:VnPay:HashSecret must be configured.")
-            .Validate(o => !string.IsNullOrWhiteSpace(o.BaseUrl), "Billing:VnPay:BaseUrl must be configured.")
+            .Validate(o => !billingEnabled || !string.IsNullOrWhiteSpace(o.TmnCode), "Billing:VnPay:TmnCode must be configured when billing is enabled.")
+            .Validate(o => !billingEnabled || !string.IsNullOrWhiteSpace(o.HashSecret), "Billing:VnPay:HashSecret must be configured when billing is enabled.")
+            .Validate(o => !billingEnabled || Uri.TryCreate(o.BaseUrl, UriKind.Absolute, out _), "Billing:VnPay:BaseUrl must be an absolute URL when billing is enabled.")
             .ValidateOnStart();
         services.AddScoped<IBillingService, VnPayBillingService>();
 
         return services;
     }
 
-    private static void AddAiProviders(
-        IServiceCollection services,
-        IConfiguration configuration)
+    private static void AddAiProviders(IServiceCollection services, IConfiguration configuration)
     {
         var legacyProvider = FirstNonEmpty(
             configuration["Rag:Provider"],
@@ -217,9 +220,7 @@ public static class ServiceCollectionExtensions
         }
     }
 
-    private static void AddOllama(
-        IServiceCollection services,
-        IConfiguration configuration)
+    private static void AddOllama(IServiceCollection services, IConfiguration configuration)
     {
         var baseUri = GetRequiredAbsoluteUri(
             FirstNonEmpty(configuration["Rag:Ollama:BaseUrl"], configuration["OLLAMA_BASE_URL"]),
@@ -233,9 +234,7 @@ public static class ServiceCollectionExtensions
         });
     }
 
-    private static void AddOpenAi(
-        IServiceCollection services,
-        IConfiguration configuration)
+    private static void AddOpenAi(IServiceCollection services, IConfiguration configuration)
     {
         var baseUri = GetRequiredAbsoluteUri(
             FirstNonEmpty(configuration["Rag:OpenAI:BaseUrl"], configuration["OPENAI_BASE_URL"]),
@@ -249,14 +248,11 @@ public static class ServiceCollectionExtensions
         {
             client.BaseAddress = baseUri;
             client.Timeout = TimeSpan.FromMinutes(2);
-            client.DefaultRequestHeaders.Authorization =
-                new AuthenticationHeaderValue("Bearer", apiKey);
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
         });
     }
 
-    private static void AddGemini(
-        IServiceCollection services,
-        IConfiguration configuration)
+    private static void AddGemini(IServiceCollection services, IConfiguration configuration)
     {
         var baseUri = GetRequiredAbsoluteUri(
             FirstNonEmpty(configuration["Rag:Gemini:BaseUrl"], configuration["GEMINI_BASE_URL"]),
@@ -274,9 +270,7 @@ public static class ServiceCollectionExtensions
         });
     }
 
-    private static void AddOpenRouter(
-        IServiceCollection services,
-        IConfiguration configuration)
+    private static void AddOpenRouter(IServiceCollection services, IConfiguration configuration)
     {
         var baseUri = GetRequiredAbsoluteUri(
             FirstNonEmpty(configuration["Rag:OpenRouter:BaseUrl"], configuration["OPENROUTER_BASE_URL"]),
@@ -297,8 +291,7 @@ public static class ServiceCollectionExtensions
         {
             client.BaseAddress = baseUri;
             client.Timeout = TimeSpan.FromMinutes(3);
-            client.DefaultRequestHeaders.Authorization =
-                new AuthenticationHeaderValue("Bearer", apiKey);
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
 
             if (!string.IsNullOrWhiteSpace(httpReferer))
             {
@@ -312,10 +305,7 @@ public static class ServiceCollectionExtensions
         });
     }
 
-    private static Uri GetRequiredAbsoluteUri(
-        string? rawValue,
-        string settingName,
-        string example)
+    private static Uri GetRequiredAbsoluteUri(string? rawValue, string settingName, string example)
     {
         if (string.IsNullOrWhiteSpace(rawValue)
             || !Uri.TryCreate(rawValue, UriKind.Absolute, out var uri))
@@ -329,9 +319,7 @@ public static class ServiceCollectionExtensions
             : new Uri(rawValue + "/", UriKind.Absolute);
     }
 
-    private static string GetRequiredValue(
-        string? value,
-        string settingName)
+    private static string GetRequiredValue(string? value, string settingName)
     {
         return !string.IsNullOrWhiteSpace(value)
             ? value

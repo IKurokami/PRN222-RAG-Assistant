@@ -3,9 +3,11 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.Extensions.Options;
 using PRN222.RagAssistant.Application.Abstractions;
 using PRN222.RagAssistant.Application.Models;
 using PRN222.RagAssistant.Domain.Entities;
+using PRN222.RagAssistant.Infrastructure.Billing;
 
 namespace PRN222.RagAssistant.Pages.Billing;
 
@@ -15,29 +17,29 @@ public sealed class CreateModel : PageModel
     private readonly IBillingService _billingService;
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly IUserQuotaService _userQuotaService;
-    private readonly IConfiguration _configuration;
+    private readonly BillingOptions _billingOptions;
     private readonly ILogger<CreateModel> _logger;
 
     public CreateModel(
         IBillingService billingService,
         UserManager<ApplicationUser> userManager,
         IUserQuotaService userQuotaService,
-        IConfiguration configuration,
+        IOptions<BillingOptions> billingOptions,
         ILogger<CreateModel> logger)
     {
         _billingService = billingService;
         _userManager = userManager;
         _userQuotaService = userQuotaService;
-        _configuration = configuration;
+        _billingOptions = billingOptions.Value;
         _logger = logger;
     }
 
-    public List<BillingPlanViewModel> Plans { get; } = new()
-    {
-        new BillingPlanViewModel(1, "Gói 50 câu hỏi RAG", 50_000, "VND", 50, "50.000 VND"),
-        new BillingPlanViewModel(2, "Gói 100 câu hỏi RAG", 100_000, "VND", 100, "100.000 VND"),
-        new BillingPlanViewModel(3, "Gói 200 câu hỏi RAG", 200_000, "VND", 200, "200.000 VND"),
-    };
+    public List<BillingPlanViewModel> Plans { get; } =
+    [
+        new(1, "Gói 50 câu hỏi RAG", 50_000, "VND", 50, "50.000 VND"),
+        new(2, "Gói 100 câu hỏi RAG", 100_000, "VND", 100, "100.000 VND"),
+        new(3, "Gói 200 câu hỏi RAG", 200_000, "VND", 200, "200.000 VND")
+    ];
 
     [BindProperty]
     public InputModel Input { get; set; } = new();
@@ -47,6 +49,11 @@ public sealed class CreateModel : PageModel
 
     public async Task OnGetAsync(CancellationToken cancellationToken)
     {
+        if (!_billingOptions.Enabled)
+        {
+            Message = "Chức năng thanh toán đang tắt trong môi trường này.";
+        }
+
         var user = await _userManager.GetUserAsync(User);
         if (user is not null)
         {
@@ -56,6 +63,12 @@ public sealed class CreateModel : PageModel
 
     public async Task<IActionResult> OnPostAsync(CancellationToken cancellationToken)
     {
+        if (!_billingOptions.Enabled)
+        {
+            Message = "Chức năng thanh toán đang tắt trong môi trường này.";
+            return Page();
+        }
+
         if (!ModelState.IsValid)
         {
             return Page();
@@ -64,9 +77,9 @@ public sealed class CreateModel : PageModel
         var user = await _userManager.GetUserAsync(User);
         if (user is null)
         {
-            Message = "Không tìm thấy thông tin người dùng hiện tại.";
-            return Page();
+            return Challenge();
         }
+
         CurrentQuota = await _userQuotaService.GetRemainingQuotaAsync(user.Id, cancellationToken);
 
         var plan = Plans.FirstOrDefault(p => p.Id == Input.PlanId);
@@ -79,44 +92,54 @@ public sealed class CreateModel : PageModel
         var baseUrl = GetBaseUrl();
         var returnPath = Url.Page("/Billing/Return", pageHandler: null) ?? "/Billing/Return";
         var returnUrl = new Uri(baseUrl, returnPath);
-        var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "127.0.0.1";
+        var remoteIp = HttpContext.Connection.RemoteIpAddress;
+        if (remoteIp?.IsIPv4MappedToIPv6 == true)
+        {
+            remoteIp = remoteIp.MapToIPv4();
+        }
+        var ipAddress = remoteIp?.ToString() ?? "127.0.0.1";
 
         var request = new CreateBillingOrderRequest(
             user.Id,
-            Input.SubjectId,
+            null,
             plan.Amount,
             plan.Currency,
             string.IsNullOrWhiteSpace(Input.Description) ? $"Mua {plan.Name}" : Input.Description.Trim(),
             returnUrl,
-            ipAddress);
+            ipAddress,
+            plan.Queries);
 
         try
         {
             var result = await _billingService.CreateOrderAsync(request, cancellationToken);
             _logger.LogInformation(
-                "Created VNPay order {OrderId} for User {UserId}, Amount {Amount} {Currency}, ReturnUrl={ReturnUrl}",
-                result.OrderId, user.Id, plan.Amount, plan.Currency, returnUrl);
+                "Created VNPay order {OrderId} for User {UserId}, Amount {Amount} {Currency}, QuotaUnits={QuotaUnits}",
+                result.OrderId,
+                user.Id,
+                plan.Amount,
+                plan.Currency,
+                plan.Queries);
 
             return Redirect(result.CheckoutUrl.AbsoluteUri);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to create VNPay order for User {UserId}", user.Id);
-            Message = "Không thể tạo yêu cầu thanh toán. Vui lòng thử lại: " + ex.Message;
+            Message = "Không thể tạo yêu cầu thanh toán. Vui lòng thử lại sau.";
             return Page();
         }
     }
 
     private Uri GetBaseUrl()
     {
-        var rawUrl = _configuration["Billing:BaseUrl"];
-        if (string.IsNullOrWhiteSpace(rawUrl) || !Uri.TryCreate(rawUrl, UriKind.Absolute, out var uri))
+        if (!string.IsNullOrWhiteSpace(_billingOptions.BaseUrl)
+            && Uri.TryCreate(_billingOptions.BaseUrl, UriKind.Absolute, out var configuredUri))
         {
-            var request = HttpContext.Request;
-            var fallback = $"{request.Scheme}://{request.Host}";
-            return new Uri(fallback, UriKind.Absolute);
+            return configuredUri;
         }
-        return uri;
+
+        var request = HttpContext.Request;
+        return new Uri($"{request.Scheme}://{request.Host}", UriKind.Absolute);
     }
 
     public sealed class InputModel
@@ -124,28 +147,23 @@ public sealed class CreateModel : PageModel
         [Required(ErrorMessage = "Vui lòng chọn gói thanh toán.")]
         public int PlanId { get; set; }
 
+        [StringLength(255, ErrorMessage = "Ghi chú thanh toán tối đa 255 ký tự.")]
         public string Description { get; set; } = string.Empty;
-
-        public Guid? SubjectId { get; set; }
     }
 }
 
-public sealed class BillingPlanViewModel
+public sealed class BillingPlanViewModel(
+    int id,
+    string name,
+    long amount,
+    string currency,
+    int queries,
+    string amountDisplay)
 {
-    public BillingPlanViewModel(int id, string name, long amount, string currency, int queries, string amountDisplay)
-    {
-        Id = id;
-        Name = name;
-        Amount = amount;
-        Currency = currency;
-        Queries = queries;
-        AmountDisplay = amountDisplay;
-    }
-
-    public int Id { get; }
-    public string Name { get; }
-    public long Amount { get; }
-    public string Currency { get; }
-    public int Queries { get; }
-    public string AmountDisplay { get; }
+    public int Id { get; } = id;
+    public string Name { get; } = name;
+    public long Amount { get; } = amount;
+    public string Currency { get; } = currency;
+    public int Queries { get; } = queries;
+    public string AmountDisplay { get; } = amountDisplay;
 }

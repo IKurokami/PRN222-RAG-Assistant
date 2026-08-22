@@ -11,5 +11,4 @@ public sealed class VnPayBillingOptions
     public string Command { get; set; } = "pay";
     public string Locale { get; set; } = "vn";
     public string OrderType { get; set; } = "other";
-    public bool Sandbox { get; set; } = true;
 }

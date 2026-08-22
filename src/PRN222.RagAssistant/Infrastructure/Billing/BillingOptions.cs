@@ -1,7 +1,9 @@
 namespace PRN222.RagAssistant.Infrastructure.Billing;
 
-public static class BillingOptions
+public sealed class BillingOptions
 {
-    public static string BaseUrlSectionName = "Billing:BaseUrl";
-    public static string VnPayWebhookPathSectionName = "Billing:VnPay:WebhookPath";
+    public const string SectionName = "Billing";
+
+    public bool Enabled { get; set; }
+    public string BaseUrl { get; set; } = string.Empty;
 }

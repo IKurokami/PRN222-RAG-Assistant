@@ -12,9 +12,7 @@ public sealed class ReturnModel : PageModel
     private readonly IBillingService _billingService;
     private readonly ILogger<ReturnModel> _logger;
 
-    public ReturnModel(
-        IBillingService billingService,
-        ILogger<ReturnModel> logger)
+    public ReturnModel(IBillingService billingService, ILogger<ReturnModel> logger)
     {
         _billingService = billingService;
         _logger = logger;
@@ -27,7 +25,8 @@ public sealed class ReturnModel : PageModel
     {
         var callbackParameters = Request.Query.ToDictionary(
             kvp => kvp.Key,
-            kvp => (string?)kvp.Value);
+            kvp => (string?)kvp.Value,
+            StringComparer.Ordinal);
 
         if (callbackParameters.Count == 0)
         {
@@ -42,13 +41,14 @@ public sealed class ReturnModel : PageModel
                 cancellationToken);
 
             _logger.LogInformation(
-                "VNPay return processed for Order {OrderId}, Status={Status}",
-                OrderStatus.OrderId, OrderStatus.Status);
+                "VNPay return verified for Order {OrderId}, DisplayStatus={Status}. Database state is updated only by IPN.",
+                OrderStatus.OrderId,
+                OrderStatus.Status);
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "VNPay return processing failed");
-            ErrorMessage = "Xác thực chữ ký hoặc xử lý kết quả giao dịch thất bại: " + ex.Message;
+            _logger.LogWarning(ex, "VNPay return verification failed");
+            ErrorMessage = "Không thể xác thực kết quả giao dịch. Vui lòng kiểm tra lịch sử giao dịch hoặc thử lại sau.";
         }
 
         return Page();

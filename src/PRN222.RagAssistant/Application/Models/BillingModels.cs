@@ -7,7 +7,8 @@ public sealed record CreateBillingOrderRequest(
     string Currency,
     string Description,
     Uri ReturnUrl,
-    string IpAddress);
+    string IpAddress,
+    int QuotaUnits);
 
 public sealed record BillingOrderResult(
     Guid OrderId,
@@ -41,4 +42,5 @@ public sealed record ProcessWebhookRequest(
 
 public sealed record BillingWebhookResult(
     bool Success,
+    string ResponseCode,
     string Message);

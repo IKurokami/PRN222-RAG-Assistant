@@ -42,7 +42,8 @@ services:
       Rag__OpenRouter__HttpReferer: ${OPENROUTER_HTTP_REFERER:-}
       Rag__OpenRouter__AppTitle: ${OPENROUTER_APP_TITLE:-PRN222 RAG Assistant}
       Rag__Storage__UploadsPath: /app/storage/uploads
-      Billing__BaseUrl: ${BILLING_BASE_URL:-https://prn222-rag-assistant.onrender.com}
+      Billing__Enabled: ${BILLING_ENABLED:-false}
+      Billing__BaseUrl: ${BILLING_BASE_URL:-http://localhost:8080}
       Billing__VnPay__TmnCode: ${VNPAY_TMN_CODE:-}
       Billing__VnPay__HashSecret: ${VNPAY_HASH_SECRET:-}
       Billing__VnPay__BaseUrl: ${VNPAY_BASE_URL:-https://sandbox.vnpayment.vn/paymentv2/vpcpay.html}
@@ -50,8 +51,6 @@ services:
       Billing__VnPay__Command: ${VNPAY_COMMAND:-pay}
       Billing__VnPay__Locale: ${VNPAY_LOCALE:-vn}
       Billing__VnPay__OrderType: ${VNPAY_ORDER_TYPE:-other}
-      Billing__VnPay__WebhookPath: ${VNPAY_WEBHOOK_PATH:-/Billing/Webhook}
-      Billing__VnPay__Sandbox: ${VNPAY_SANDBOX:-true}
     ports:
       - "${APP_PORT:-8080}:8080"
     volumes:

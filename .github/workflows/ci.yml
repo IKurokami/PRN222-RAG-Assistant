@@ -69,6 +69,15 @@ jobs:
           --project src/PRN222.RagAssistant
           --startup-project src/PRN222.RagAssistant
 
+      - name: Test PostgreSQL concurrency invariants
+        env:
+          POSTGRES_TEST_CONNECTION: Host=localhost;Port=5432;Database=prn222_rag;Username=postgres;Password=postgres
+        run: >-
+          dotnet test tests/PRN222.RagAssistant.Tests/PRN222.RagAssistant.Tests.csproj
+          --configuration Release
+          --no-build
+          --filter FullyQualifiedName~PostgresConcurrencyTests
+
       - name: Verify PostgreSQL schema baseline
         run: |
           docker compose exec -T postgres psql -U postgres -d prn222_rag -v ON_ERROR_STOP=1 -c "SELECT extversion FROM pg_extension WHERE extname = 'vector';"
