@@ -250,20 +250,74 @@ public sealed class RagQueryService : IRagQueryService
                     "completed",
                     $"Đã tìm thấy {chunkCount} đoạn tài liệu phù hợp");
 
-                // Issue #36: C# iterators cannot yield inside try/catch blocks (CS1626).
-                // Collect deltas and detect rate-limit errors in a local helper, then
-                // yield the collected events after exiting the try/catch boundary.
-                var chatResult = await CollectChatResponseAsync(
-                    prepared.SystemPrompt!,
-                    prepared.UserPrompt!,
-                    cancellationToken);
+                // Preserve true SSE streaming. C# async iterators cannot yield from inside
+                // a try/catch (CS1626), so only MoveNextAsync/CompleteAsync is wrapped and
+                // each successful token is yielded after leaving the catch boundary.
+                var answerBuilder = new StringBuilder();
+                AiProviderRateLimitException? rateLimitException = null;
 
-                if (chatResult.RateLimited)
+                if (_chatService is IStreamingChatCompletionService streamingChat)
+                {
+                    await using var enumerator = streamingChat.StreamAsync(
+                            prepared.SystemPrompt!,
+                            prepared.UserPrompt!,
+                            cancellationToken)
+                        .GetAsyncEnumerator(cancellationToken);
+
+                    while (true)
+                    {
+                        bool hasNext;
+                        string delta;
+
+                        try
+                        {
+                            hasNext = await enumerator.MoveNextAsync();
+                            delta = hasNext ? enumerator.Current : string.Empty;
+                        }
+                        catch (AiProviderRateLimitException ex)
+                        {
+                            rateLimitException = ex;
+                            break;
+                        }
+
+                        if (!hasNext)
+                        {
+                            break;
+                        }
+
+                        answerBuilder.Append(delta);
+                        yield return new RagDeltaEvent(delta);
+                    }
+                }
+                else
+                {
+                    string? completed = null;
+
+                    try
+                    {
+                        completed = await _chatService.CompleteAsync(
+                            prepared.SystemPrompt!,
+                            prepared.UserPrompt!,
+                            cancellationToken);
+                    }
+                    catch (AiProviderRateLimitException ex)
+                    {
+                        rateLimitException = ex;
+                    }
+
+                    if (rateLimitException is null && completed is not null)
+                    {
+                        answerBuilder.Append(completed);
+                        yield return new RagDeltaEvent(completed);
+                    }
+                }
+
+                if (rateLimitException is not null)
                 {
                     _logger.LogWarning(
-                        chatResult.RateLimitException,
+                        rateLimitException,
                         "AI provider rate-limited during chat generation. Provider={Provider}, SessionId={SessionId}, UserId={UserId}",
-                        chatResult.RateLimitException!.ProviderName,
+                        rateLimitException.ProviderName,
                         session.Id,
                         userId);
                     yield return new RagErrorEvent(
@@ -272,13 +326,7 @@ public sealed class RagQueryService : IRagQueryService
                     yield break;
                 }
 
-                // Yield collected deltas now that we are outside the try/catch.
-                foreach (var delta in chatResult.Deltas)
-                {
-                    yield return new RagDeltaEvent(delta);
-                }
-
-                answerText = chatResult.FullText.Trim();
+                answerText = answerBuilder.ToString().Trim();
                 citations = ParseCitationsFromAnswer(answerText, prepared.Chunks);
             }
         }
@@ -677,55 +725,6 @@ public sealed class RagQueryService : IRagQueryService
         }
 
         return session.Id;
-    }
-
-    /// <summary>
-    /// Collects all streaming or non-streaming chat tokens into a <see cref="ChatCompletionResult"/>.
-    /// Catches <see cref="AiProviderRateLimitException"/> and captures it in the result instead of
-    /// re-throwing, allowing the async-iterator caller to yield events outside a try/catch block
-    /// (C# iterators cannot yield inside try/catch — CS1626).
-    /// </summary>
-    private async Task<ChatCompletionResult> CollectChatResponseAsync(
-        string systemPrompt,
-        string userPrompt,
-        CancellationToken cancellationToken)
-    {
-        var deltas = new List<string>();
-        var builder = new StringBuilder();
-
-        try
-        {
-            if (_chatService is IStreamingChatCompletionService streamingChat)
-            {
-                await foreach (var token in streamingChat.StreamAsync(
-                                   systemPrompt, userPrompt, cancellationToken))
-                {
-                    deltas.Add(token);
-                    builder.Append(token);
-                }
-            }
-            else
-            {
-                var text = await _chatService.CompleteAsync(
-                    systemPrompt, userPrompt, cancellationToken);
-                deltas.Add(text);
-                builder.Append(text);
-            }
-
-            return new ChatCompletionResult(deltas, builder.ToString(), null);
-        }
-        catch (AiProviderRateLimitException ex)
-        {
-            return new ChatCompletionResult([], string.Empty, ex);
-        }
-    }
-
-    private sealed record ChatCompletionResult(
-        IReadOnlyList<string> Deltas,
-        string FullText,
-        AiProviderRateLimitException? RateLimitException)
-    {
-        public bool RateLimited => RateLimitException is not null;
     }
 
     private sealed record PreparedGroundedQuery(
