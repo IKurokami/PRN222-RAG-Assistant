@@ -41,7 +41,7 @@ public sealed class ReturnModel : PageModel
                 cancellationToken);
 
             _logger.LogInformation(
-                "VNPay return verified for Order {OrderId}, DisplayStatus={Status}. Database state is updated only by IPN.",
+                "VNPay return processed for Order {OrderId}, Status={Status}",
                 OrderStatus.OrderId,
                 OrderStatus.Status);
         }

@@ -124,7 +124,6 @@ public sealed class VnPayBillingService : IBillingService
         ValidateMerchantCode(request.CallbackParameters);
         ValidateAmount(order, request.CallbackParameters);
 
-        // VNPay Return URL is presentation-only. The authoritative state transition is IPN.
         var current = Map(order);
         if (string.Equals(order.Status, "Paid", StringComparison.Ordinal))
         {
@@ -133,11 +132,31 @@ public sealed class VnPayBillingService : IBillingService
 
         var responseCode = GetCallbackValue(request.CallbackParameters, "vnp_ResponseCode");
         var transactionStatus = GetCallbackValue(request.CallbackParameters, "vnp_TransactionStatus");
-        var displayStatus = IsSuccessfulPayment(responseCode, transactionStatus) ? "Pending" : "Failed";
 
+        // IPN remains the preferred server-to-server confirmation path. Some VNPay sandbox
+        // merchant configurations do not deliver IPN reliably, so a fully verified successful
+        // Return URL may finalize the same atomic Pending -> Paid transition as a safe fallback.
+        if (IsSuccessfulPayment(responseCode, transactionStatus))
+        {
+            var finalized = await TryFinalizePaidOrderAsync(order, request.CallbackParameters, cancellationToken);
+            if (finalized)
+            {
+                return Map(order);
+            }
+
+            // A concurrent IPN/Return may have won the conditional update. Reload the persisted
+            // state so the browser sees the committed result instead of a stale Pending snapshot.
+            var refreshed = await _dbContext.PaymentOrders
+                .AsNoTracking()
+                .FirstAsync(o => o.Id == order.Id, cancellationToken);
+            return Map(refreshed);
+        }
+
+        // Failed/cancelled browser returns are presentation-only. We do not persist a failure here
+        // because a delayed IPN remains authoritative for terminal state changes.
         return current with
         {
-            Status = displayStatus,
+            Status = "Failed",
             ExternalResponseCode = responseCode
         };
     }

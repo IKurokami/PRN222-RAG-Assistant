@@ -43,7 +43,7 @@ public sealed class VnPayBillingServiceTests
     }
 
     [Fact]
-    public async Task ProcessReturnAsync_VerifiesButDoesNotMutateOrderOrQuota()
+    public async Task ProcessReturnAsync_VerifiedSuccessfulReturn_FinalizesOrderAndQuotaAsFallback()
     {
         var (dbContext, service, userId) = await CreateServiceAsync(initialQuota: 10);
         await using var _ = dbContext;
@@ -54,11 +54,33 @@ public sealed class VnPayBillingServiceTests
             new ProcessReturnRequest(result.OrderId, callback),
             CancellationToken.None);
 
-        Assert.Equal("Pending", displayStatus.Status);
+        Assert.Equal("Paid", displayStatus.Status);
         var order = await dbContext.PaymentOrders.AsNoTracking().FirstAsync(o => o.Id == result.OrderId);
         var user = await dbContext.Users.AsNoTracking().FirstAsync(u => u.Id == userId);
-        Assert.Equal("Pending", order.Status);
-        Assert.Equal(10, user.QuotaRemaining);
+        Assert.Equal("Paid", order.Status);
+        Assert.Equal(60, user.QuotaRemaining);
+        Assert.Equal("14567890", order.ExternalTransactionNo);
+    }
+
+    [Fact]
+    public async Task ProcessReturnAsync_ThenIpn_DoesNotDoubleCredit()
+    {
+        var (dbContext, service, userId) = await CreateServiceAsync(initialQuota: 0);
+        await using var _ = dbContext;
+        var result = await service.CreateOrderAsync(NewOrderRequest(userId, 50_000, 50), CancellationToken.None);
+        var callback = BuildSuccessfulCallback(result.ExternalOrderId, 50_000);
+
+        var returnStatus = await service.ProcessReturnAsync(
+            new ProcessReturnRequest(result.OrderId, callback),
+            CancellationToken.None);
+        var webhookResult = await service.ProcessWebhookAsync(
+            new ProcessWebhookRequest("VNPay", callback),
+            CancellationToken.None);
+
+        Assert.Equal("Paid", returnStatus.Status);
+        Assert.Equal("02", webhookResult.ResponseCode);
+        var user = await dbContext.Users.AsNoTracking().FirstAsync(u => u.Id == userId);
+        Assert.Equal(50, user.QuotaRemaining);
     }
 
     [Fact]
