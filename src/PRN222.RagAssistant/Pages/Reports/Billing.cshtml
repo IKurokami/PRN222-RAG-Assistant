@@ -1,0 +1,229 @@
+@page
+@model PRN222.RagAssistant.Pages.Reports.BillingModel
+@{
+    ViewData["Title"] = "Billing Analytics";
+    var report = Model.Report;
+    var maxDailyRevenue = report.DailyActivityLast7Days.Count > 0
+        ? Math.Max(1L, report.DailyActivityLast7Days.Max(item => item.PaidRevenueVnd))
+        : 1L;
+}
+
+<div class="container py-4">
+    <div class="academic-breadcrumb mb-3">
+        <a asp-page="/Index"><i class="bi bi-house-door"></i> Trang chủ</a>
+        <span class="academic-breadcrumb-separator">/</span>
+        <a asp-page="/Subjects/Index">Môn học</a>
+        <span class="academic-breadcrumb-separator">/</span>
+        <span class="text-slate-800 fw-semibold">Billing Analytics</span>
+    </div>
+
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4 pb-2 border-bottom">
+        <div>
+            <div class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle px-2.5 py-1 mb-1">Admin • system-wide</div>
+            <h1 class="fw-bold fs-3 text-slate-900 mb-1">
+                <i class="bi bi-credit-card-2-front-fill text-primary me-2"></i>Thanh toán &amp; Quota Analytics
+            </h1>
+            <p class="text-slate-500 mb-0">Theo dõi doanh thu đã xác nhận, sức khỏe checkout VNPay, quota đã bán và cơ cấu kênh thanh toán.</p>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+            <a asp-page="/Billing/History" class="btn btn-sm btn-academic-outline"><i class="bi bi-receipt"></i> Lịch sử của tôi</a>
+            <a asp-page="/Subjects/Index" class="btn btn-sm btn-academic-outline"><i class="bi bi-bar-chart-line"></i> Báo cáo học thuật</a>
+        </div>
+    </div>
+
+    <div class="alert alert-info border-info-subtle d-flex gap-3 align-items-start mb-4" role="alert">
+        <i class="bi bi-info-circle-fill fs-5 mt-1"></i>
+        <div class="small">
+            <strong>Phạm vi dữ liệu:</strong> đây là số liệu billing toàn hệ thống, chỉ Admin được xem. Checkout hiện mua quota RAG dùng chung và đang tạo đơn với <code>SubjectId = null</code>, vì vậy doanh thu không được gán giả tạo cho môn học đang chọn. Chỉ các đơn <strong>Paid</strong> mới được tính doanh thu/quota đã bán.
+        </div>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-sm-6 col-xl-3">
+            <div class="academic-card h-100 border-start border-4 border-success">
+                <div class="small fw-bold text-slate-500 text-uppercase">Doanh thu đã xác nhận</div>
+                <div class="fs-3 fw-bold text-success mt-1">@report.GrossPaidRevenueVnd.ToString("N0") ₫</div>
+                <div class="small text-slate-500 mt-2">30 ngày: @report.PaidRevenueLast30DaysVnd.ToString("N0") ₫ từ @report.PaidOrdersLast30Days đơn</div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-xl-3">
+            <div class="academic-card h-100 border-start border-4 border-primary">
+                <div class="small fw-bold text-slate-500 text-uppercase">Đơn Paid</div>
+                <div class="fs-3 fw-bold text-primary mt-1">@report.PaidOrders / @report.TotalOrders</div>
+                <div class="small text-slate-500 mt-2">Settled success: @report.SettledPaymentSuccessPercent.ToString("0.#")% • checkout completion: @report.CheckoutCompletionPercent.ToString("0.#")%</div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-xl-3">
+            <div class="academic-card h-100 border-start border-4 border-info">
+                <div class="small fw-bold text-slate-500 text-uppercase">Quota đã bán</div>
+                <div class="fs-3 fw-bold text-info mt-1">@report.PurchasedQuotaUnits.ToString("N0")</div>
+                <div class="small text-slate-500 mt-2">@report.EffectiveRevenuePerQuotaUnitVnd.ToString("N0") ₫ / query • TB @report.AverageQuotaUnitsPerPaidOrder.ToString("0.##") quota/đơn</div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-xl-3">
+            <div class="academic-card h-100 border-start border-4 @(report.StalePendingOrders > 0 ? "border-warning" : "border-success")">
+                <div class="small fw-bold text-slate-500 text-uppercase">Pending quá hạn</div>
+                <div class="fs-3 fw-bold @(report.StalePendingOrders > 0 ? "text-warning" : "text-success") mt-1">@report.StalePendingOrders</div>
+                <div class="small text-slate-500 mt-2">@report.PendingOrders pending tổng cộng • mốc cảnh báo 30 phút</div>
+            </div>
+        </div>
+    </div>
+
+    @if (report.PaidOrdersMissingQuotaMetadata > 0)
+    {
+        <div class="alert alert-warning border-warning-subtle d-flex gap-3 align-items-start mb-4" role="alert">
+            <i class="bi bi-exclamation-triangle-fill fs-5 mt-1"></i>
+            <div class="small"><strong>Data integrity:</strong> có @report.PaidOrdersMissingQuotaMetadata đơn Paid không đọc được <code>quotaUnits</code> bất biến từ metadata. Các đơn này vẫn tính vào doanh thu nhưng bị loại khỏi metric quota/package để tránh suy diễn sai.</div>
+        </div>
+    }
+
+    <div class="row g-4 mb-4">
+        <div class="col-xl-7">
+            <div class="academic-card h-100">
+                <div class="d-flex justify-content-between align-items-center border-bottom pb-2 mb-3">
+                    <div>
+                        <h2 class="fw-bold fs-5 text-slate-900 mb-0"><i class="bi bi-graph-up-arrow text-primary me-1"></i>Billing 7 ngày gần nhất</h2>
+                        <div class="small text-slate-500 mt-1">Doanh thu dùng thời điểm PaidUtc đã được persist sau callback VNPay hợp lệ; số đơn tạo dùng CreatedUtc.</div>
+                    </div>
+                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle">UTC</span>
+                </div>
+                <div class="d-flex flex-column gap-3">
+                    @foreach (var day in report.DailyActivityLast7Days)
+                    {
+                        var width = day.PaidRevenueVnd == 0
+                            ? 0
+                            : Math.Max(4, (int)Math.Round(day.PaidRevenueVnd * 100.0 / maxDailyRevenue));
+                        <div>
+                            <div class="d-flex justify-content-between gap-3 small mb-1">
+                                <span class="fw-semibold text-slate-700">@day.DateUtc.ToString("dd/MM")</span>
+                                <span class="text-slate-500">@day.CreatedOrders tạo • @day.PaidOrders paid • @day.PurchasedQuotaUnits quota • @day.PaidRevenueVnd.ToString("N0") ₫</span>
+                            </div>
+                            <div class="progress" style="height: 8px;">
+                                <div class="progress-bar bg-success" role="progressbar" style="width: @width%" aria-valuenow="@width" aria-valuemin="0" aria-valuemax="100"></div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-5">
+            <div class="academic-card h-100">
+                <h2 class="fw-bold fs-5 text-slate-900 mb-3 pb-2 border-bottom"><i class="bi bi-speedometer2 text-primary me-1"></i>Sức khỏe quota &amp; checkout</h2>
+                <div class="row g-3">
+                    <div class="col-6"><div class="p-3 rounded-3 border bg-light h-100"><div class="small text-slate-500">Người đã trả tiền</div><div class="fs-3 fw-bold text-slate-900">@report.UniquePayingUsers</div></div></div>
+                    <div class="col-6"><div class="p-3 rounded-3 border bg-light h-100"><div class="small text-slate-500">Quota còn khả dụng</div><div class="fs-3 fw-bold text-primary">@report.TotalOutstandingQuota.ToString("N0")</div><div class="small text-slate-500">@report.UsersWithAvailableQuota/@report.RegisteredUsers user còn quota</div></div></div>
+                    <div class="col-6"><div class="p-3 rounded-3 border bg-light h-100"><div class="small text-slate-500">Failed</div><div class="fs-3 fw-bold text-danger">@report.FailedOrders</div></div></div>
+                    <div class="col-6"><div class="p-3 rounded-3 border bg-light h-100"><div class="small text-slate-500">Giá trị đơn Paid TB</div><div class="fs-5 fw-bold text-success">@report.AveragePaidOrderValueVnd.ToString("N0") ₫</div></div></div>
+                </div>
+                <div class="small text-slate-500 mt-3"><strong>Lưu ý:</strong> quota còn lại bao gồm cả quota miễn phí/khởi tạo, nên không dùng để suy ra “quota mua còn lại”.</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4 mb-4">
+        <div class="col-xl-6">
+            <div class="academic-card h-100 p-0 overflow-hidden">
+                <div class="p-3 border-bottom">
+                    <h2 class="fw-bold fs-5 text-slate-900 mb-1"><i class="bi bi-box-seam text-primary me-1"></i>Cơ cấu gói quota</h2>
+                    <div class="small text-slate-500">Suy ra từ <code>MetadataJson.quotaUnits</code> đã khóa tại lúc tạo đơn.</div>
+                </div>
+                @if (report.QuotaPackageMix.Count == 0)
+                {
+                    <div class="text-center py-5 text-slate-500">Chưa có đơn Paid với quota metadata hợp lệ.</div>
+                }
+                else
+                {
+                    <div class="table-responsive">
+                        <table class="table table-academic align-middle mb-0">
+                            <thead><tr><th class="ps-3">Quota/gói</th><th class="text-center">Đơn Paid</th><th class="text-center">Tỷ trọng</th><th class="text-end pe-3">Doanh thu</th></tr></thead>
+                            <tbody>
+                                @foreach (var item in report.QuotaPackageMix)
+                                {
+                                    <tr><td class="ps-3 fw-bold">@item.QuotaUnits</td><td class="text-center">@item.PaidOrders</td><td class="text-center">@item.PaidOrderSharePercent.ToString("0.#")%</td><td class="text-end pe-3">@item.PaidRevenueVnd.ToString("N0") ₫</td></tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+        </div>
+        <div class="col-xl-6">
+            <div class="academic-card h-100">
+                <h2 class="fw-bold fs-5 text-slate-900 mb-3 pb-2 border-bottom"><i class="bi bi-diagram-3 text-primary me-1"></i>Khả năng attribution theo môn</h2>
+                <div class="row g-3">
+                    <div class="col-6"><div class="p-3 rounded-3 border bg-light"><div class="small text-slate-500">Paid có SubjectId</div><div class="fs-3 fw-bold text-primary">@report.SubjectAttributedPaidOrders</div></div></div>
+                    <div class="col-6"><div class="p-3 rounded-3 border bg-light"><div class="small text-slate-500">Paid không SubjectId</div><div class="fs-3 fw-bold text-slate-900">@report.UnattributedPaidOrders</div></div></div>
+                </div>
+                <div class="small text-slate-500 mt-3"><strong>Biết được:</strong> dữ liệu hiện có đủ cơ sở để phân tích doanh thu theo môn hay chưa. Khi checkout vẫn mua quota dùng chung, không nên biến số global thành “doanh thu môn học”.</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4 mb-4">
+        <div class="col-lg-6">
+            <div class="academic-card h-100 p-0 overflow-hidden">
+                <div class="p-3 border-bottom"><h2 class="fw-bold fs-5 text-slate-900 mb-1"><i class="bi bi-bank text-primary me-1"></i>Ngân hàng trên đơn Paid</h2><div class="small text-slate-500">Top kênh theo số giao dịch đã xác nhận.</div></div>
+                @if (report.PaymentsByBank.Count == 0)
+                {
+                    <div class="text-center py-4 text-slate-500">Chưa có BankCode trên đơn Paid.</div>
+                }
+                else
+                {
+                    <div class="table-responsive"><table class="table table-academic align-middle mb-0"><thead><tr><th class="ps-3">BankCode</th><th class="text-center">Đơn</th><th class="text-center">Tỷ trọng</th><th class="text-end pe-3">Doanh thu</th></tr></thead><tbody>@foreach (var item in report.PaymentsByBank){<tr><td class="ps-3 fw-bold font-monospace">@item.Label</td><td class="text-center">@item.PaidOrders</td><td class="text-center">@item.PaidOrderSharePercent.ToString("0.#")%</td><td class="text-end pe-3">@item.PaidRevenueVnd.ToString("N0") ₫</td></tr>}</tbody></table></div>
+                }
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="academic-card h-100 p-0 overflow-hidden">
+                <div class="p-3 border-bottom"><h2 class="fw-bold fs-5 text-slate-900 mb-1"><i class="bi bi-credit-card text-primary me-1"></i>Loại thẻ / phương thức</h2><div class="small text-slate-500">Phân bố CardType trên đơn Paid.</div></div>
+                @if (report.PaymentsByCardType.Count == 0)
+                {
+                    <div class="text-center py-4 text-slate-500">Chưa có CardType trên đơn Paid.</div>
+                }
+                else
+                {
+                    <div class="table-responsive"><table class="table table-academic align-middle mb-0"><thead><tr><th class="ps-3">CardType</th><th class="text-center">Đơn</th><th class="text-center">Tỷ trọng</th><th class="text-end pe-3">Doanh thu</th></tr></thead><tbody>@foreach (var item in report.PaymentsByCardType){<tr><td class="ps-3 fw-bold font-monospace">@item.Label</td><td class="text-center">@item.PaidOrders</td><td class="text-center">@item.PaidOrderSharePercent.ToString("0.#")%</td><td class="text-end pe-3">@item.PaidRevenueVnd.ToString("N0") ₫</td></tr>}</tbody></table></div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <div class="academic-card p-0 overflow-hidden mb-4">
+        <div class="p-3 border-bottom d-flex justify-content-between align-items-center gap-3">
+            <div><h2 class="fw-bold fs-5 text-slate-900 mb-1"><i class="bi bi-clock-history text-primary me-1"></i>Đơn thanh toán gần đây</h2><div class="small text-slate-500">Không hiển thị user ID/email; chỉ dùng dữ liệu ledger cần thiết cho vận hành.</div></div>
+            <span class="badge bg-light text-slate-700 border">@report.RecentOrders.Count gần nhất</span>
+        </div>
+        @if (report.RecentOrders.Count == 0)
+        {
+            <div class="text-center py-5 text-slate-500">Chưa có PaymentOrder.</div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table table-academic align-middle mb-0">
+                    <thead><tr><th class="ps-3">TxnRef</th><th>Trạng thái</th><th class="text-end">Số tiền</th><th class="text-center">Quota</th><th>Kênh</th><th>Scope</th><th class="text-end pe-3">Tạo lúc</th></tr></thead>
+                    <tbody>
+                        @foreach (var order in report.RecentOrders)
+                        {
+                            var statusClass = order.Status switch
+                            {
+                                "Paid" => "bg-success-subtle text-success border border-success-subtle",
+                                "Failed" => "bg-danger-subtle text-danger border border-danger-subtle",
+                                _ => "bg-warning-subtle text-warning-emphasis border border-warning-subtle"
+                            };
+                            <tr>
+                                <td class="ps-3 font-monospace small fw-semibold">@order.ExternalOrderId</td>
+                                <td><span class="badge @statusClass">@order.Status</span></td>
+                                <td class="text-end fw-semibold">@order.AmountVnd.ToString("N0") ₫</td>
+                                <td class="text-center">@(order.QuotaUnits?.ToString("N0") ?? "—")</td>
+                                <td class="small">@(!string.IsNullOrWhiteSpace(order.BankCode) ? order.BankCode : "—") @(!string.IsNullOrWhiteSpace(order.CardType) ? $"/ {order.CardType}" : "")</td>
+                                <td><span class="badge bg-light text-slate-700 border">@(order.IsSubjectAttributed ? "Subject-linked" : "Global quota")</span></td>
+                                <td class="text-end pe-3 small text-slate-500 font-monospace">@order.CreatedUtc.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</div>
