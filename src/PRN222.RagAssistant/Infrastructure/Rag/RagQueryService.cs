@@ -100,6 +100,7 @@ public sealed class RagQueryService : IRagQueryService
         {
             throw new InsufficientQuotaException(userId);
         }
+
         var effectiveSubjectId = session.SubjectId ?? subjectId;
         var history = await LoadRecentHistoryAsync(session.Id, cancellationToken);
 
@@ -148,8 +149,6 @@ public sealed class RagQueryService : IRagQueryService
                     yield return toolEvent;
                 }
 
-                // Never expose a direct answer before a successful retrieval tool has
-                // produced either chunk evidence or trusted document metadata evidence.
                 if (!evidence.HasEvidence)
                 {
                     continue;
@@ -186,9 +185,6 @@ public sealed class RagQueryService : IRagQueryService
                 {
                     citations = ParseCitationsFromAnswer(answerText, evidence.Chunks);
 
-                    // Metadata-only answers from list_documents cannot point at a chunk,
-                    // but any answer synthesized from retrieved chunks must reference at
-                    // least one valid marker before it can be persisted as grounded output.
                     if (evidence.RequiresCitations
                         && citations.Count == 0
                         && !string.Equals(
@@ -258,26 +254,76 @@ public sealed class RagQueryService : IRagQueryService
                     $"Đã tìm thấy {chunkCount} đoạn tài liệu phù hợp");
 
                 var answerBuilder = new StringBuilder();
+                AiProviderRateLimitException? rateLimitException = null;
 
                 if (_chatService is IStreamingChatCompletionService streamingChat)
                 {
-                    await foreach (var delta in streamingChat.StreamAsync(
-                                       prepared.SystemPrompt!,
-                                       prepared.UserPrompt!,
-                                       cancellationToken))
+                    await using var enumerator = streamingChat.StreamAsync(
+                            prepared.SystemPrompt!,
+                            prepared.UserPrompt!,
+                            cancellationToken)
+                        .GetAsyncEnumerator(cancellationToken);
+
+                    while (true)
                     {
+                        bool hasNext;
+                        string delta;
+
+                        try
+                        {
+                            hasNext = await enumerator.MoveNextAsync();
+                            delta = hasNext ? enumerator.Current : string.Empty;
+                        }
+                        catch (AiProviderRateLimitException ex)
+                        {
+                            rateLimitException = ex;
+                            break;
+                        }
+
+                        if (!hasNext)
+                        {
+                            break;
+                        }
+
                         answerBuilder.Append(delta);
                         yield return new RagDeltaEvent(delta);
                     }
                 }
                 else
                 {
-                    var completed = await _chatService.CompleteAsync(
-                        prepared.SystemPrompt!,
-                        prepared.UserPrompt!,
-                        cancellationToken);
-                    answerBuilder.Append(completed);
-                    yield return new RagDeltaEvent(completed);
+                    string? completed = null;
+
+                    try
+                    {
+                        completed = await _chatService.CompleteAsync(
+                            prepared.SystemPrompt!,
+                            prepared.UserPrompt!,
+                            cancellationToken);
+                    }
+                    catch (AiProviderRateLimitException ex)
+                    {
+                        rateLimitException = ex;
+                    }
+
+                    if (rateLimitException is null && completed is not null)
+                    {
+                        answerBuilder.Append(completed);
+                        yield return new RagDeltaEvent(completed);
+                    }
+                }
+
+                if (rateLimitException is not null)
+                {
+                    _logger.LogWarning(
+                        rateLimitException,
+                        "AI provider rate-limited during chat generation. Provider={Provider}, SessionId={SessionId}, UserId={UserId}",
+                        rateLimitException.ProviderName,
+                        session.Id,
+                        userId);
+                    yield return new RagErrorEvent(
+                        "AI_PROVIDER_RATE_LIMITED",
+                        "Dịch vụ AI hiện đang quá tải hoặc đã đạt giới hạn yêu cầu. Vui lòng thử lại sau một lúc.");
+                    yield break;
                 }
 
                 answerText = answerBuilder.ToString().Trim();
@@ -285,8 +331,6 @@ public sealed class RagQueryService : IRagQueryService
             }
         }
 
-        // Persist only after model/retrieval processing has completed successfully.
-        // A cancelled/broken stream therefore does not leave a partial assistant message.
         var userMessage = await PersistUserMessageAsync(session.Id, question, cancellationToken);
         var assistantMessage = await PersistAssistantMessageAsync(
             session.Id,
@@ -323,8 +367,6 @@ public sealed class RagQueryService : IRagQueryService
     {
         ValidateQuestion(question);
 
-        // Evaluation intentionally keeps the deterministic retrieval pipeline so it can
-        // serve as a stable baseline against the interactive agentic chat experience.
         var queryResult = await GenerateAnswerAsync(
             question,
             subjectId,
@@ -380,7 +422,6 @@ public sealed class RagQueryService : IRagQueryService
             .Take(_options.Retrieval.TopK)
             .ToList();
 
-        // Classic fallback retains the previous contextual expansion behavior.
         if (topChunks.Count == 0 && history.Count > 0)
         {
             var recentUserQuestion = history
