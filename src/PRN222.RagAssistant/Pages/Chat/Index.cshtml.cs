@@ -177,8 +177,6 @@ public sealed class IndexModel : PageModel
 
         try
         {
-            // The RAG service now owns retrieval/tool/model streaming. This handler only
-            // translates typed application events to SSE and never fabricates token deltas.
             await using var stream = _ragQueryService.AskStreamAsync(
                     user.Id,
                     dto.SessionId,
@@ -191,8 +189,6 @@ public sealed class IndexModel : PageModel
             {
                 var moveNextTask = stream.MoveNextAsync().AsTask();
 
-                // Retrieval tools and model first-token latency can exceed proxy idle
-                // windows, so keep the SSE socket alive without inventing progress data.
                 while (!moveNextTask.IsCompleted)
                 {
                     var completedTask = await Task.WhenAny(
@@ -226,7 +222,6 @@ public sealed class IndexModel : PageModel
                         break;
 
                     case RagDeltaEvent delta:
-                        // Each delta is a real provider/model streaming update.
                         await SendEventAsync("delta", new { content = delta.Content });
                         break;
 
@@ -262,6 +257,14 @@ public sealed class IndexModel : PageModel
                             })
                         });
                         break;
+
+                    case RagErrorEvent ragError:
+                        await SendEventAsync("error", new
+                        {
+                            errorCode = ragError.ErrorCode,
+                            message = ragError.Message
+                        });
+                        break;
                 }
             }
         }
@@ -294,7 +297,11 @@ public sealed class IndexModel : PageModel
 
             try
             {
-                await SendEventAsync("error", new { message = "Đã xảy ra lỗi: " + ex.Message });
+                await SendEventAsync("error", new
+                {
+                    errorCode = "STREAM_ERROR",
+                    message = "Đã xảy ra lỗi khi xử lý yêu cầu. Vui lòng thử lại."
+                });
             }
             catch (Exception sendError)
             {
