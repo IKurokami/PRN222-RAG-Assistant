@@ -43,8 +43,8 @@ services:
       Rag__OpenRouter__AppTitle: ${OPENROUTER_APP_TITLE:-PRN222 RAG Assistant}
       Rag__Storage__UploadsPath: /app/storage/uploads
       Billing__BaseUrl: ${BILLING_BASE_URL:-https://prn222-rag-assistant.onrender.com}
-      Billing__VnPay__TmnCode: ${VNPAY_TMN_CODE:-8OTYXKKM}
-      Billing__VnPay__HashSecret: ${VNPAY_HASH_SECRET:-EUKFJAYATVRRJBDQHUWZTJRCTCSSOYVY}
+      Billing__VnPay__TmnCode: ${VNPAY_TMN_CODE:-}
+      Billing__VnPay__HashSecret: ${VNPAY_HASH_SECRET:-}
       Billing__VnPay__BaseUrl: ${VNPAY_BASE_URL:-https://sandbox.vnpayment.vn/paymentv2/vpcpay.html}
       Billing__VnPay__Version: ${VNPAY_VERSION:-2.1.0}
       Billing__VnPay__Command: ${VNPAY_COMMAND:-pay}
