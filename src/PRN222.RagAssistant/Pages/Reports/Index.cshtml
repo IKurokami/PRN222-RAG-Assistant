@@ -36,6 +36,12 @@
             <p class="text-slate-500 mb-0">@Model.SubjectName — Theo dõi sức khỏe corpus, mức sử dụng nguồn học liệu và hoạt động RAG theo đúng phạm vi môn học.</p>
         </div>
         <div class="d-flex gap-2 flex-wrap">
+            @if (User.IsInRole(AppRoles.Admin))
+            {
+                <a asp-page="/Reports/Billing" class="btn btn-sm btn-academic-outline">
+                    <i class="bi bi-credit-card-2-front"></i> Thanh toán &amp; quota
+                </a>
+            }
             <a asp-page="/Documents/Index" asp-route-subjectId="@Model.SubjectId" class="btn btn-sm btn-academic-outline">
                 <i class="bi bi-journal-bookmark"></i> Tài liệu
             </a>
