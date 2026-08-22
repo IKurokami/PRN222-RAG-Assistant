@@ -1,16 +1,13 @@
 # Member contribution ledger
 
-> Merged baseline: `master` after PR #43 on 2026-08-21.
->
-> PR #46/issue #47 implementation is being developed on its branch and is **not merged**. This ledger continues to distinguish branch implementation state from merged contribution credit and uses Member numbers only.
+> Merged baseline verified against `master` on 2026-08-22. PR #46 is merged and is now part of auditable implementation history.
 
 ## Accounting rule
 
 - **Ownership** = scope a member is responsible for maintaining.
 - **Contribution credit** = merged implementation/review/integration work actually delivered.
-- Documentation-only target decisions do not count as implementation of the planned Razor Pages/SignalR migration.
-- Branch work in an unmerged PR does not count as merged contribution credit; keep PR #46 auditable until it lands.
 - Keep PR numbers as auditable evidence.
+- Historical product implementation remains valid contribution credit even when later architecture migrations replace its presentation layer.
 
 ## Member 1
 
@@ -20,103 +17,66 @@ Representative merged work includes PR #4, #17, #18, #21, #28, #37, #38 and #39.
 
 ## Member 2
 
-Member 2 delivered the main request/business behavior for Flow 1 and the original Flow 3 reporting behavior:
+Delivered the main Flow 1 request/business behavior and original Flow 3 reporting behavior: Document upload/list/details/edit/delete/re-index, Chapter management, Flow 1 validation/authorization, and Report & Statistics dashboard behavior/tests.
 
-- Document upload/list/details/edit/delete/re-index semantics;
-- Chapter management behavior;
-- Flow 1 validation/authorization behavior;
-- Report & Statistics dashboard behavior/tests.
-
-Representative merged work: PR #5 and PR #12.
-
-PR #40 later refactored Report data access behind `IReportQueryService` and made Chat aggregates subject-scoped. Member 2 retains behavior ownership.
-
-The PR #46 branch retains the PageModel/DbContext cleanup and implements authorized management realtime for Documents, Chapters, Subjects, Subject Leader assignments, and Users/roles. This branch state does not add merged implementation credit until PR #46 lands and authorship/review history is auditable.
+Representative merged work includes PR #5 and PR #12. PR #40 later moved Report data access behind `IReportQueryService` and made Chat aggregates subject-scoped.
 
 ## Member 3
 
-Member 3 delivered the cross-application UI/UX baseline in PR #19 and remains the maintenance owner for document indexing/ingestion.
-
-The PR #46 branch includes management SignalR status-notification integration; final merged credit must follow the members who actually deliver and review the merged code.
+Delivered the cross-application UI/UX baseline in PR #19 and remains the maintenance owner for document indexing/ingestion.
 
 ## Member 4
 
-Member 4 delivered the merged Flow 2 RAG backend baseline in PR #30, including subject-scoped retrieval/session behavior, grounding/no-evidence logic, provider-neutral calls, message/citation persistence and backend tests.
-
-Member 4 remains the maintenance owner for core Flow 2 RAG behavior.
+Delivered the merged Flow 2 RAG backend baseline in PR #30, including subject-scoped retrieval/session behavior, grounding/no-evidence logic, provider-neutral calls, message/citation persistence and backend tests. Member 4 remains the maintenance owner for core Flow 2 RAG behavior.
 
 ## Member 5
 
-Member 5 has merged product implementation credit for the original Flow 2 product layer:
+Has merged product implementation credit for the original Flow 2 layer:
 
-### PR #34
+- **PR #34** — original Chat product UI/session/history/citations and the 50-question Evaluation Suite integration.
+- **PR #35** — full-screen Chat UX, SSE progress/typewriter behavior, Markdown/code rendering, citation/source presentation and grounding/follow-up improvements.
 
-- original Chat product UI/session/history/citations;
-- 50-question Evaluation Suite and UI/service integration.
+These remain historical contribution credit even though later PRs migrated presentation architecture.
 
-### PR #35
+## Cross-cutting presentation milestones
 
-- full-screen Chat UX;
-- SSE progress/typewriter experience;
-- Markdown/code rendering;
-- citation reader/source presentation;
-- grounding/follow-up enhancements.
+- **PR #42** — migrated Chat HTTP presentation to Razor Pages while preserving `/Chat`, RAG behavior and SSE handlers.
+- **PR #43** — introduced `IChatPageService` so Chat PageModel page/session data no longer directly depends on `ApplicationDbContext`.
+- **PR #46** — migrated the remaining MVC Controllers/Views to Razor Pages, removed direct `ApplicationDbContext` usage from PageModels via purpose-specific services, added authorized ManagementHub realtime for Documents, Chapters, Subjects, Subject Leader assignments and Users/roles, and verified the Release build/tests.
 
-These entries remain historical contribution credit even though the repository presentation target is now Razor Pages only.
+Credit for these cross-cutting milestones follows actual merged authorship/review history rather than nominal workflow ownership.
 
-## Post-PR #40 presentation milestones
+## Billing/reporting milestones
 
-### PR #42
+- **PR #53** — VNPay billing and concurrency-safe account-level RAG quota management.
+- **PR #54** — distinct Chat 429/rate-limit handling.
+- **PR #55** — Admin billing analytics integrated with the reporting area.
+- **PR #56** — verified VNPay return fallback finalization when IPN is missing.
 
-Migrated Chat HTTP presentation to Razor Pages while preserving the `/Chat` URL, RAG behavior and SSE handlers.
-
-### PR #43
-
-Introduced `IChatPageService` so Chat PageModel page/session data access no longer depends directly on `ApplicationDbContext`.
-
-These are cross-cutting presentation architecture milestones. Ownership/credit should follow the actual merged authorship/review history rather than being inferred from nominal workflow ownership.
-
-## PR #46 branch implementation state (not merged)
-
-The branch implements issue #47 management realtime while retaining the completed PageModel/DbContext cleanup:
-
-```text
-HTTP UI/actions               -> Razor Pages handlers
-Management realtime           -> authorized ManagementHub SignalR
-  Documents/Chapters          -> subject-scoped updates
-  Subjects/assignments        -> authorized subject-admin/catalog updates
-  Users/roles                 -> authorized users-admin updates
-Chat progress/result          -> SSE, unchanged
-```
-
-Writes remain in Razor Page handlers/application-facing services. Server-side policy and concrete-subject authorization is required before subscriptions; broadcasts occur only after persistence commits. Clients automatically reconnect and reload authorized state when `ManagementChanged` is insufficient. Document index-status changes retain their status payload.
-
-PR #46 is not merged. Do not record this branch implementation as merged contribution credit or infer ownership/identity from this status; update the ledger after the actual merge.
+These are cross-cutting product/platform changes; contribution identity should follow the actual merged Git history.
 
 ## Workflow contribution summary
 
 | Workflow / area | Maintenance/assigned owner(s) | Merged contribution highlights |
 |---|---|---|
-| Core/Data/Identity/RBAC | Member 1 | Member 1 |
-| Multi-subject/security integration | Member 1 | Member 1 |
+| Core/Data/Identity/RBAC | Member 1 | Member 1 baseline + later cross-cutting merges |
+| Multi-subject/security integration | Member 1 | Member 1 baseline + PR #46 integration |
 | AI provider/deployment infrastructure | Member 1 | PR #21/#28/#37/#38/#39 |
-| Flow 1 request/business behavior | Member 2 | Member 2 baseline |
+| Flow 1 request/business behavior | Member 2 | Member 2 baseline + PR #46 presentation migration |
 | Flow 1 indexing/ingestion maintenance | Member 3 | existing merged contributors; Member 3 maintains |
-| Cross-app UI/UX baseline | Member 3 | PR #19 |
+| Cross-app UI/UX baseline | Member 3 | PR #19 + later presentation migration |
 | Flow 2 RAG backend | Member 4 | PR #30 + later integrated enhancements |
-| Flow 2 product UI/evaluation | Member 5 | PR #34/#35 historical product layer |
+| Flow 2 product UI/evaluation | Member 5 | PR #34/#35 historical layer + PR #42/#46 migrations |
 | Chat Razor Pages architecture | cross-cutting | PR #42/#43 |
-| Management realtime | cross-cutting | PR #46 branch implementation; not merged |
-| Flow 3 Report & Statistics | Member 2 | Member 2 baseline + PR #40 integration |
-| Repository docs/coordination | Member 1 | Member 1 |
+| Management realtime / Razor Pages completion | cross-cutting | PR #46 |
+| Flow 3 academic Report & Statistics | Member 2 | Member 2 baseline + PR #40 integration |
+| Billing/quota + billing analytics | cross-cutting | PR #53/#55/#56 |
+| Repository docs/coordination | Member 1 | ongoing |
 
 ## Current follow-up debt
 
-- merge PR #46 after review/validation, then reconcile this ledger against actual merged authorship;
-- complete remaining Razor Pages presentation migration and remove legacy MVC presentation/routing after parity;
-- preserve authorized ManagementHub groups, post-commit fan-out, and Document index-status notifications;
-- preserve Chat SSE and prohibit a SignalR Chat migration;
 - deeper document-ingestion/RAG quality validation;
-- hosted source-file durability beyond free ephemeral storage.
-
-Update this ledger when future merges materially change ownership or contribution credit.
+- durable hosted source-file storage beyond free ephemeral storage;
+- keep ManagementHub authorization/group isolation and Chat SSE semantics covered by regression tests;
+- keep billing/report documentation synchronized with persisted payment/quota semantics;
+- update this ledger whenever future merges materially change ownership or contribution credit.

@@ -1,45 +1,23 @@
 # PRN222 RAG Assistant
 
-ASP.NET Core RAG learning assistant built with .NET 10, Razor Pages, PostgreSQL/pgvector, ASP.NET Core Identity, background document indexing, provider-neutral AI services, SSE for Chat, and SignalR as the target realtime channel for Document Management.
+ASP.NET Core RAG learning assistant built with .NET 10, Razor Pages, PostgreSQL/pgvector, ASP.NET Core Identity, background document indexing, provider-neutral AI services, SSE for Chat, and authorized SignalR realtime notifications for management surfaces.
 
-> Documentation target updated on 2026-08-21 after PR #42/#43.
->
-> **Important:** this documentation PR defines the required presentation end state only. It does not migrate the remaining runtime MVC code. A follow-up implementation PR must remove the legacy MVC presentation layer before the codebase can be called Razor-Pages-only.
+> Documentation verified against `master` on 2026-08-22 after the Razor Pages/SignalR migration (PR #46), VNPay billing/quota integration (PR #53), Chat 429 handling (PR #54), billing analytics (PR #55), and VNPay return fallback fix (PR #56).
 
-PRN222 is the seeded demo subject. Runtime workflows remain multi-subject and must not treat PRN222 as a global hard-coded scope.
+PRN222 is the seeded demo subject. Runtime workflows are multi-subject and must not treat PRN222 as a global hard-coded scope.
 
-## Presentation decision
-
-The required end state is:
+## Current presentation architecture
 
 ```text
-HTTP UI + HTTP actions: Razor Pages only
+HTTP UI + HTTP actions: Razor Pages
 Chat realtime/progress: SSE
-Document Management realtime notifications: SignalR
+Management realtime: SignalR / ManagementHub
 Background indexing: hosted worker/services
 ```
 
-After the implementation migration there must be no duplicate MVC/Razor Page product surfaces and no conventional controller routing for product UI.
+The MVC product presentation migration is complete on `master` after PR #46. CRUD and other writes remain Razor Page handlers/application services; SignalR is fan-out only.
 
-SignalR is an intentional realtime transport, not an alternative HTTP presentation framework. Document writes remain Razor Page handlers; successful create/update/delete/index-state changes are broadcast to authorized connected browsers.
-
-Canonical migration specification: `docs/razor-pages-signalr-architecture.md`.
-
-## Migration status
-
-| Area | Target presentation | Runtime status at this docs PR |
-|---|---|---|
-| Account/authentication | Razor Pages | Already Razor Pages |
-| Flow 1 - Documents/Chapters | Razor Pages + SignalR notifications | Code migration pending |
-| Flow 2 - Chat/history/citations | Razor Pages + SSE | Razor Pages after PR #42/#43 |
-| Flow 2 - Evaluation | Razor Pages | Code migration pending |
-| Flow 3 - Reports | Razor Pages + query service | Already Razor Pages |
-| Admin users/subjects | Razor Pages | Code migration pending |
-| Subject catalogue | Razor Pages | Code migration pending |
-
-The documentation target does not count as implementation completion.
-
-## Target page map
+## Current page map
 
 ```text
 Pages/
@@ -54,22 +32,17 @@ Pages/
   Reports/
 ```
 
-Public URLs may be preserved with Razor Page route templates where compatibility is useful.
-
 ## Flow 1 - Document Management & indexing
 
-Target request flow:
-
 ```text
-Document/Chapter Razor Page handler
-  -> validate subject/resource/file
-  -> authorize concrete Subject
-  -> application/infrastructure write boundary
+Razor Page handler
+  -> validate + authorize policy/concrete Subject
+  -> application service / persistence
   -> IDocumentIndexingQueue when required
-  -> publish Document realtime event
+  -> publish ManagementChanged after commit
 ```
 
-Background indexing remains:
+Background indexing:
 
 ```text
 IDocumentIndexingQueue
@@ -79,43 +52,24 @@ IDocumentIndexingQueue
   -> TextChunker
   -> ITextEmbeddingService
   -> DocumentChunk replacement / index status
-  -> publish DocumentIndexStatusChanged
+  -> ManagementChanged(Document, IndexStatusChanged)
 ```
 
-### SignalR contract
+Management realtime uses `/hubs/management` and authorized scoped subscriptions for Documents, Chapters, Subjects, Subject Leader assignments, and Users/roles. Clients reconnect automatically and reload server state when needed.
 
-Recommended hub route:
+## Flow 2 - Chat and Evaluation
 
-```text
-/hubs/documents
-```
-
-Recommended events:
+Chat is Razor Pages and keeps **Server-Sent Events (SSE)** for progress/typewriter output:
 
 ```text
-DocumentCreated
-DocumentUpdated
-DocumentDeleted
-DocumentIndexStatusChanged
-```
-
-Connections must be subject-scoped and server-authorized. SignalR does not perform CRUD; Page Handlers perform antiforgery-protected writes and publish events only after successful persistence.
-
-## Flow 2 - Chat
-
-Chat is already a Razor Page after PR #42. PR #43 moved its page-data/session persistence boundary behind `IChatPageService`.
-
-The Chat UI continues to use **Server-Sent Events (SSE)** for progress/typewriter output:
-
-```text
-browser fetch(POST Razor Page handler)
+browser POST Razor Page handler
   -> text/event-stream
   -> tool_call / citations / delta / done / error
 ```
 
-Do not replace Chat SSE with SignalR as part of the Document Management realtime migration.
+Chat page/session persistence is behind `IChatPageService`. Rate-limit failures are handled distinctly from no-document/no-evidence cases after PR #54.
 
-## RAG pipeline
+RAG pipeline:
 
 ```text
 selected Subject
@@ -125,24 +79,16 @@ selected Subject
   -> pgvector retrieval constrained by SubjectId + embedding dimensions
   -> grounded prompt/history
   -> IChatCompletionService
-  -> citation marker parsing
+  -> citation parsing
   -> ChatMessage + MessageCitation persistence
-  -> Razor Page Chat UI
+  -> Razor Page Chat UI + SSE
 ```
 
-## Evaluation
+Evaluation is a Razor Pages surface backed by `IEvaluationService` and the packaged 50-question dataset under `Infrastructure/Data/evaluation_dataset_50.json`.
 
-Evaluation remains backed by `IEvaluationService` and the packaged 50-question dataset under:
+## Flow 3 - Reports & Statistics
 
-```text
-Infrastructure/Data/evaluation_dataset_50.json
-```
-
-The target presentation is `Pages/Evaluation/Index.cshtml` with Razor Page handlers for single-question/full-suite actions.
-
-## Flow 3 reporting
-
-Reports already follow the desired presentation/application boundary:
+Academic reporting remains subject-scoped:
 
 ```text
 Reports Razor Page
@@ -151,7 +97,22 @@ Reports Razor Page
   -> ApplicationDbContext
 ```
 
-Document, indexing, chat-session, chat-message, and citation metrics remain scoped to the selected `SubjectId`.
+Admin billing analytics is intentionally separate and system-wide:
+
+```text
+Billing report Razor Page
+  -> IBillingReportQueryService
+  -> BillingReportQueryService
+  -> ApplicationDbContext
+```
+
+Academic corpus/chat/citation metrics must not be mixed with account-level revenue/quota metrics unless the product later persists explicit subject attribution.
+
+## Billing and quota
+
+PR #53 added VNPay account-level quota purchases with concurrency-safe quota reservation/activation. VNPay credentials are server-side environment secrets.
+
+PR #56 allows a cryptographically verified successful VNPay return to finalize an order when the IPN callback is missing; persisted payment state remains the reporting source of truth. PR #55 added Admin-only billing analytics based on persisted order/quota semantics.
 
 ## AI runtime
 
@@ -171,17 +132,9 @@ OpenAI
 OpenRouter
 ```
 
-Changing embedding provider/model/dimension requires a complete corpus re-index. PR #37 keeps dimension-changing transitions safe by filtering stored vectors by `vector_dims(...)` before cosine distance; it does not make different embedding semantic spaces compatible.
+Changing embedding provider/model/dimension requires a complete corpus re-index. Dimension filtering makes migrations safe but does not make different embedding semantic spaces compatible. Changing only the chat provider/model/fallback order does not require re-indexing.
 
-Changing only the chat provider/model/fallback order does not require re-indexing.
-
-Canonical provider notes: `docs/ai-provider-backup.md`.
-
-## Render deployment
-
-`render.yaml` defines the Docker web service and Render PostgreSQL deployment.
-
-Current Render AI split:
+Current Render split documented by the repository:
 
 ```text
 Chat provider:      Gemini
@@ -191,16 +144,11 @@ Embedding model:    nvidia/llama-nemotron-embed-vl-1b-v2:free
 Embedding dims:     1024
 ```
 
-Render needs server-side AI secrets:
+## Render deployment
 
-```text
-Rag__Gemini__ApiKey
-Rag__OpenRouter__ApiKey
-```
+`render.yaml` defines the Docker web service and Render PostgreSQL deployment. ASP.NET Core Data Protection keys persist in PostgreSQL. Uploaded source files on the free web service remain ephemeral unless durable storage is added.
 
-ASP.NET Core Data Protection keys persist in PostgreSQL. Uploaded source files on the free web service remain ephemeral.
-
-Render web services support WebSocket connections, so the target SignalR Document hub fits the current web-service model. Clients must use reconnect behavior because instance replacement during deploy/maintenance can close active connections.
+Required AI/payment secrets must be supplied through deployment environment variables; never commit real credentials.
 
 ## Roles and authorization
 
@@ -220,9 +168,9 @@ ManageSubjects  -> Admin
 ManageDocuments -> Admin OR SubjectLeader
 ```
 
-Subject-specific operations additionally enforce concrete subject access. SignalR subscriptions must enforce the same subject boundary server-side. UI visibility is never authorization.
+Subject-specific operations additionally enforce concrete subject access. ManagementHub subscriptions enforce the same server-side boundary. UI visibility is never authorization.
 
-## Commands
+## Verification commands
 
 ```bash
 dotnet tool restore
@@ -256,11 +204,14 @@ Do not run `docker compose down -v` unless deleting local database/model volumes
 Start with:
 
 - `docs/README.md`
-- `docs/razor-pages-signalr-architecture.md`
 - `docs/project-status.md`
+- `docs/razor-pages-signalr-architecture.md`
 - `docs/infrastructure.md`
 - `docs/role-access-control.md`
 - `docs/multi-subject-management.md`
 - `docs/ai-provider-backup.md`
+- `docs/payment-integration-vnpay.md`
+- `docs/report-statistics-metrics.md`
+- `docs/billing-report-statistics.md`
 - `docs/render-deployment.md`
 - `docs/member-contributions.md`
