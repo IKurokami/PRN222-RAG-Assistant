@@ -584,10 +584,10 @@ else
                 } else {
                     bodyEl.innerHTML = `<div class="alert alert-danger py-2 mb-0 rounded-4 border-0">${escapeHtml(error.message || 'Lỗi kết nối máy chủ. Vui lòng thử lại.')}</div>`;
                 }
-            }
+            } finally {
                 sendIcon.classList.remove('d-none');
                 sendSpinner.classList.add('d-none');
-                sendBtn.disabled = !input.value.trim();
+                sendBtn.disabled = !input.value.trim() || !activeSessionId;
                 scrollToBottom();
             }
         }
