@@ -1,100 +1,79 @@
 # Flow 3 handoff - Report & Statistics
 
-> Updated on 2026-08-21 for the richer academic/operational reporting dashboard.
+> Updated on 2026-08-22 for the academic dashboard plus Admin-only billing analytics added after the VNPay quota-purchase integration.
 
 ## Status
 
-Flow 3 is complete, read-only, subject-scoped, and remains a Razor Pages workflow under `Pages/Reports/`.
+Flow 3 remains read-only and Razor Pages-based under `Pages/Reports/`, with two deliberately different scopes:
+
+- academic/RAG reporting is subject-scoped;
+- billing/quota analytics is system-wide and Admin-only.
+
+This split prevents account-level quota purchases from being falsely attributed to whichever Subject happens to be open in the academic report.
 
 ## Architecture
 
-The PageModel does not access `ApplicationDbContext`/EF Core directly.
+PageModels do not access `ApplicationDbContext`/EF Core directly.
 
 ```text
+Academic report
 Pages/Reports/Index.cshtml.cs
  -> IReportQueryService
  -> ReportQueryService
  -> ApplicationDbContext
+
+Billing analytics
+Pages/Reports/Billing.cshtml.cs
+ -> IBillingReportQueryService
+ -> BillingReportQueryService
+ -> ApplicationDbContext
 ```
 
-Application provides presentation-safe report read models through `SubjectReportSnapshot`.
+Application provides presentation-safe read models through `SubjectReportSnapshot` and `BillingReportSnapshot`.
 
-`Program.cs` registers the report boundary with `AddReporting()`.
+`Program.cs` registers both boundaries with `AddReporting()`.
 
-## Authorization
+## Authorization and scope
 
-Reports require:
+### Academic report
+
+Requires:
 
 1. coarse `ManageDocuments` policy; and
-2. `ISubjectAccessService.CanManageSubjectAsync` for the concrete subject.
+2. `ISubjectAccessService.CanManageSubjectAsync` for the concrete Subject.
 
-The query service is not the authorization boundary; the Razor Page validates access before requesting the report.
+Admin can view any Subject; a Subject Leader can view only assigned Subjects; Student has no report access.
 
-## Subject-scoped baseline metrics
+### Billing analytics
 
-The snapshot retains:
+`/Reports/Billing` requires the `Admin` role. It does not expose system-wide revenue, payment-channel or quota aggregates to Subject Leaders.
 
-- total Chapters;
-- total Documents;
-- unassigned Documents;
-- Documents by Chapter;
+The current checkout purchases account-level RAG quota and passes `SubjectId = null` into `CreateBillingOrderRequest`. Although `PaymentOrder.SubjectId` is available for future explicit attribution, current global purchases must not be presented as Subject revenue.
+
+## Subject-scoped academic metrics
+
+The academic snapshot includes:
+
+- total Chapters and Documents;
+- unassigned Documents and Documents by Chapter;
 - Uploaded/Processing/Indexed/Failed counts;
-- total DocumentChunks;
-- recent indexing failures;
-- recently indexed Documents and chunk counts;
-- total ChatSessions for the subject;
-- total ChatMessages belonging to those sessions;
-- total MessageCitations belonging to those messages.
+- total DocumentChunks and average chunks per indexed Document;
+- recent indexing failures and recently indexed Documents;
+- ChatSession/ChatMessage activity for the Subject;
+- user question and assistant response counts;
+- active sessions in the last 7 and 30 days;
+- daily message/citation trend;
+- citation coverage and average citations per assistant response;
+- unique cited Documents and cited indexed-document coverage;
+- indexed-but-never-cited Documents;
+- top cited Documents and Chapters;
+- top-three citation concentration.
 
 Chat aggregates remain explicitly constrained through `ChatSession.SubjectId`.
-
-## Richer academic and operational metrics
-
-The report now additionally exposes database-observable signals that have an explicit practical interpretation:
-
-### Corpus/index health
-
-- average chunks per indexed document;
-- indexing readiness percentage in the UI;
-- indexed-but-never-cited document count.
-
-These help identify indexing backlog/failures, unusual chunking patterns, and sources that may be undiscoverable or simply unused.
-
-### Learner/query activity
-
-- user question count;
-- assistant response count;
-- average messages per session;
-- active sessions in the last 7 and 30 days;
-- daily user/assistant message trend for the last 7 days.
-
-These describe actual usage and conversation depth rather than only corpus size.
-
-### Evidence/citation usage
-
-- assistant responses containing at least one citation;
-- citation coverage percentage;
-- average citations per assistant response;
-- unique cited documents;
-- cited indexed-document coverage;
-- top cited documents with citation count, distinct sessions and distinct cited chunks;
-- top cited chapters with cited-document breadth;
-- top-three citation concentration;
-- daily citation trend for the last 7 days.
-
-These answer practical questions such as:
-
-- Which documents are actually supporting answers?
-- Which chapters are receiving the most retrieval demand?
-- Is the indexed corpus being used broadly or narrowly?
-- Are a few sources dominating most citations?
-- Which indexed sources have never appeared in a persisted citation?
 
 ## Academic interpretation rule
 
 Observable citation/usage statistics are **not** renamed into semantic RAG quality metrics.
-
-In particular:
 
 - citation coverage is not faithfulness;
 - cited-source coverage is not context recall;
@@ -103,45 +82,85 @@ In particular:
 
 Faithfulness, context precision/recall, answer relevance/correctness and similar semantic metrics require the Evaluation workflow with suitable ground truth and/or judge-based scoring.
 
-The metric definitions, formulas, practical uses and limitations are documented in `report-statistics-metrics.md`.
+Detailed academic metric definitions remain in `report-statistics-metrics.md`.
+
+## Billing and quota metrics
+
+The Admin billing snapshot adds operational/business signals made possible by `PaymentOrder` and user quota persistence:
+
+- total/Paid/Pending/Failed orders;
+- confirmed Paid revenue and 30-day Paid revenue;
+- average Paid order value;
+- settled payment success rate;
+- checkout completion proxy including stale Pending attempts;
+- Pending orders older than 30 minutes;
+- unique paying users;
+- purchased quota units from immutable `MetadataJson.quotaUnits`;
+- average quota units per Paid order;
+- effective revenue per quota unit;
+- Paid rows with missing/malformed quota metadata;
+- quota package mix;
+- BankCode and CardType mix for Paid transactions;
+- seven-day order/Paid/revenue/quota trend;
+- Subject-attributed vs unattributed Paid orders;
+- current users with positive quota and total outstanding quota;
+- recent order ledger without user IDs, names or emails.
+
+Only persisted `Status == Paid` is counted as confirmed revenue/quota sales. Fresh Pending orders are not treated as failures. A 30-minute stale-Pending threshold is a reporting heuristic, not a VNPay terminal state.
+
+Current outstanding quota includes free/initial quota as well as purchased quota, so it is intentionally **not** labeled “unused purchased quota”.
+
+Detailed billing formulas and limitations are documented in `billing-report-statistics.md`.
 
 ## UI behavior
 
-The Reports page now presents:
+The academic page keeps its existing corpus/RAG dashboard and shows an Admin-only navigation button to Billing Analytics.
 
-- summary KPI cards;
-- actionable signal cards with a short “what this tells us” interpretation;
-- seven-day activity bars for messages and citations;
-- ranked cited-document table;
-- ranked cited-chapter visualization;
-- indexing health and chapter distribution;
-- recent failures and recently indexed documents.
+The Billing Analytics page presents:
 
-The implementation uses the existing Bootstrap/project design system and does not add a client-side charting dependency.
+- revenue/order/quota KPI cards;
+- data-integrity warnings for invalid quota metadata;
+- seven-day billing activity bars;
+- checkout/quota health summary;
+- quota package mix;
+- payment bank/card-type mix;
+- Subject-attribution coverage;
+- recent non-PII order rows.
 
-All navigation uses Razor Page routing.
+Both pages use the existing Bootstrap/project design system and Razor Page routing; no client-side charting dependency is added.
 
-## Provider boundary
+## Provider and mutation boundary
 
-Reports remain provider-independent. They do not perform embedding, retrieval, chat completion, LLM judging, or workflow mutation.
+Reports remain provider-independent and read-only. They do not:
+
+- call VNPay;
+- confirm/fail an order;
+- grant or consume quota;
+- perform embedding/retrieval/chat completion;
+- mutate academic content.
+
+The VNPay IPN/payment service remains the authoritative write path for Paid state and quota grants.
 
 ## Tests
 
-Regression coverage verifies:
+Academic regression coverage continues to verify subject isolation and report aggregation.
 
-- PageModel depends on `IReportQueryService` rather than `ApplicationDbContext`;
-- unknown Subject returns no snapshot;
-- document/chat/citation statistics do not leak across subjects;
-- indexed-but-never-cited and cited-source coverage calculations;
-- cited/uncited assistant response coverage calculations;
-- top cited document/chapter aggregation;
-- seven-day activity aggregation;
-- compatibility with the EF InMemory test setup used by report tests.
+`BillingReportQueryServiceTests` additionally verifies:
+
+- Billing report is Admin-only;
+- PageModel depends on `IBillingReportQueryService`, not `ApplicationDbContext`;
+- Paid-only revenue aggregation;
+- settled success vs stale-Pending-aware checkout completion;
+- quota metadata parsing and damaged-metadata handling;
+- package and payment-channel mix;
+- Subject-attribution coverage;
+- current quota aggregation;
+- seven-day activity aggregation without UTC date-boundary flakiness.
 
 ## Ownership / contribution
 
 - Member 2 retains Flow 3 reporting behavior ownership.
 - Member 1 owns cross-cutting subject/RBAC/shared-contract/documentation coordination.
-- Cross-cutting reporting architecture/integration updates do not transfer Flow 3 behavior ownership.
+- Billing integration/reporting work should be credited from actual merged PR authorship/review history rather than inferred from nominal ownership.
 
 Canonical contribution accounting: `member-contributions.md`.
