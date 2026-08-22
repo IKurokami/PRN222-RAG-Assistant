@@ -1,8 +1,8 @@
 # Project status
 
-> Updated on 2026-08-21 for the PR #46/issue #47 implementation branch.
+> Updated on 2026-08-22 after PR #53 introduced VNPay billing/account quota and the reporting follow-up added Admin-only billing analytics.
 >
-> This file distinguishes the **merged `master` state** from the **PR #46 branch state**. PR #46 is **not merged**; branch implementation notes are not merged contribution claims.
+> This file still distinguishes the **merged `master` state** from the **PR #46 branch state**. PR #46 is **not merged**; branch implementation notes are not merged contribution claims.
 
 ## Target presentation architecture
 
@@ -15,6 +15,7 @@ Flow 2 Evaluation:         Razor Pages
 Flow 3 Reports:            Razor Pages
 Admin users/subjects:      Razor Pages
 Subject catalogue:         Razor Pages
+Billing/quota:             Razor Pages
 ```
 
 SignalR is the authorized management fan-out mechanism for Documents, Chapters, Subjects, Subject Leader assignments, and Users/roles. It does not replace Razor Page handlers or Chat SSE.
@@ -25,14 +26,16 @@ SignalR is the authorized management fan-out mechanism for Documents, Chapters, 
 |---|---|---|
 | Account/auth | Razor Pages | Complete |
 | Chat/history/citations | Razor Pages + SSE | Complete after PR #42/#43 |
-| Reports | Razor Pages + `IReportQueryService` | Complete |
+| Academic Reports | Razor Pages + `IReportQueryService` | Complete |
+| Billing/quota checkout | Razor Pages + `IBillingService` | Complete after PR #53 |
+| Billing analytics | Razor Pages + `IBillingReportQueryService` | Reporting follow-up branch |
 | Documents/Chapters | Razor Pages + ManagementHub | PR #46 branch implementation; not merged |
 | Evaluation | Razor Pages | Implementation pending |
 | Admin users/subjects | Razor Pages + ManagementHub | PR #46 branch implementation; not merged |
 | Subject catalogue | Razor Pages + ManagementHub | PR #46 branch implementation; not merged |
 | Legacy MVC presentation removal | Removed | Verify on PR #46 branch; merge pending |
 
-The migration is **not complete on `master`** until the follow-up code PR merges and any remaining legacy MVC presentation/controller routing is verified after Razor Page parity.
+The presentation migration is **not complete on `master`** until the follow-up code PR merges and any remaining legacy MVC presentation/controller routing is verified after Razor Page parity.
 
 ## Relevant merged milestones
 
@@ -45,6 +48,7 @@ The migration is **not complete on `master`** until the follow-up code PR merges
 - **PR #40** - Reports moved behind `IReportQueryService`; report chat aggregates became subject-scoped.
 - **PR #42** - Chat product presentation migrated to Razor Pages.
 - **PR #43** - Chat PageModel direct DbContext usage replaced by `IChatPageService`.
+- **PR #53** - VNPay billing and concurrency-safe account-level RAG quota management.
 
 ## PR #46 implementation state (branch only)
 
@@ -103,7 +107,7 @@ Evaluation must migrate to Razor Pages in the follow-up presentation PR while pr
 
 ## Flow 3
 
-Reports remain:
+Academic reports remain subject-scoped:
 
 ```text
 Pages/Reports/Index.cshtml.cs
@@ -112,7 +116,18 @@ Pages/Reports/Index.cshtml.cs
  -> ApplicationDbContext
 ```
 
-All metrics remain subject-scoped.
+The billing reporting follow-up adds a separate system-wide Admin-only read model:
+
+```text
+Pages/Reports/Billing.cshtml.cs
+ -> IBillingReportQueryService
+ -> BillingReportQueryService
+ -> ApplicationDbContext
+```
+
+The split is intentional. Academic corpus/chat/citation metrics remain subject-scoped. Current VNPay checkout grants account-level quota and creates orders without a Subject assignment, so confirmed revenue, payment-channel and quota-sale metrics are not attributed to the Subject currently being viewed.
+
+Billing analytics treats persisted `Paid` orders as confirmed revenue, reports Paid/Pending/Failed and stale Pending checkout health, quota/package mix, payment channel mix, short-term revenue activity and non-PII recent-order data. It does not mutate payment or quota state.
 
 ## Provider/runtime status
 
@@ -142,12 +157,16 @@ master checks pass
  -> Render checksPass auto deploy
 ```
 
+Billing analytics regression coverage verifies the Admin-only boundary, query-service/PageModel separation, Paid-only revenue/quota semantics, stale-Pending-aware completion, metadata-integrity handling and seven-day aggregation.
+
 The PR #46 branch includes the management realtime implementation and must add/update regression coverage for Razor Page authorization/handlers and ManagementHub subscription/realtime behavior before merge. This branch status does not claim PR #46 is merged.
 
 ## Remaining technical debt
 
 Primary follow-up work:
 
+- merge/review the reporting follow-up and keep payment analytics semantics aligned with the actual quota product model;
+- only add subject-level revenue if checkout later records an explicit, meaningful Subject attribution;
 - merge PR #46 after review and validation, then reconcile canonical docs against the merged source;
 - complete/remove any remaining legacy MVC presentation registration/routing after parity;
 - preserve authorized ManagementHub group isolation and post-commit fan-out;
