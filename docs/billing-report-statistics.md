@@ -1,6 +1,6 @@
 # Billing Report & Statistics
 
-> Added on 2026-08-22 after the VNPay quota-purchase integration landed on `master` in PR #53.
+> Added on 2026-08-22 after the VNPay quota-purchase integration landed on `master` in PR #53, and synchronized with the verified Return fallback semantics from PR #56.
 
 ## Goal
 
@@ -25,7 +25,7 @@ The page is read-only and **Admin-only**. Subject Leaders keep access to their a
 
 | Metric | Formula / source | What it tells us | Important limitation |
 |---|---|---|---|
-| Confirmed revenue | Sum `PaymentOrder.Amount` where `Status == Paid` | Revenue that the authoritative IPN flow actually confirmed | Sandbox transactions are demo data, not accounting statements |
+| Confirmed revenue | Sum `PaymentOrder.Amount` where persisted `Status == Paid` | Revenue represented by orders finalized through verified VNPay callback processing; IPN is preferred and a verified successful Return may finalize as fallback | Sandbox transactions are demo data, not accounting statements |
 | Paid / Pending / Failed | Count by persisted order status | Checkout/payment ledger health | Pending may still be in an active checkout window |
 | Stale pending | Pending orders older than 30 minutes | Likely abandoned/unreconciled checkout attempts after the 15-minute VNPay expiry window plus safety buffer | Does not prove why the user abandoned payment |
 | Settled payment success | `Paid / (Paid + Failed)` | Success among orders that reached a terminal state | Excludes pending/abandoned attempts |
@@ -52,7 +52,7 @@ If product requirements later introduce subject-specific quota or a checkout tha
 - `/Reports/Billing` uses `[Authorize(Roles = AppRoles.Admin)]`.
 - The page does not display user IDs, emails or names in the recent-order table.
 - The query is read-only and does not call VNPay, mutate order state or grant/consume quota.
-- Only persisted `Paid` state is treated as confirmed revenue; browser Return URL state is never used as the source of truth.
+- Only persisted `Paid` state is treated as confirmed revenue. A browser-only display result is not counted; however, after PR #56 a fully verified successful VNPay Return may atomically persist the same `Pending -> Paid` transition as a fallback when IPN is missing.
 - No VNPay secret or callback signature data is exposed.
 
 ## Data-quality rules
