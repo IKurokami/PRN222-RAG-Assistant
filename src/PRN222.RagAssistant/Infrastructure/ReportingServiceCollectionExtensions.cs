@@ -8,6 +8,7 @@ public static class ReportingServiceCollectionExtensions
     public static IServiceCollection AddReporting(this IServiceCollection services)
     {
         services.AddScoped<IReportQueryService, ReportQueryService>();
+        services.AddScoped<IBillingReportQueryService, BillingReportQueryService>();
         return services;
     }
 }
