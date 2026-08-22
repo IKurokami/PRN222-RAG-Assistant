@@ -27,6 +27,7 @@ public sealed class PostgresConcurrencyTests
         {
             setup.Users.Add(NewUser(userId, 1));
             await setup.SaveChangesAsync();
+            await SetQuotaAsync(setup, userId, 1);
         }
 
         var start = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -39,6 +40,7 @@ public sealed class PostgresConcurrencyTests
             try
             {
                 await using var reservation = await service.ReserveQuotaAsync(userId);
+                reservation.Activate();
                 await Task.Delay(150);
                 await service.ConsumeQuotaAsync(userId);
                 return true;
@@ -54,7 +56,7 @@ public sealed class PostgresConcurrencyTests
         start.SetResult();
         var results = await Task.WhenAll(first, second);
 
-        Assert.Single(results.Where(result => result));
+        Assert.Single(results, result => result);
         await using var verify = CreateContext(connectionString);
         Assert.Equal(0, await verify.Users.Where(u => u.Id == userId).Select(u => u.QuotaRemaining).SingleAsync());
     }
@@ -71,6 +73,7 @@ public sealed class PostgresConcurrencyTests
         {
             setup.Users.Add(NewUser(userId, 0));
             await setup.SaveChangesAsync();
+            await SetQuotaAsync(setup, userId, 0);
             orderResult = await CreateBillingService(setup).CreateOrderAsync(
                 new CreateBillingOrderRequest(
                     userId,
@@ -133,6 +136,11 @@ public sealed class PostgresConcurrencyTests
             .Options;
         return new ApplicationDbContext(options);
     }
+
+    private static async Task SetQuotaAsync(ApplicationDbContext context, Guid userId, int quota) =>
+        _ = await context.Users
+            .Where(u => u.Id == userId)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(u => u.QuotaRemaining, quota));
 
     private static ApplicationUser NewUser(Guid id, int quota) =>
         new()

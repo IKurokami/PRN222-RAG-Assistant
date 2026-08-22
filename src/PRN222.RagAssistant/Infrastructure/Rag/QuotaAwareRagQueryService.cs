@@ -16,6 +16,7 @@ public sealed class QuotaAwareRagQueryService(
         CancellationToken cancellationToken = default)
     {
         await using var reservation = await quotaService.ReserveQuotaAsync(userId, cancellationToken);
+        reservation.Activate();
         return await inner.AskAsync(userId, chatSessionId, question, subjectId, cancellationToken);
     }
 
@@ -27,6 +28,7 @@ public sealed class QuotaAwareRagQueryService(
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         await using var reservation = await quotaService.ReserveQuotaAsync(userId, cancellationToken);
+        reservation.Activate();
 
         await foreach (var streamEvent in inner
                            .AskStreamAsync(userId, chatSessionId, question, subjectId, cancellationToken)

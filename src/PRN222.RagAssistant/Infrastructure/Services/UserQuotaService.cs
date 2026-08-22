@@ -7,7 +7,7 @@ namespace PRN222.RagAssistant.Infrastructure.Services;
 
 public sealed class UserQuotaService(ApplicationDbContext dbContext) : IUserQuotaService
 {
-    private static readonly AsyncLocal<ReservationState?> CurrentReservation = new();
+    private static readonly AsyncLocal<ReservationLease?> CurrentReservation = new();
 
     public async Task<int> GetRemainingQuotaAsync(Guid userId, CancellationToken cancellationToken = default)
     {
@@ -28,27 +28,19 @@ public sealed class UserQuotaService(ApplicationDbContext dbContext) : IUserQuot
         return await GetRemainingQuotaAsync(userId, cancellationToken) > 0;
     }
 
-    public async Task<IAsyncDisposable> ReserveQuotaAsync(
+    public async Task<IQuotaReservation> ReserveQuotaAsync(
         Guid userId,
         CancellationToken cancellationToken = default)
     {
-        if (CurrentReservation.Value is not null)
-        {
-            throw new InvalidOperationException("Nested quota reservations are not supported.");
-        }
-
         await DecrementQuotaAtomicallyAsync(userId, cancellationToken);
-
-        var state = new ReservationState(userId);
-        CurrentReservation.Value = state;
-        return new ReservationLease(this, state);
+        return new ReservationLease(this, userId);
     }
 
     public async Task ConsumeQuotaAsync(Guid userId, CancellationToken cancellationToken = default)
     {
         if (CurrentReservation.Value is { } reservation && reservation.UserId == userId)
         {
-            reservation.Committed = true;
+            reservation.Commit();
             return;
         }
 
@@ -119,39 +111,65 @@ public sealed class UserQuotaService(ApplicationDbContext dbContext) : IUserQuot
         await dbContext.SaveChangesAsync(cancellationToken);
     }
 
-    private async ValueTask ReleaseReservationAsync(ReservationState state)
+    private async ValueTask ReleaseReservationAsync(ReservationLease reservation)
     {
         try
         {
-            if (!state.Committed)
+            if (!reservation.IsCommitted)
             {
-                await GrantQuotaAsync(state.UserId, 1, CancellationToken.None);
+                await GrantQuotaAsync(reservation.UserId, 1, CancellationToken.None);
             }
         }
         finally
         {
-            if (ReferenceEquals(CurrentReservation.Value, state))
+            if (ReferenceEquals(CurrentReservation.Value, reservation))
             {
                 CurrentReservation.Value = null;
             }
         }
     }
 
-    private sealed class ReservationState(Guid userId)
+    private sealed class ReservationLease(UserQuotaService owner, Guid userId) : IQuotaReservation
     {
-        public Guid UserId { get; } = userId;
-        public bool Committed { get; set; }
-    }
-
-    private sealed class ReservationLease(UserQuotaService owner, ReservationState state) : IAsyncDisposable
-    {
+        private int _activated;
+        private int _committed;
         private int _disposed;
+
+        public Guid UserId { get; } = userId;
+        public bool IsCommitted => Volatile.Read(ref _committed) != 0;
+
+        public void Activate()
+        {
+            if (Volatile.Read(ref _disposed) != 0)
+            {
+                throw new ObjectDisposedException(nameof(ReservationLease));
+            }
+
+            var current = CurrentReservation.Value;
+            if (current is not null && !ReferenceEquals(current, this))
+            {
+                throw new InvalidOperationException("Nested quota reservations are not supported.");
+            }
+
+            CurrentReservation.Value = this;
+            Volatile.Write(ref _activated, 1);
+        }
+
+        public void Commit()
+        {
+            if (Volatile.Read(ref _disposed) != 0)
+            {
+                throw new ObjectDisposedException(nameof(ReservationLease));
+            }
+
+            Interlocked.Exchange(ref _committed, 1);
+        }
 
         public async ValueTask DisposeAsync()
         {
             if (Interlocked.Exchange(ref _disposed, 1) == 0)
             {
-                await owner.ReleaseReservationAsync(state);
+                await owner.ReleaseReservationAsync(this);
             }
         }
     }
