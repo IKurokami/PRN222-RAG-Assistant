@@ -70,9 +70,12 @@
                             <li class="nav-item">
                                 <a class="nav-link-humata @(isChatPage ? "is-active" : null)" asp-area="" asp-page="/Chat/Index">Trò chuyện RAG</a>
                             </li>
-                            <li class="nav-item">
-                                <a class="nav-link-humata @(currentPage.StartsWith("/Evaluation", StringComparison.OrdinalIgnoreCase) ? "is-active" : null)" asp-area="" asp-page="/Evaluation/Index">Đánh giá RAG</a>
-                            </li>
+                            @if (isAdmin || isSubjectLeader)
+                            {
+                                <li class="nav-item">
+                                    <a class="nav-link-humata @(currentPage.StartsWith("/Evaluation", StringComparison.OrdinalIgnoreCase) ? "is-active" : null)" asp-area="" asp-page="/Evaluation/Index">Đánh giá RAG</a>
+                                </li>
+                            }
                             <li class="nav-item">
                                 <a class="nav-link-humata @(currentPage.StartsWith("/Billing", StringComparison.OrdinalIgnoreCase) ? "is-active" : null)" asp-page="/Billing/Create">
                                     <i class="bi bi-credit-card-2-front me-1"></i>Nạp Quota
@@ -147,7 +150,6 @@
 
     <footer class="footer-humata-deep mt-auto">
         <div class="container">
-            <!-- Centered Brand Logo -->
             <a class="footer-brand-logo" asp-area="" asp-page="/Index">
                 <span class="app-logo-mark app-logo-mark-footer" aria-hidden="true">
                     <span class="app-logo-letter">R</span>
@@ -156,7 +158,6 @@
                 <span>PRN222 RAG</span>
             </a>
 
-            <!-- Centered Nav Links -->
             <ul class="footer-nav-links">
                 <li><a asp-area="" asp-page="/Index">Trang chủ</a></li>
                 @if (User.Identity?.IsAuthenticated == true)
@@ -168,8 +169,6 @@
                 <li><a asp-page="/Privacy">Điều khoản &amp; Bảo mật</a></li>
             </ul>
 
-
-            <!-- Centered Copyright -->
             <div class="footer-copyright">
                 &copy; 2026 PRN222 RAG Assistant — Đại Học FPT (FPT University). Toàn bộ quyền được bảo lưu.
             </div>
