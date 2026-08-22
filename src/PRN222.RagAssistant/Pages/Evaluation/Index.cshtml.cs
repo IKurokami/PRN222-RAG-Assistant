@@ -5,10 +5,13 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 using PRN222.RagAssistant.Application.Abstractions;
 using PRN222.RagAssistant.Application.Models;
 using PRN222.RagAssistant.Domain.Entities;
+using PRN222.RagAssistant.Security;
 
 namespace PRN222.RagAssistant.Pages.Evaluation;
 
-[Authorize]
+// Issue #44: Evaluation is a management/benchmarking surface. Students must not access it.
+// Server-side guard: Admin and SubjectLeader only. Students get 403 → AccessDenied.
+[Authorize(Roles = AppRoles.Admin + "," + AppRoles.SubjectLeader)]
 public class IndexModel(
     IEvaluationService evaluationService,
     ISubjectCatalogService subjectCatalogService,
